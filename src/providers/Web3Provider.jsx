@@ -183,8 +183,9 @@ export const Web3Provider = ({ children }) => {
 
       if (window.ethereum) {
         // Listen for account changes only if MetaMask is available
-      window.ethereum.on('accountsChanged', handleAccountsChanged)
-      window.ethereum.on('chainChanged', handleChainChanged)
+        window.ethereum.on('accountsChanged', handleAccountsChanged)
+        window.ethereum.on('chainChanged', handleChainChanged)
+      }
 
     } catch (error) {
       console.error('Wallet connection error:', error)

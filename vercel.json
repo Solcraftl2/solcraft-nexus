@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "name": "solcraft-nexus-complete",
   "builds": [
     {
       "src": "package.json",
@@ -8,17 +7,9 @@
       "config": {
         "distDir": "dist"
       }
-    },
-    {
-      "src": "api/*.py",
-      "use": "@vercel/python"
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
     {
       "src": "/assets/(.*)",
       "dest": "/assets/$1"

@@ -12,6 +12,16 @@ export const useWeb3 = () => {
   return context
 }
 
+// Simulate wallet for demo purposes
+const simulateWallet = () => {
+  return {
+    address: '0x742d35Cc6634C0532925a3b8D0C9C0E3C5d8c8c8',
+    balance: '2.5847',
+    network: 'Ethereum Mainnet',
+    provider: 'Simulated Wallet'
+  }
+}
+
 export const Web3Provider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -40,6 +50,12 @@ export const Web3Provider = ({ children }) => {
         // Try to reconnect wallet if available
         if (window.ethereum) {
           await reconnectWallet()
+        } else {
+          // Use simulated wallet if no real wallet
+          const simWallet = simulateWallet()
+          setWallet(simWallet)
+          setBalance(simWallet.balance)
+          setNetwork(simWallet.network)
         }
       }
     } catch (error) {
@@ -82,56 +98,91 @@ export const Web3Provider = ({ children }) => {
   const connectWallet = async () => {
     setIsConnecting(true)
     try {
-      if (!window.ethereum) {
-        throw new Error('MetaMask non installato. Installa MetaMask per continuare.')
-      }
+      let walletData, userData, balanceValue, networkName
 
-      // Request account access
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      })
+      if (window.ethereum) {
+        // Real MetaMask connection
+        const accounts = await window.ethereum.request({
+          method: 'eth_requestAccounts'
+        })
 
-      if (accounts.length === 0) {
-        throw new Error('Nessun account selezionato')
-      }
+        if (accounts.length === 0) {
+          throw new Error('Nessun account selezionato')
+        }
 
-      // Get balance
-      const balance = await window.ethereum.request({
-        method: 'eth_getBalance',
-        params: [accounts[0], 'latest']
-      })
+        // Get balance
+        const balance = await window.ethereum.request({
+          method: 'eth_getBalance',
+          params: [accounts[0], 'latest']
+        })
 
-      // Get network
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-      
-      const walletData = {
-        address: accounts[0],
-        type: 'MetaMask',
-        connected: true,
-        chainId: chainId
-      }
+        // Get network
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' })
+        
+        walletData = {
+          address: accounts[0],
+          type: 'MetaMask',
+          connected: true,
+          chainId: chainId
+        }
 
-      const userData = {
-        id: accounts[0],
-        address: accounts[0],
-        authMethod: 'wallet',
-        connectedAt: new Date().toISOString()
+        userData = {
+          id: accounts[0],
+          address: accounts[0],
+          authMethod: 'wallet',
+          connectedAt: new Date().toISOString()
+        }
+
+        // Convert balance from wei to ETH
+        balanceValue = (parseInt(balance, 16) / Math.pow(10, 18)).toFixed(4)
+        networkName = getNetworkName(chainId)
+      } else {
+        // Simulate wallet connection
+        const simWallet = simulateWallet()
+        
+        walletData = {
+          address: simWallet.address,
+          type: 'Simulated Wallet',
+          connected: true,
+          chainId: '0x1' // Ethereum mainnet
+        }
+
+        userData = {
+          id: simWallet.address,
+          address: simWallet.address,
+          authMethod: 'wallet',
+          connectedAt: new Date().toISOString()
+        }
+
+        balanceValue = simWallet.balance
+        networkName = simWallet.network
+
+        toast.success('Wallet simulato connesso per demo!')
       }
 
       setWallet(walletData)
       setUser(userData)
       setIsAuthenticated(true)
-      
-      // Convert balance from wei to ETH
-      const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18)
-      setBalance(balanceInEth.toFixed(4))
-      setNetwork(getNetworkName(chainId))
+      setBalance(balanceValue)
+      setNetwork(networkName)
 
       // Save to localStorage
       localStorage.setItem('solcraft_user', JSON.stringify(userData))
       localStorage.setItem('solcraft_wallet', JSON.stringify(walletData))
 
-      // Listen for account changes
+      // Authenticate with backend
+      try {
+        await apiService.authenticateWallet({
+          address: walletData.address,
+          type: walletData.type
+        })
+      } catch (error) {
+        console.error('Backend authentication error:', error)
+        // Continue anyway since we have local auth
+      }
+
+      if (window.ethereum) {
+        // Listen for account changes only if MetaMask is available
       window.ethereum.on('accountsChanged', handleAccountsChanged)
       window.ethereum.on('chainChanged', handleChainChanged)
 

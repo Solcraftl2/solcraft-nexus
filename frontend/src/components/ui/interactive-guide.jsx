@@ -279,4 +279,5 @@ export const useInteractiveGuide = (guideSteps) => {
 };
 
 export default InteractiveGuide;
+export { InteractiveGuide };
 

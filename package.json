@@ -1,0 +1,35 @@
+{
+  "name": "solcraft-nexus",
+  "version": "1.0.0",
+  "description": "Professional tokenization platform on Ripple XRP Ledger",
+  "main": "index.js",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run preview",
+    "backend": "cd backend && python src/main.py",
+    "install-all": "cd backend && pip install -r requirements.txt && cd ../frontend && npm install"
+  },
+  "keywords": [
+    "tokenization",
+    "ripple",
+    "xrp-ledger",
+    "blockchain",
+    "crypto",
+    "defi",
+    "react",
+    "flask",
+    "professional"
+  ],
+  "author": "SolCraft Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/solcraft-nexus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/username/solcraft-nexus/issues"
+  },
+  "homepage": "https://github.com/username/solcraft-nexus#readme"
+}
+

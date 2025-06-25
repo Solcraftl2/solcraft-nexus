@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { MetaMaskProvider, useSDK } from '@metamask/sdk-react'
+import { Web3Auth } from '@web3auth/modal'
+import { CHAIN_NAMESPACES, IProvider, WEB3AUTH_NETWORK } from '@web3auth/base'
+import { EthereumPrivateKeyProvider } from '@web3auth/ethereum-provider'
+import { Client as XRPLClient } from 'xrpl'
 import apiService from '../services/apiService'
 
 const Web3Context = createContext()
@@ -12,15 +17,29 @@ export const useWeb3 = () => {
   return context
 }
 
-// Simulate wallet for demo purposes
-const simulateWallet = () => {
-  return {
-    address: '0x742d35Cc6634C0532925a3b8D0C9C0E3C5d8c8c8',
-    balance: '2.5847',
-    network: 'Ethereum Mainnet',
-    provider: 'Simulated Wallet'
-  }
+// Web3Auth configuration
+const clientId = process.env.NEXT_PUBLIC_WEB3AUTH_CLIENT_ID || "BPi5PB_UiIZ-cPz1GtV5i1I2iOSOHuimiXBI0e-Oe_u6X3oVAbCiAZOTEBtTXw4tsluTITPqA8zMsfxIKMjiqNQ"
+
+const chainConfig = {
+  chainNamespace: CHAIN_NAMESPACES.EIP155,
+  chainId: "0x1", // Ethereum Mainnet
+  rpcTarget: "https://rpc.ankr.com/eth",
+  displayName: "Ethereum Mainnet",
+  blockExplorerUrl: "https://etherscan.io",
+  ticker: "ETH",
+  tickerName: "Ethereum",
+  logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
 }
+
+const privateKeyProvider = new EthereumPrivateKeyProvider({
+  config: { chainConfig },
+})
+
+const web3auth = new Web3Auth({
+  clientId,
+  web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
+  privateKeyProvider,
+})
 
 export const Web3Provider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -29,142 +48,162 @@ export const Web3Provider = ({ children }) => {
   const [wallet, setWallet] = useState(null)
   const [balance, setBalance] = useState('0')
   const [network, setNetwork] = useState(null)
+  const [web3authProvider, setWeb3authProvider] = useState(null)
+  const [xrplClient, setXrplClient] = useState(null)
 
-  // Check for existing session on mount
+  // Initialize Web3Auth and XRPL client
   useEffect(() => {
-    checkExistingSession()
+    initializeProviders()
   }, [])
 
-  const checkExistingSession = async () => {
-    setIsConnecting(true)
+  const initializeProviders = async () => {
     try {
-      // Check localStorage for existing session
-      const savedUser = localStorage.getItem('solcraft_user')
-      const savedWallet = localStorage.getItem('solcraft_wallet')
+      // Initialize Web3Auth
+      await web3auth.initModal()
       
-      if (savedUser && savedWallet) {
-        setUser(JSON.parse(savedUser))
-        setWallet(JSON.parse(savedWallet))
-        setIsAuthenticated(true)
+      // Initialize XRPL client
+      const client = new XRPLClient('wss://xrplcluster.com/')
+      setXrplClient(client)
+      
+      // Check for existing session
+      if (web3auth.connected) {
+        setWeb3authProvider(web3auth.provider)
+        await loadUserInfo()
+      }
+    } catch (error) {
+      console.error('Error initializing providers:', error)
+    }
+  }
+
+  const loadUserInfo = async () => {
+    try {
+      if (web3auth.connected && web3auth.provider) {
+        const user = await web3auth.getUserInfo()
+        const accounts = await web3auth.provider.request({ method: 'eth_accounts' })
         
-        // Try to reconnect wallet if available
-        if (window.ethereum) {
-          await reconnectWallet()
-        } else {
-          // Use simulated wallet if no real wallet
-          const simWallet = simulateWallet()
-          setWallet(simWallet)
-          setBalance(simWallet.balance)
-          setNetwork(simWallet.network)
+        if (accounts.length > 0) {
+          const balance = await web3auth.provider.request({
+            method: 'eth_getBalance',
+            params: [accounts[0], 'latest']
+          })
+          
+          const userData = {
+            id: user.verifierId || accounts[0],
+            name: user.name || `User ${accounts[0].slice(0, 6)}`,
+            email: user.email || `${accounts[0].slice(0, 10)}@web3auth.local`,
+            avatar: user.profileImage || `https://api.dicebear.com/7.x/identicon/svg?seed=${accounts[0]}`,
+            authMethod: 'web3auth'
+          }
+
+          const walletData = {
+            address: accounts[0],
+            type: 'Web3Auth',
+            connected: true,
+            provider: 'ethereum'
+          }
+
+          setUser(userData)
+          setWallet(walletData)
+          setIsAuthenticated(true)
+          
+          // Convert balance from wei to ETH
+          const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18)
+          setBalance(balanceInEth.toFixed(4))
+          setNetwork('Ethereum Mainnet')
+
+          // Save to localStorage
+          localStorage.setItem('solcraft_user', JSON.stringify(userData))
+          localStorage.setItem('solcraft_wallet', JSON.stringify(walletData))
         }
       }
     } catch (error) {
-      console.error('Error checking existing session:', error)
+      console.error('Error loading user info:', error)
+    }
+  }
+
+  const connectWithWeb3Auth = async () => {
+    setIsConnecting(true)
+    try {
+      if (!web3auth) {
+        throw new Error('Web3Auth not initialized')
+      }
+
+      const web3authProvider = await web3auth.connect()
+      setWeb3authProvider(web3authProvider)
+      
+      await loadUserInfo()
+      
+      // Authenticate with backend
+      try {
+        await apiService.authenticateWallet({
+          address: wallet?.address,
+          type: 'Web3Auth'
+        })
+      } catch (error) {
+        console.error('Backend authentication error:', error)
+      }
+
+      toast.success('Connesso con Web3Auth!')
+      
+    } catch (error) {
+      console.error('Web3Auth connection error:', error)
+      toast.error(`Errore connessione Web3Auth: ${error.message}`)
+      throw error
     } finally {
       setIsConnecting(false)
     }
   }
 
-  const reconnectWallet = async () => {
-    try {
-      if (window.ethereum) {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' })
-        if (accounts.length > 0) {
-          const balance = await window.ethereum.request({
-            method: 'eth_getBalance',
-            params: [accounts[0], 'latest']
-          })
-          
-          setWallet({
-            address: accounts[0],
-            type: 'MetaMask',
-            connected: true
-          })
-          
-          // Convert balance from wei to ETH
-          const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18)
-          setBalance(balanceInEth.toFixed(4))
-          
-          // Get network
-          const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-          setNetwork(getNetworkName(chainId))
-        }
-      }
-    } catch (error) {
-      console.error('Error reconnecting wallet:', error)
-    }
-  }
-
-  const connectWallet = async () => {
+  const connectWithMetaMask = async () => {
     setIsConnecting(true)
     try {
-      let walletData, userData, balanceValue, networkName
+      if (!window.ethereum) {
+        throw new Error('MetaMask non installato. Installa MetaMask per continuare.')
+      }
 
-      if (window.ethereum) {
-        // Real MetaMask connection
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts'
-        })
+      // Request account access
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      })
 
-        if (accounts.length === 0) {
-          throw new Error('Nessun account selezionato')
-        }
+      if (accounts.length === 0) {
+        throw new Error('Nessun account selezionato')
+      }
 
-        // Get balance
-        const balance = await window.ethereum.request({
-          method: 'eth_getBalance',
-          params: [accounts[0], 'latest']
-        })
+      // Get balance
+      const balance = await window.ethereum.request({
+        method: 'eth_getBalance',
+        params: [accounts[0], 'latest']
+      })
 
-        // Get network
-        const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-        
-        walletData = {
-          address: accounts[0],
-          type: 'MetaMask',
-          connected: true,
-          chainId: chainId
-        }
+      // Get network
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' })
+      
+      const walletData = {
+        address: accounts[0],
+        type: 'MetaMask',
+        connected: true,
+        chainId: chainId,
+        provider: 'ethereum'
+      }
 
-        userData = {
-          id: accounts[0],
-          address: accounts[0],
-          authMethod: 'wallet',
-          connectedAt: new Date().toISOString()
-        }
-
-        // Convert balance from wei to ETH
-        balanceValue = (parseInt(balance, 16) / Math.pow(10, 18)).toFixed(4)
-        networkName = getNetworkName(chainId)
-      } else {
-        // Simulate wallet connection
-        const simWallet = simulateWallet()
-        
-        walletData = {
-          address: simWallet.address,
-          type: 'Simulated Wallet',
-          connected: true,
-          chainId: '0x1' // Ethereum mainnet
-        }
-
-        userData = {
-          id: simWallet.address,
-          address: simWallet.address,
-          authMethod: 'wallet',
-          connectedAt: new Date().toISOString()
-        }
-
-        balanceValue = simWallet.balance
-        networkName = simWallet.network
-
-        toast.success('Wallet simulato connesso per demo!')
+      const userData = {
+        id: accounts[0],
+        name: `MetaMask ${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`,
+        email: `${accounts[0].slice(0, 10)}@metamask.local`,
+        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${accounts[0]}`,
+        address: accounts[0],
+        authMethod: 'metamask'
       }
 
       setWallet(walletData)
       setUser(userData)
       setIsAuthenticated(true)
-      setBalance(balanceValue)
-      setNetwork(networkName)
+      
+      // Convert balance from wei to ETH
+      const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18)
+      setBalance(balanceInEth.toFixed(4))
+      setNetwork(getNetworkName(chainId))
 
       // Save to localStorage
       localStorage.setItem('solcraft_user', JSON.stringify(userData))
@@ -178,17 +217,78 @@ export const Web3Provider = ({ children }) => {
         })
       } catch (error) {
         console.error('Backend authentication error:', error)
-        // Continue anyway since we have local auth
       }
 
-      if (window.ethereum) {
-        // Listen for account changes only if MetaMask is available
-        window.ethereum.on('accountsChanged', handleAccountsChanged)
-        window.ethereum.on('chainChanged', handleChainChanged)
-      }
+      // Listen for account changes
+      window.ethereum.on('accountsChanged', handleAccountsChanged)
+      window.ethereum.on('chainChanged', handleChainChanged)
+
+      toast.success('MetaMask connesso con successo!')
 
     } catch (error) {
-      console.error('Wallet connection error:', error)
+      console.error('MetaMask connection error:', error)
+      toast.error(`Errore connessione MetaMask: ${error.message}`)
+      throw error
+    } finally {
+      setIsConnecting(false)
+    }
+  }
+
+  const connectWithXRPL = async () => {
+    setIsConnecting(true)
+    try {
+      if (!xrplClient) {
+        throw new Error('XRPL client not initialized')
+      }
+
+      // Connect to XRPL
+      await xrplClient.connect()
+      
+      // Generate a new wallet for demo (in production, use existing wallet)
+      const { Wallet } = await import('xrpl')
+      const testWallet = Wallet.generate()
+      
+      const walletData = {
+        address: testWallet.address,
+        type: 'XRPL',
+        connected: true,
+        provider: 'xrpl'
+      }
+
+      const userData = {
+        id: testWallet.address,
+        name: `XRPL ${testWallet.address.slice(0, 6)}...${testWallet.address.slice(-4)}`,
+        email: `${testWallet.address.slice(0, 10)}@xrpl.local`,
+        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${testWallet.address}`,
+        address: testWallet.address,
+        authMethod: 'xrpl'
+      }
+
+      setWallet(walletData)
+      setUser(userData)
+      setIsAuthenticated(true)
+      setBalance('0.0000') // Demo balance
+      setNetwork('XRP Ledger')
+
+      // Save to localStorage
+      localStorage.setItem('solcraft_user', JSON.stringify(userData))
+      localStorage.setItem('solcraft_wallet', JSON.stringify(walletData))
+
+      // Authenticate with backend
+      try {
+        await apiService.authenticateWallet({
+          address: walletData.address,
+          type: walletData.type
+        })
+      } catch (error) {
+        console.error('Backend authentication error:', error)
+      }
+
+      toast.success('XRPL wallet connesso con successo!')
+
+    } catch (error) {
+      console.error('XRPL connection error:', error)
+      toast.error(`Errore connessione XRPL: ${error.message}`)
       throw error
     } finally {
       setIsConnecting(false)
@@ -198,127 +298,58 @@ export const Web3Provider = ({ children }) => {
   const loginWithOAuth = async (provider) => {
     setIsConnecting(true)
     try {
-      // Call real API for OAuth login
+      // Use Web3Auth for OAuth login
+      await connectWithWeb3Auth()
+      
+      // Additional OAuth-specific logic can be added here
       const response = await apiService.loginWithOAuth(provider, {
         provider: provider,
-        timestamp: new Date().toISOString()
+        user: user
       })
-      
-      if (response.success && response.user) {
-        const userData = {
-          id: response.user.id,
-          name: response.user.name,
-          email: response.user.email,
-          avatar: response.user.avatar,
-          authMethod: provider,
-          connectedAt: new Date().toISOString()
-        }
 
-        setUser(userData)
-        setIsAuthenticated(true)
-
-        // Save to localStorage
-        localStorage.setItem('solcraft_user', JSON.stringify(userData))
-
-        // After OAuth, optionally connect wallet
-        if (window.ethereum) {
-          try {
-            await connectWalletAfterOAuth()
-          } catch (error) {
-            // Wallet connection is optional after OAuth
-            console.log('Wallet connection skipped:', error.message)
-          }
-        }
-      } else {
-        throw new Error(response.message || 'Login fallito')
+      if (response.success) {
+        toast.success(`Login ${provider} completato!`)
       }
 
+      return response
     } catch (error) {
-      console.error('OAuth login error:', error)
+      console.error(`OAuth ${provider} error:`, error)
+      toast.error(`Errore login ${provider}: ${error.message}`)
       throw error
     } finally {
       setIsConnecting(false)
     }
   }
 
-  const connectWalletAfterOAuth = async () => {
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' })
-      if (accounts.length > 0) {
-        const balance = await window.ethereum.request({
-          method: 'eth_getBalance',
-          params: [accounts[0], 'latest']
-        })
-        
-        const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-        
-        const walletData = {
-          address: accounts[0],
-          type: 'MetaMask',
-          connected: true,
-          chainId: chainId
-        }
-
-        setWallet(walletData)
-        const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18)
-        setBalance(balanceInEth.toFixed(4))
-        setNetwork(getNetworkName(chainId))
-
-        localStorage.setItem('solcraft_wallet', JSON.stringify(walletData))
-      }
-    } catch (error) {
-      console.error('Error connecting wallet after OAuth:', error)
-    }
-  }
-
-  const simulateOAuthFlow = async (provider) => {
-    // Simulate OAuth API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    const mockUsers = {
-      google: {
-        id: 'google_' + Math.random().toString(36).substr(2, 9),
-        name: 'Mario Rossi',
-        email: 'mario.rossi@gmail.com',
-        avatar: 'https://ui-avatars.com/api/?name=Mario+Rossi&background=4285f4&color=fff'
-      },
-      github: {
-        id: 'github_' + Math.random().toString(36).substr(2, 9),
-        name: 'Mario Rossi',
-        email: 'mario.rossi@github.com',
-        avatar: 'https://ui-avatars.com/api/?name=Mario+Rossi&background=333&color=fff'
-      },
-      apple: {
-        id: 'apple_' + Math.random().toString(36).substr(2, 9),
-        name: 'Mario Rossi',
-        email: 'mario.rossi@icloud.com',
-        avatar: 'https://ui-avatars.com/api/?name=Mario+Rossi&background=000&color=fff'
-      }
-    }
-
-    return mockUsers[provider] || mockUsers.google
-  }
-
   const disconnect = async () => {
     try {
+      // Disconnect Web3Auth
+      if (web3auth.connected) {
+        await web3auth.logout()
+      }
+
+      // Disconnect XRPL
+      if (xrplClient && xrplClient.isConnected()) {
+        await xrplClient.disconnect()
+      }
+
       // Clear state
       setIsAuthenticated(false)
       setUser(null)
       setWallet(null)
       setBalance('0')
       setNetwork(null)
+      setWeb3authProvider(null)
 
       // Clear localStorage
       localStorage.removeItem('solcraft_user')
       localStorage.removeItem('solcraft_wallet')
+      localStorage.removeItem('solcraft_token')
 
-      // Remove event listeners
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged)
-        window.ethereum.removeListener('chainChanged', handleChainChanged)
-      }
+      // Logout from backend
+      await apiService.logout()
 
-      toast.success('Disconnesso con successo')
+      toast.success('Disconnesso con successo!')
     } catch (error) {
       console.error('Disconnect error:', error)
       toast.error('Errore durante la disconnessione')
@@ -329,58 +360,35 @@ export const Web3Provider = ({ children }) => {
     if (accounts.length === 0) {
       disconnect()
     } else {
-      // Update wallet address
-      const updatedWallet = { ...wallet, address: accounts[0] }
-      setWallet(updatedWallet)
-      localStorage.setItem('solcraft_wallet', JSON.stringify(updatedWallet))
+      // Reload user info with new account
+      loadUserInfo()
     }
   }
 
   const handleChainChanged = (chainId) => {
     setNetwork(getNetworkName(chainId))
-    if (wallet) {
-      const updatedWallet = { ...wallet, chainId }
-      setWallet(updatedWallet)
-      localStorage.setItem('solcraft_wallet', JSON.stringify(updatedWallet))
-    }
+    // Reload balance for new network
+    loadUserInfo()
   }
 
   const getNetworkName = (chainId) => {
     const networks = {
       '0x1': 'Ethereum Mainnet',
+      '0x3': 'Ropsten Testnet',
+      '0x4': 'Rinkeby Testnet',
       '0x5': 'Goerli Testnet',
+      '0x2a': 'Kovan Testnet',
       '0x89': 'Polygon Mainnet',
+      '0x13881': 'Polygon Mumbai',
+      '0xa86a': 'Avalanche Mainnet',
+      '0xa869': 'Avalanche Fuji',
       '0x38': 'BSC Mainnet',
-      '0xa4b1': 'Arbitrum One'
+      '0x61': 'BSC Testnet'
     }
-    return networks[chainId] || 'Unknown Network'
+    return networks[chainId] || `Unknown Network (${chainId})`
   }
 
-  const sendTransaction = async (to, amount, tokenAddress = null) => {
-    if (!wallet) {
-      throw new Error('Wallet non connesso')
-    }
-
-    try {
-      const params = {
-        from: wallet.address,
-        to: to,
-        value: '0x' + (parseFloat(amount) * Math.pow(10, 18)).toString(16)
-      }
-
-      const txHash = await window.ethereum.request({
-        method: 'eth_sendTransaction',
-        params: [params]
-      })
-
-      return txHash
-    } catch (error) {
-      console.error('Transaction error:', error)
-      throw error
-    }
-  }
-
-  const value = {
+  const contextValue = {
     // State
     isAuthenticated,
     isConnecting,
@@ -388,21 +396,27 @@ export const Web3Provider = ({ children }) => {
     wallet,
     balance,
     network,
-    
-    // Actions
-    connectWallet,
+    web3authProvider,
+    xrplClient,
+
+    // Methods
+    connectWithWeb3Auth,
+    connectWithMetaMask,
+    connectWithXRPL,
     loginWithOAuth,
     disconnect,
-    sendTransaction,
     
-    // Utils
-    getNetworkName
+    // Aliases for backward compatibility
+    connectWallet: connectWithMetaMask,
+    authenticateWallet: connectWithMetaMask
   }
 
   return (
-    <Web3Context.Provider value={value}>
+    <Web3Context.Provider value={contextValue}>
       {children}
     </Web3Context.Provider>
   )
 }
+
+
 

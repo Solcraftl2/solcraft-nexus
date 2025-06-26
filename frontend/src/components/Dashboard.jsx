@@ -43,7 +43,7 @@ const Dashboard = ({ user }) => {
         const token = localStorage.getItem('authToken');
         
         // Carica statistiche portfolio
-        const balanceResponse = await fetch('/api/portfolio-balance', {
+        const balanceResponse = await fetch('/.netlify/functions/portfolio-balance', {
           headers: {
             'Authorization': `Bearer ${token}`
           }

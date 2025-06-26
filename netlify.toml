@@ -21,3 +21,6 @@
   directory = "api"
   node_bundler = "esbuild"
 
+
+// Force redeploy for API functions - 2025-06-26
+

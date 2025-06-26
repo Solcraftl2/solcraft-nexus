@@ -1,6 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function App() {
+  const [showMessage, setShowMessage] = useState(false);
+  
+  const handleButtonClick = () => {
+    setShowMessage(true);
+    alert('Pulsante funzionante! SolCraft Nexus è operativo.');
+  };
+
   return (
     <div style={{
       padding: '2rem',
@@ -49,21 +56,41 @@ function App() {
           color: '#718096',
           marginBottom: '1.5rem'
         }}>
-          Se vedi questo messaggio, React funziona correttamente!
+          {showMessage ? 
+            '✅ Pulsante cliccato! React funziona perfettamente!' : 
+            'Se vedi questo messaggio, React funziona correttamente!'
+          }
         </p>
         
-        <button style={{
-          backgroundColor: '#3b82f6',
-          color: 'white',
-          padding: '0.75rem 1.5rem',
-          border: 'none',
-          borderRadius: '0.5rem',
-          fontSize: '1rem',
-          cursor: 'pointer',
-          width: '100%'
-        }}>
-          Accedi alla Piattaforma
+        <button 
+          onClick={handleButtonClick}
+          style={{
+            backgroundColor: showMessage ? '#10b981' : '#3b82f6',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            border: 'none',
+            borderRadius: '0.5rem',
+            fontSize: '1rem',
+            cursor: 'pointer',
+            width: '100%',
+            transition: 'all 0.3s ease',
+            transform: showMessage ? 'scale(1.05)' : 'scale(1)'
+          }}
+        >
+          {showMessage ? '✅ Funziona!' : 'Accedi alla Piattaforma'}
         </button>
+        
+        {showMessage && (
+          <div style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            backgroundColor: '#d1fae5',
+            borderRadius: '0.5rem',
+            color: '#065f46'
+          }}>
+            🎉 Interattività confermata! Il pulsante risponde correttamente.
+          </div>
+        )}
       </div>
       
       <div style={{

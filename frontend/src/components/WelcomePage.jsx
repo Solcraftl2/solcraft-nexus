@@ -1,8 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
+import LoginModal from './LoginModal';
 
 const WelcomePage = ({ onLogin }) => {
-  const handleTestLogin = () => {
-    onLogin({ name: 'Test User', email: 'test@example.com' });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  const handleLoginSuccess = (userData) => {
+    setShowLoginModal(false);
+    onLogin(userData);
+  };
+
+  const handleOpenLogin = () => {
+    setShowLoginModal(true);
   };
 
   return (
@@ -10,7 +18,7 @@ const WelcomePage = ({ onLogin }) => {
       <h1>🚀 SolCraft Nexus</h1>
       <p>Piattaforma di Tokenizzazione RWA su XRPL</p>
       <button 
-        onClick={handleTestLogin}
+        onClick={handleOpenLogin}
         style={{
           padding: '1rem 2rem',
           backgroundColor: '#3b82f6',
@@ -24,6 +32,12 @@ const WelcomePage = ({ onLogin }) => {
       >
         Accedi alla Piattaforma
       </button>
+
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onLoginSuccess={handleLoginSuccess}
+      />
     </div>
   );
 };

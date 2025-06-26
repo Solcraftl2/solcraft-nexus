@@ -1,348 +1,933 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Wallet, 
-  Send, 
-  Download, 
-  Eye, 
-  EyeOff, 
-  Copy, 
-  ExternalLink,
-  TrendingUp,
-  TrendingDown,
-  RefreshCw,
-  Plus,
-  ArrowUpRight,
-  ArrowDownLeft
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Button } from './ui/button';
-import { HelpIcon } from './ui/tooltip';
+import React, { useState } from 'react';
 
 const WalletPage = ({ user }) => {
-  const [showBalance, setShowBalance] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedWallet, setSelectedWallet] = useState('main');
-
-  // Dati wallet simulati (da sostituire con dati reali da Supabase)
-  const walletData = {
-    main: {
-      name: 'Portafoglio Principale',
-      address: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
-      balance: {
-        xrp: 1250.75,
-        eur: 1250.75,
-        usd: 1375.82
-      },
-      tokens: [
-        { symbol: 'XRP', amount: 1250.75, value: 1250.75, change: 8.5 },
-        { symbol: 'SOLO', amount: 500, value: 125.50, change: -2.3 },
-        { symbol: 'CORE', amount: 1000, value: 89.20, change: 15.7 }
-      ]
-    }
-  };
-
-  const recentTransactions = [
+  const [selectedTab, setSelectedTab] = useState('overview');
+  const [transactions] = useState([
     {
       id: 1,
-      type: 'received',
-      amount: 100,
-      currency: 'XRP',
-      from: 'rKBjNhXZCPWZqXpSSET3CC1WdRqZQwex',
-      date: '2025-06-26T10:30:00Z',
-      status: 'completed',
-      hash: '1A2B3C4D5E6F7890ABCDEF1234567890'
+      type: 'receive',
+      amount: '+250.00 XRP',
+      from: 'rDNvpJMWqxQtCkjQ3wQpLrTwKjBF8CX2dm',
+      date: '2025-06-26',
+      time: '14:30',
+      status: 'confirmed',
+      hash: '8F4B2C1A9E7D6F3B5A8C2E1D4F7B9A6C3E8D1F4B7A9C2E5D8F1B4A7C9E2D5F8'
     },
     {
       id: 2,
-      type: 'sent',
-      amount: 50,
-      currency: 'XRP',
+      type: 'send',
+      amount: '-100.00 XRP',
       to: 'rLNaPoKeeBjZe2qs6x52yVPZpZ8td4dc6w',
-      date: '2025-06-25T15:45:00Z',
-      status: 'completed',
-      hash: '9876543210FEDCBA0987654321ABCDEF'
+      date: '2025-06-25',
+      time: '09:15',
+      status: 'confirmed',
+      hash: '3A7F9C2E5D8B1F4A7C9E2D5F8B1A4C7E9D2F5A8C1E4D7F9B2A5C8E1D4F7B9A'
     },
     {
       id: 3,
-      type: 'received',
-      amount: 25.5,
-      currency: 'SOLO',
-      from: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
-      date: '2025-06-24T09:15:00Z',
-      status: 'completed',
-      hash: 'ABCDEF1234567890FEDCBA0987654321'
+      type: 'receive',
+      amount: '+500.00 XRP',
+      from: 'rMPCGeneratedAddress123456789',
+      date: '2025-06-24',
+      time: '16:45',
+      status: 'confirmed',
+      hash: '9E2D5F8B1A4C7E9D2F5A8C1E4D7F9B2A5C8E1D4F7B9A3C6E9D2F5A8B1E4D7F'
     }
-  ];
+  ]);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    // Simula chiamata API per aggiornare i dati
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 2000);
-  };
+  const [assets] = useState([
+    {
+      id: 1,
+      symbol: 'XRP',
+      name: 'XRP Ledger',
+      balance: '1,250.75',
+      value: '€625.38',
+      change: '+2.5%',
+      icon: '💎'
+    },
+    {
+      id: 2,
+      symbol: 'RWA-RE01',
+      name: 'Real Estate Token #1',
+      balance: '50.00',
+      value: '€2,500.00',
+      change: '+8.2%',
+      icon: '🏠'
+    },
+    {
+      id: 3,
+      symbol: 'RWA-ST02',
+      name: 'Startup Equity Token',
+      balance: '25.00',
+      value: '€1,875.00',
+      change: '+15.7%',
+      icon: '🚀'
+    }
+  ]);
 
-  const copyAddress = (address) => {
-    navigator.clipboard.writeText(address);
-    // Qui potresti aggiungere una notifica di successo
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('it-IT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const currentWallet = walletData[selectedWallet];
+  const totalBalance = assets.reduce((sum, asset) => {
+    return sum + parseFloat(asset.value.replace('€', '').replace(',', ''));
+  }, 0);
 
   return (
-    <div className="space-y-6">
+    <div style={{
+      minHeight: '100vh',
+      background: '#f8f9fa',
+      fontFamily: 'Arial, sans-serif'
+    }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Portafoglio
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">
-            Gestisci i tuoi wallet e le transazioni
-          </p>
-        </div>
-        <div className="flex items-center space-x-3">
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center space-x-2"
-          >
-            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-            <span>Aggiorna</span>
-          </Button>
-          <Button className="flex items-center space-x-2">
-            <Plus size={16} />
-            <span>Nuovo Wallet</span>
-          </Button>
+      <div style={{
+        background: 'white',
+        padding: '2rem',
+        borderBottom: '1px solid #e2e8f0',
+        marginBottom: '2rem'
+      }}>
+        <div style={{
+          maxWidth: '1400px',
+          margin: '0 auto',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div>
+            <h1 style={{
+              fontSize: '2.5rem',
+              fontWeight: 'bold',
+              color: '#1e293b',
+              margin: '0 0 0.5rem 0'
+            }}>
+              💰 Portafoglio
+            </h1>
+            <p style={{
+              color: '#64748b',
+              fontSize: '1.1rem',
+              margin: 0
+            }}>
+              Gestione completa dei tuoi asset digitali e tokenizzati
+            </p>
+          </div>
+          
+          <div style={{
+            textAlign: 'right'
+          }}>
+            <div style={{
+              fontSize: '2.5rem',
+              fontWeight: 'bold',
+              color: '#10b981',
+              marginBottom: '0.5rem'
+            }}>
+              €{totalBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+            </div>
+            <div style={{
+              color: '#64748b',
+              fontSize: '1rem'
+            }}>
+              Valore Totale Portafoglio
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Wallet Balance Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl p-6 text-white"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <Wallet size={24} />
-            <div>
-              <h3 className="font-semibold">{currentWallet.name}</h3>
-              <p className="text-blue-100 text-sm">XRPL Mainnet</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowBalance(!showBalance)}
-            className="text-white hover:bg-white/20"
-          >
-            {showBalance ? <EyeOff size={16} /> : <Eye size={16} />}
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-3xl font-bold">
-            {showBalance ? `€${currentWallet.balance.eur.toLocaleString()}` : '••••••'}
-          </div>
-          <div className="text-blue-100">
-            {showBalance ? `${currentWallet.balance.xrp.toLocaleString()} XRP` : '••••••'}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-6">
-          <div className="flex items-center space-x-2 text-sm">
-            <span className="text-blue-100">Indirizzo:</span>
-            <code className="bg-white/20 px-2 py-1 rounded text-xs">
-              {currentWallet.address.slice(0, 8)}...{currentWallet.address.slice(-6)}
-            </code>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => copyAddress(currentWallet.address)}
-              className="text-white hover:bg-white/20 p-1"
+      <div style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        padding: '0 2rem'
+      }}>
+        {/* Navigation Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: '1rem',
+          marginBottom: '2rem',
+          borderBottom: '1px solid #e2e8f0'
+        }}>
+          {[
+            { id: 'overview', label: '📊 Panoramica', desc: 'Saldo e statistiche' },
+            { id: 'assets', label: '💎 Asset', desc: 'Token e criptovalute' },
+            { id: 'transactions', label: '📋 Transazioni', desc: 'Cronologia movimenti' },
+            { id: 'send', label: '📤 Invia', desc: 'Trasferisci fondi' },
+            { id: 'receive', label: '📥 Ricevi', desc: 'Genera indirizzo' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedTab(tab.id)}
+              style={{
+                padding: '1rem 1.5rem',
+                border: 'none',
+                background: selectedTab === tab.id ? '#f8fafc' : 'transparent',
+                borderBottom: selectedTab === tab.id ? '3px solid #3b82f6' : '3px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                textAlign: 'left'
+              }}
             >
-              <Copy size={14} />
-            </Button>
-          </div>
-          <div className="flex items-center space-x-2">
-            <TrendingUp size={16} className="text-green-300" />
-            <span className="text-green-300 font-medium">+8.5%</span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700"
-        >
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-              <ArrowDownLeft size={24} className="text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Ricevi</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Genera indirizzo per ricevere</p>
-            </div>
-          </div>
-          <Button className="w-full">
-            Genera Indirizzo
-          </Button>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700"
-        >
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <ArrowUpRight size={24} className="text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Invia</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Trasferisci XRP o token</p>
-            </div>
-          </div>
-          <Button className="w-full">
-            Invia Crypto
-          </Button>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700"
-        >
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <ExternalLink size={24} className="text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Explorer</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Visualizza su XRPL</p>
-            </div>
-          </div>
-          <Button variant="outline" className="w-full">
-            Apri Explorer
-          </Button>
-        </motion.div>
-      </div>
-
-      {/* Token Holdings */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700"
-      >
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            I Tuoi Token
-          </h3>
-        </div>
-        <div className="divide-y divide-slate-200 dark:divide-slate-700">
-          {currentWallet.tokens.map((token, index) => (
-            <div key={index} className="p-6 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">{token.symbol.slice(0, 2)}</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900 dark:text-slate-100">{token.symbol}</h4>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {token.amount.toLocaleString()} {token.symbol}
-                  </p>
-                </div>
+              <div style={{
+                fontWeight: selectedTab === tab.id ? 'bold' : 'normal',
+                color: selectedTab === tab.id ? '#1e293b' : '#64748b',
+                fontSize: '1rem',
+                marginBottom: '0.2rem'
+              }}>
+                {tab.label}
               </div>
-              <div className="text-right">
-                <div className="font-semibold text-slate-900 dark:text-slate-100">
-                  €{token.value.toLocaleString()}
-                </div>
-                <div className={`text-sm flex items-center space-x-1 ${
-                  token.change >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {token.change >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                  <span>{token.change >= 0 ? '+' : ''}{token.change}%</span>
-                </div>
+              <div style={{
+                fontSize: '0.8rem',
+                color: '#94a3b8'
+              }}>
+                {tab.desc}
               </div>
-            </div>
+            </button>
           ))}
         </div>
-      </motion.div>
 
-      {/* Recent Transactions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700"
-      >
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Transazioni Recenti
+        {/* Overview Tab */}
+        {selectedTab === 'overview' && (
+          <div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+              gap: '2rem',
+              marginBottom: '2rem'
+            }}>
+              <div style={{
+                background: 'white',
+                padding: '2rem',
+                borderRadius: '12px',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  marginBottom: '1.5rem'
+                }}>
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.5rem'
+                  }}>
+                    💰
+                  </div>
+                  <div>
+                    <h3 style={{
+                      margin: 0,
+                      fontSize: '1.3rem',
+                      color: '#1e293b'
+                    }}>
+                      Saldo Totale
+                    </h3>
+                    <p style={{
+                      margin: 0,
+                      color: '#64748b',
+                      fontSize: '0.9rem'
+                    }}>
+                      Tutti gli asset
+                    </p>
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: '2.2rem',
+                  fontWeight: 'bold',
+                  color: '#10b981',
+                  marginBottom: '0.5rem'
+                }}>
+                  €{totalBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                </div>
+                <div style={{
+                  color: '#10b981',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span>↗️</span>
+                  +8.5% questo mese
+                </div>
+              </div>
+
+              <div style={{
+                background: 'white',
+                padding: '2rem',
+                borderRadius: '12px',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  marginBottom: '1.5rem'
+                }}>
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.5rem'
+                  }}>
+                    💎
+                  </div>
+                  <div>
+                    <h3 style={{
+                      margin: 0,
+                      fontSize: '1.3rem',
+                      color: '#1e293b'
+                    }}>
+                      Asset Diversi
+                    </h3>
+                    <p style={{
+                      margin: 0,
+                      color: '#64748b',
+                      fontSize: '0.9rem'
+                    }}>
+                      Portafoglio diversificato
+                    </p>
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: '2.2rem',
+                  fontWeight: 'bold',
+                  color: '#3b82f6',
+                  marginBottom: '0.5rem'
+                }}>
+                  {assets.length}
+                </div>
+                <div style={{
+                  color: '#64748b',
+                  fontSize: '0.9rem'
+                }}>
+                  Criptovalute e RWA
+                </div>
+              </div>
+
+              <div style={{
+                background: 'white',
+                padding: '2rem',
+                borderRadius: '12px',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  marginBottom: '1.5rem'
+                }}>
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.5rem'
+                  }}>
+                    📈
+                  </div>
+                  <div>
+                    <h3 style={{
+                      margin: 0,
+                      fontSize: '1.3rem',
+                      color: '#1e293b'
+                    }}>
+                      Performance
+                    </h3>
+                    <p style={{
+                      margin: 0,
+                      color: '#64748b',
+                      fontSize: '0.9rem'
+                    }}>
+                      Rendimento 30gg
+                    </p>
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: '2.2rem',
+                  fontWeight: 'bold',
+                  color: '#8b5cf6',
+                  marginBottom: '0.5rem'
+                }}>
+                  +12.3%
+                </div>
+                <div style={{
+                  color: '#8b5cf6',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span>🚀</span>
+                  Trend positivo
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div style={{
+              background: 'white',
+              padding: '2rem',
+              borderRadius: '12px',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+            }}>
+              <h3 style={{
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                color: '#1e293b',
+                marginBottom: '1.5rem'
+              }}>
+                ⚡ Azioni Rapide
+              </h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '1rem'
+              }}>
+                {[
+                  { action: 'send', label: '📤 Invia Fondi', desc: 'Trasferisci XRP o token' },
+                  { action: 'receive', label: '📥 Ricevi Fondi', desc: 'Genera indirizzo wallet' },
+                  { action: 'swap', label: '🔄 Scambia', desc: 'Converti tra asset' },
+                  { action: 'stake', label: '🏦 Staking', desc: 'Guadagna rendimenti' }
+                ].map(item => (
+                  <button
+                    key={item.action}
+                    onClick={() => setSelectedTab(item.action)}
+                    style={{
+                      padding: '1.5rem',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '12px',
+                      background: 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                      textAlign: 'left'
+                    }}
+                    onMouseOver={(e) => {
+                      e.target.style.borderColor = '#3b82f6';
+                      e.target.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.target.style.borderColor = '#e2e8f0';
+                      e.target.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <div style={{
+                      fontWeight: 'bold',
+                      color: '#1e293b',
+                      marginBottom: '0.5rem'
+                    }}>
+                      {item.label}
+                    </div>
+                    <div style={{
+                      color: '#64748b',
+                      fontSize: '0.9rem'
+                    }}>
+                      {item.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Assets Tab */}
+        {selectedTab === 'assets' && (
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '2rem',
+              borderBottom: '1px solid #e2e8f0'
+            }}>
+              <h3 style={{
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                color: '#1e293b',
+                margin: 0
+              }}>
+                💎 I Tuoi Asset
+              </h3>
+              <p style={{
+                color: '#64748b',
+                margin: '0.5rem 0 0 0'
+              }}>
+                Gestisci e monitora tutti i tuoi token e criptovalute
+              </p>
+            </div>
+            
+            <div style={{ padding: '0' }}>
+              {assets.map(asset => (
+                <div
+                  key={asset.id}
+                  style={{
+                    padding: '1.5rem 2rem',
+                    borderBottom: '1px solid #f1f5f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    transition: 'background 0.3s'
+                  }}
+                  onMouseOver={(e) => e.target.style.background = '#f8fafc'}
+                  onMouseOut={(e) => e.target.style.background = 'white'}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem'
+                  }}>
+                    <div style={{
+                      width: '50px',
+                      height: '50px',
+                      background: 'linear-gradient(135deg, #f1f5f9, #e2e8f0)',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.5rem'
+                    }}>
+                      {asset.icon}
+                    </div>
+                    <div>
+                      <div style={{
+                        fontWeight: 'bold',
+                        color: '#1e293b',
+                        fontSize: '1.1rem'
+                      }}>
+                        {asset.symbol}
+                      </div>
+                      <div style={{
+                        color: '#64748b',
+                        fontSize: '0.9rem'
+                      }}>
+                        {asset.name}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{
+                      fontWeight: 'bold',
+                      color: '#1e293b',
+                      fontSize: '1.1rem'
+                    }}>
+                      {asset.balance} {asset.symbol}
+                    </div>
+                    <div style={{
+                      color: '#64748b',
+                      fontSize: '0.9rem'
+                    }}>
+                      {asset.value}
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    color: asset.change.startsWith('+') ? '#10b981' : '#ef4444',
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem',
+                    textAlign: 'right'
+                  }}>
+                    {asset.change}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Transactions Tab */}
+        {selectedTab === 'transactions' && (
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '2rem',
+              borderBottom: '1px solid #e2e8f0'
+            }}>
+              <h3 style={{
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                color: '#1e293b',
+                margin: 0
+              }}>
+                📋 Cronologia Transazioni
+              </h3>
+              <p style={{
+                color: '#64748b',
+                margin: '0.5rem 0 0 0'
+              }}>
+                Tutte le tue transazioni recenti su XRPL
+              </p>
+            </div>
+            
+            <div style={{ padding: '0' }}>
+              {transactions.map(tx => (
+                <div
+                  key={tx.id}
+                  style={{
+                    padding: '1.5rem 2rem',
+                    borderBottom: '1px solid #f1f5f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    transition: 'background 0.3s'
+                  }}
+                  onMouseOver={(e) => e.target.style.background = '#f8fafc'}
+                  onMouseOut={(e) => e.target.style.background = 'white'}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem'
+                  }}>
+                    <div style={{
+                      width: '50px',
+                      height: '50px',
+                      background: tx.type === 'receive' 
+                        ? 'linear-gradient(135deg, #10b981, #059669)' 
+                        : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.5rem',
+                      color: 'white'
+                    }}>
+                      {tx.type === 'receive' ? '📥' : '📤'}
+                    </div>
+                    <div>
+                      <div style={{
+                        fontWeight: 'bold',
+                        color: '#1e293b',
+                        fontSize: '1.1rem'
+                      }}>
+                        {tx.type === 'receive' ? 'Ricevuto' : 'Inviato'}
+                      </div>
+                      <div style={{
+                        color: '#64748b',
+                        fontSize: '0.9rem'
+                      }}>
+                        {tx.type === 'receive' ? `Da: ${tx.from.substring(0, 20)}...` : `A: ${tx.to.substring(0, 20)}...`}
+                      </div>
+                      <div style={{
+                        color: '#94a3b8',
+                        fontSize: '0.8rem'
+                      }}>
+                        {tx.date} alle {tx.time}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{
+                      fontWeight: 'bold',
+                      color: tx.type === 'receive' ? '#10b981' : '#ef4444',
+                      fontSize: '1.1rem'
+                    }}>
+                      {tx.amount}
+                    </div>
+                    <div style={{
+                      color: '#10b981',
+                      fontSize: '0.8rem',
+                      background: '#f0fdf4',
+                      padding: '0.2rem 0.5rem',
+                      borderRadius: '4px',
+                      display: 'inline-block'
+                    }}>
+                      ✅ Confermata
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Send Tab */}
+        {selectedTab === 'send' && (
+          <div style={{
+            background: 'white',
+            padding: '2rem',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            maxWidth: '600px'
+          }}>
+            <h3 style={{
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              color: '#1e293b',
+              marginBottom: '1rem'
+            }}>
+              📤 Invia Fondi
             </h3>
-            <Button variant="ghost" size="sm">
-              Vedi Tutte
-            </Button>
-          </div>
-        </div>
-        <div className="divide-y divide-slate-200 dark:divide-slate-700">
-          {recentTransactions.map((tx) => (
-            <div key={tx.id} className="p-6 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  tx.type === 'received' 
-                    ? 'bg-green-100 dark:bg-green-900/30' 
-                    : 'bg-red-100 dark:bg-red-900/30'
-                }`}>
-                  {tx.type === 'received' ? (
-                    <ArrowDownLeft size={20} className="text-green-600 dark:text-green-400" />
-                  ) : (
-                    <ArrowUpRight size={20} className="text-red-600 dark:text-red-400" />
-                  )}
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-900 dark:text-slate-100">
-                    {tx.type === 'received' ? 'Ricevuto' : 'Inviato'}
-                  </div>
-                  <div className="text-sm text-slate-600 dark:text-slate-400">
-                    {formatDate(tx.date)}
-                  </div>
+            <p style={{
+              color: '#64748b',
+              marginBottom: '2rem'
+            }}>
+              Trasferisci XRP o token ad altri wallet XRPL
+            </p>
+
+            <form style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500',
+                  color: '#374151'
+                }}>
+                  Indirizzo Destinatario
+                </label>
+                <input
+                  type="text"
+                  placeholder="rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    transition: 'border-color 0.3s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500',
+                  color: '#374151'
+                }}>
+                  Importo
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '1rem',
+                      transition: 'border-color 0.3s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                  />
+                  <select style={{
+                    padding: '0.75rem',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    background: 'white'
+                  }}>
+                    <option>XRP</option>
+                    <option>RWA-RE01</option>
+                    <option>RWA-ST02</option>
+                  </select>
                 </div>
               </div>
-              <div className="text-right">
-                <div className={`font-semibold ${
-                  tx.type === 'received' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {tx.type === 'received' ? '+' : '-'}{tx.amount} {tx.currency}
+
+              <div>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500',
+                  color: '#374151'
+                }}>
+                  Memo (Opzionale)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Descrizione transazione"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    transition: 'border-color 0.3s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              <div style={{
+                background: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                borderRadius: '8px',
+                padding: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '0.9rem',
+                  color: '#0369a1',
+                  fontWeight: '500',
+                  marginBottom: '0.5rem'
+                }}>
+                  💡 Riepilogo Transazione
                 </div>
-                <div className="text-sm text-slate-600 dark:text-slate-400">
-                  Completata
+                <div style={{
+                  fontSize: '0.8rem',
+                  color: '#0369a1'
+                }}>
+                  • Commissione di rete: ~0.00001 XRP<br/>
+                  • Tempo di conferma: ~3-5 secondi<br/>
+                  • La transazione sarà irreversibile una volta confermata
                 </div>
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s'
+                }}
+                onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+              >
+                📤 Invia Transazione
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Receive Tab */}
+        {selectedTab === 'receive' && (
+          <div style={{
+            background: 'white',
+            padding: '2rem',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            maxWidth: '600px',
+            textAlign: 'center'
+          }}>
+            <h3 style={{
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              color: '#1e293b',
+              marginBottom: '1rem'
+            }}>
+              📥 Ricevi Fondi
+            </h3>
+            <p style={{
+              color: '#64748b',
+              marginBottom: '2rem'
+            }}>
+              Condividi questo indirizzo per ricevere XRP o token
+            </p>
+
+            <div style={{
+              background: '#f8fafc',
+              border: '2px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '2rem',
+              marginBottom: '2rem'
+            }}>
+              <div style={{
+                width: '150px',
+                height: '150px',
+                background: 'white',
+                border: '2px solid #e2e8f0',
+                borderRadius: '8px',
+                margin: '0 auto 1.5rem auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '3rem'
+              }}>
+                📱
+              </div>
+              
+              <div style={{
+                fontSize: '0.9rem',
+                color: '#64748b',
+                marginBottom: '1rem'
+              }}>
+                Il tuo indirizzo XRPL:
+              </div>
+              
+              <div style={{
+                background: 'white',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '1rem',
+                fontFamily: 'monospace',
+                fontSize: '0.9rem',
+                color: '#1e293b',
+                wordBreak: 'break-all',
+                marginBottom: '1rem'
+              }}>
+                {user?.address || 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH'}
+              </div>
+              
+              <button
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s'
+                }}
+                onClick={() => {
+                  navigator.clipboard.writeText(user?.address || 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH');
+                  alert('Indirizzo copiato negli appunti!');
+                }}
+              >
+                📋 Copia Indirizzo
+              </button>
+            </div>
+
+            <div style={{
+              background: '#fef3c7',
+              border: '1px solid #fbbf24',
+              borderRadius: '8px',
+              padding: '1rem',
+              textAlign: 'left'
+            }}>
+              <div style={{
+                fontSize: '0.9rem',
+                color: '#92400e',
+                fontWeight: '500',
+                marginBottom: '0.5rem'
+              }}>
+                ⚠️ Importante
+              </div>
+              <div style={{
+                fontSize: '0.8rem',
+                color: '#92400e'
+              }}>
+                • Invia solo XRP e token compatibili XRPL a questo indirizzo<br/>
+                • Non inviare altre criptovalute (Bitcoin, Ethereum, ecc.)<br/>
+                • Verifica sempre l'indirizzo prima di inviare fondi
               </div>
             </div>
-          ))}
-        </div>
-      </motion.div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

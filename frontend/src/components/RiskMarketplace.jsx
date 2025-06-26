@@ -7,21 +7,32 @@ import {
   marketData 
 } from '../data/insuranceData';
 import oracleService from '../services/oracleService';
+import CatastropheBondInterface from './CatastropheBondInterface';
+import CyberRiskInterface from './CyberRiskInterface';
 
 const RiskMarketplace = ({ user, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('browse');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedRiskLayer, setSelectedRiskLayer] = useState('all');
-  const [sortBy, setSortBy] = useState('yield_desc');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('yield');
   const [selectedToken, setSelectedToken] = useState(null);
-  const [investmentAmount, setInvestmentAmount] = useState('');
   const [showInvestModal, setShowInvestModal] = useState(false);
+  const [investmentAmount, setInvestmentAmount] = useState('');
   const [userPortfolio, setUserPortfolio] = useState([]);
   const [watchlist, setWatchlist] = useState([]);
-  const [oracleStatus, setOracleStatus] = useState(null);
+  const [oracleData, setOracleData] = useState({});
   const [triggerEvents, setTriggerEvents] = useState([]);
   const [monitoredTokens, setMonitoredTokens] = useState(new Set());
+  const [specializedView, setSpecializedView] = useState(null);
+
+  // Render specialized interfaces
+  if (specializedView === 'catastrophe') {
+    return <CatastropheBondInterface user={user} onNavigate={onNavigate} />;
+  }
+  
+  if (specializedView === 'cyber') {
+    return <CyberRiskInterface user={user} onNavigate={onNavigate} />;
+  }
 
   // Initialize oracle service and monitoring
   useEffect(() => {

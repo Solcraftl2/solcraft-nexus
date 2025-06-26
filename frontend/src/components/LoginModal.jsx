@@ -197,6 +197,108 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
   };
 
+  const handleTrustWalletConnect = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    
+    try {
+      // Verifica se Trust Wallet è installato (browser extension)
+      const isTrustWalletInstalled = window.ethereum && window.ethereum.isTrust;
+      
+      if (isTrustWalletInstalled) {
+        // Trust Wallet è installato ma non supporta XRPL
+        const userData = {
+          name: 'Trust Wallet User (Limitato)',
+          email: null,
+          provider: 'Trust Wallet',
+          wallet: null,
+          isSimulated: true,
+          message: 'Trust Wallet rilevato ma non supporta XRPL via web. Usa l\'app mobile per XRPL.',
+          limitation: 'XRPL non supportato via browser extension'
+        };
+        
+        setTimeout(() => {
+          onLoginSuccess(userData);
+          setLoading(false);
+          onClose();
+        }, 2000);
+        return;
+      }
+
+      // Verifica se è disponibile WalletConnect (per mobile)
+      if (window.WalletConnect) {
+        // Potenziale connessione via WalletConnect
+        const userData = {
+          name: 'Trust Wallet User (WalletConnect)',
+          email: null,
+          provider: 'Trust Wallet',
+          wallet: {
+            address: 'rTrustWalletConnect123...',
+            type: 'XRPL',
+            network: 'testnet'
+          },
+          isSimulated: true,
+          message: 'Connessione Trust Wallet via WalletConnect simulata. XRPL non supportato nativamente.',
+          method: 'WalletConnect (simulato)'
+        };
+        
+        setTimeout(() => {
+          onLoginSuccess(userData);
+          setLoading(false);
+          onClose();
+        }, 2000);
+        return;
+      }
+
+      // Nessuna integrazione Trust Wallet disponibile - simulazione completa
+      const userData = {
+        name: 'Trust Wallet User (Demo)',
+        email: null,
+        provider: 'Trust Wallet',
+        wallet: {
+          address: 'rTrustWalletDemo123...',
+          type: 'XRPL',
+          network: 'testnet'
+        },
+        isSimulated: true,
+        message: 'Trust Wallet non rilevato. Connessione completamente simulata per demo.',
+        recommendation: 'Per XRPL reale, usa Crossmark o XUMM'
+      };
+      
+      setTimeout(() => {
+        onLoginSuccess(userData);
+        setLoading(false);
+        onClose();
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Errore Trust Wallet:', error);
+      
+      // Fallback a simulazione completa
+      const userData = {
+        name: 'Trust Wallet User (Errore)',
+        email: null,
+        provider: 'Trust Wallet',
+        wallet: {
+          address: 'rTrustWalletError123...',
+          type: 'XRPL',
+          network: 'testnet'
+        },
+        isSimulated: true,
+        error: error.message,
+        message: 'Errore nella connessione Trust Wallet. Simulazione attivata.'
+      };
+      
+      setTimeout(() => {
+        onLoginSuccess(userData);
+        setLoading(false);
+        onClose();
+      }, 1500);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleWalletConnect = async (wallet, event) => {
     event.preventDefault();
     
@@ -209,22 +311,27 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
       await handleXummConnect(event);
       return;
     }
+    
+    if (wallet === 'Trust') {
+      await handleTrustWalletConnect(event);
+      return;
+    }
 
-    // Simulazione per Trust Wallet (non supporta XRPL via web)
+    // Fallback per wallet non implementati
     setLoading(true);
     
     setTimeout(() => {
       const userData = {
-        name: `${wallet} User (Simulato)`,
+        name: `${wallet} User (Non Implementato)`,
         email: null,
         provider: wallet,
         wallet: {
-          address: `r${wallet}Simulated123...`,
+          address: `r${wallet}NotImplemented123...`,
           type: 'XRPL',
           network: 'testnet'
         },
         isSimulated: true,
-        message: `${wallet} non supporta XRPL via web. Connessione simulata per demo.`
+        message: `${wallet} non ancora implementato. Connessione simulata per demo.`
       };
       
       onLoginSuccess(userData);
@@ -263,7 +370,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
             Scegli il tuo metodo di accesso preferito
           </p>
           <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-            ⚠️ Social: Demo | Crossmark & XUMM: Reale/Simulato | Trust: Demo
+            ⚠️ Social: Demo | Crossmark & XUMM: Reale/Simulato | Trust: Limitato
           </p>
         </div>
 
@@ -322,9 +429,9 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
           
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
             {[
-              { name: 'Crossmark', status: 'Ready', color: '#10b981' },
-              { name: 'XUMM', status: 'Ready', color: '#3b82f6' },
-              { name: 'Trust', status: 'Demo', color: '#6b7280' }
+              { name: 'Crossmark', status: 'Ready', color: '#10b981', icon: '🚀' },
+              { name: 'XUMM', status: 'Ready', color: '#3b82f6', icon: '💎' },
+              { name: 'Trust', status: 'Limited', color: '#f59e0b', icon: '⚠️' }
             ].map((wallet) => (
               <button
                 key={wallet.name}
@@ -341,15 +448,22 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                   fontWeight: wallet.status === 'Ready' ? 'bold' : 'normal'
                 }}
               >
-                {wallet.name === 'Crossmark' && '🚀 '}
-                {wallet.name === 'XUMM' && '💎 '}
-                {wallet.name === 'Trust' && '🔒 '}
-                {wallet.name}
+                {wallet.icon} {wallet.name}
                 {wallet.status === 'Ready' && ' (Ready)'}
-                {wallet.status === 'Demo' && ' (Demo)'}
+                {wallet.status === 'Limited' && ' (Limited)'}
               </button>
             ))}
           </div>
+          
+          {/* Nota informativa per Trust Wallet */}
+          <p style={{ 
+            fontSize: '0.75rem', 
+            color: '#6b7280', 
+            marginTop: '0.75rem',
+            fontStyle: 'italic'
+          }}>
+            💡 Trust Wallet: XRPL supportato solo su mobile app
+          </p>
         </div>
 
         <button

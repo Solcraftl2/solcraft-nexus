@@ -22,11 +22,10 @@
   directory = "api"
   node_bundler = "esbuild"
 
-
 [[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200
 
-// Force redeploy for API functions - 2025-06-26
+# Force redeploy for API functions - 2025-06-26
 

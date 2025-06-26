@@ -1,22 +1,39 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
+// Netlify Function format
+exports.handler = async (event, context) => {
+  // CORS headers
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Content-Type': 'application/json'
   }
 
-  return res.status(200).json({
-    success: true,
-    message: 'SolCraft Nexus API is healthy',
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    endpoints: {
-      'Google OAuth': '/api/auth/oauth/google',
-      'GitHub OAuth': '/api/auth/oauth/github',
-      'Wallet Auth': '/api/auth/wallet'
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
     }
-  })
+  }
+
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      success: true,
+      message: 'SolCraft Nexus API is healthy on Netlify!',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      platform: 'Netlify Functions',
+      endpoints: {
+        'Google OAuth': '/api/auth/oauth/google',
+        'GitHub OAuth': '/api/auth/oauth/github',
+        'Wallet Auth': '/api/auth/wallet',
+        'Account Info': '/api/account/info',
+        'MPT Create': '/api/mpt/create',
+        'Portfolio': '/api/portfolio/balance'
+      }
+    })
+  }
 }
 

@@ -1,20 +1,33 @@
-// Vercel Function format
-export default function handler(req, res) {
+// Netlify Function format
+exports.handler = async (event, context) => {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Content-Type': 'application/json'
   }
 
-  return res.status(200).json({
-    success: true,
-    message: 'SolCraft Nexus API Test funziona!',
-    timestamp: new Date().toISOString(),
-    method: req.method,
-    url: req.url
-  })
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
+    }
+  }
+
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      success: true,
+      message: 'SolCraft Nexus API Test funziona perfettamente su Netlify!',
+      timestamp: new Date().toISOString(),
+      method: event.httpMethod,
+      path: event.path,
+      platform: 'Netlify Functions',
+      status: 'All systems operational'
+    })
+  }
 }
 

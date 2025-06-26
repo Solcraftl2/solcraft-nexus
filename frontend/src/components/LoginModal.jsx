@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import sdk from '@crossmarkio/sdk';
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSocialLogin = async (provider) => {
+  const handleSocialLogin = async (provider, event) => {
+    event.preventDefault(); // Impedisce comportamento di default
     console.log(`🔧 Login simulato con ${provider}`);
     setLoading(true);
     
@@ -27,65 +27,54 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }, 1500);
   };
 
-  const handleCrossmarkConnect = async () => {
-    console.log('🚀 Connessione Crossmark reale...');
-    setLoading(true);
+  const handleCrossmarkConnect = async (event) => {
+    // TEST 1: Alert immediato per confermare che arriviamo qui
+    alert('🎯 STEP 1: Handler Crossmark chiamato!');
+    
+    event.preventDefault();
+    
+    // TEST 2: Alert dopo preventDefault
+    alert('🎯 STEP 2: preventDefault eseguito!');
     
     try {
-      // Verifica se Crossmark è installato
+      // TEST 3: Alert prima dell'import
+      alert('🎯 STEP 3: Prima dell\'import SDK...');
+      
+      // Provo l'import in modo diverso
+      const sdk = await import('@crossmarkio/sdk');
+      
+      // TEST 4: Alert dopo l'import
+      alert('🎯 STEP 4: Import SDK completato!');
+      
+      // TEST 5: Controllo window.crossmark
+      alert(`🎯 STEP 5: window.crossmark = ${!!window.crossmark}`);
+      
       if (!window.crossmark) {
-        alert('Crossmark wallet non trovato. Installa l\'estensione Crossmark dal Chrome Web Store.');
-        setLoading(false);
+        alert('❌ Crossmark non installato');
         return;
       }
-
-      console.log('📡 Inizializzazione Crossmark SDK...');
       
-      // Connessione con Crossmark
-      const signInResponse = await sdk.async.signInAndWait();
-      console.log('✅ Risposta Crossmark signIn:', signInResponse);
-
-      if (signInResponse && signInResponse.response && signInResponse.response.data) {
-        const { address } = signInResponse.response.data;
-        
-        // Recupera informazioni sessione
-        const sessionResponse = await sdk.async.getUserSession();
-        console.log('✅ Sessione Crossmark:', sessionResponse);
-
-        const userData = {
-          name: `Crossmark User`,
-          email: null,
-          provider: 'Crossmark',
-          wallet: {
-            address: address,
-            type: 'XRPL',
-            network: 'mainnet'
-          },
-          isSimulated: false // Connessione reale!
-        };
-        
-        console.log('🎉 Crossmark connesso con successo:', userData);
-        onLoginSuccess(userData);
-        onClose();
-      } else {
-        throw new Error('Risposta Crossmark non valida');
-      }
+      alert('🎯 STEP 6: Crossmark trovato, procedo...');
+      
     } catch (error) {
-      console.error('❌ Errore connessione Crossmark:', error);
-      alert(`Errore connessione Crossmark: ${error.message}`);
-    } finally {
-      setLoading(false);
+      alert(`❌ ERRORE: ${error.message}`);
     }
   };
 
-  const handleWalletConnect = async (wallet) => {
+  const handleWalletConnect = async (wallet, event) => {
+    // TEST GENERALE: Alert per tutti i wallet
+    alert(`🔧 WALLET HANDLER: ${wallet}`);
+    
+    event.preventDefault();
+    
     if (wallet === 'Crossmark') {
-      await handleCrossmarkConnect();
+      alert('🚀 ROUTING TO CROSSMARK...');
+      await handleCrossmarkConnect(event);
       return;
     }
 
     // Simulazione per altri wallet (XUMM, Trust)
-    console.log(`🔧 Wallet simulato: ${wallet}`);
+    alert(`✅ SIMULAZIONE: ${wallet}`);
     setLoading(true);
     
     setTimeout(() => {
@@ -101,7 +90,6 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
         isSimulated: true
       };
       
-      console.log('✅ Wallet simulato completato:', userData);
       onLoginSuccess(userData);
       setLoading(false);
       onClose();
@@ -138,7 +126,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
             Scegli il tuo metodo di accesso preferito
           </p>
           <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-            ⚠️ Social Login: Demo | Crossmark: Reale | Altri wallet: Demo
+            ⚠️ Social Login: Demo | Crossmark: Debug | Altri wallet: Demo
           </p>
         </div>
 
@@ -146,7 +134,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
           {['Google', 'GitHub', 'Twitter', 'Discord'].map((provider) => (
             <button
               key={provider}
-              onClick={() => handleSocialLogin(provider)}
+              onClick={(event) => handleSocialLogin(provider, event)}
               disabled={loading}
               style={{
                 display: 'flex',
@@ -199,7 +187,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
             {['Crossmark', 'XUMM', 'Trust'].map((wallet) => (
               <button
                 key={wallet}
-                onClick={() => handleWalletConnect(wallet)}
+                onClick={(event) => handleWalletConnect(wallet, event)}
                 disabled={loading}
                 style={{
                   padding: '0.5rem 1rem',
@@ -212,9 +200,9 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                   fontWeight: wallet === 'Crossmark' ? 'bold' : 'normal'
                 }}
               >
-                {wallet === 'Crossmark' && '🚀 '}
+                {wallet === 'Crossmark' && '🔍 '}
                 {wallet}
-                {wallet === 'Crossmark' && ' (Reale)'}
+                {wallet === 'Crossmark' && ' (Debug)'}
               </button>
             ))}
           </div>

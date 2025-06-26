@@ -9,6 +9,7 @@ import LearnPage from './components/LearnPage';
 import TradingSystem from './components/TradingSystem';
 import NotificationSystem from './components/NotificationSystem';
 import AdvancedAnalytics from './components/AdvancedAnalytics';
+import RiskMarketplace from './components/RiskMarketplace';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -47,6 +48,8 @@ function App() {
       case 'tokenize':
         return <TokenizePage user={user} onNavigate={handleNavigate} onLogout={handleLogout} />;
       case 'marketplace':
+        return <RiskMarketplace user={user} onNavigate={handleNavigate} />;
+      case 'trading':
         return <TradingSystem user={user} onNavigate={handleNavigate} />;
       case 'learn':
         return <LearnPage user={user} onNavigate={handleNavigate} onLogout={handleLogout} />;

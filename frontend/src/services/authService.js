@@ -18,7 +18,7 @@ class AuthService {
   // Initialize Web3Auth Plug and Play for social login
   async initializeWeb3Auth() {
     try {
-      console.log('Initializing Web3Auth Plug and Play...');
+      console.log('🔐 Initializing Web3Auth Plug and Play...');
 
       const { web3AuthOptions } = web3AuthContextConfig;
 
@@ -49,7 +49,7 @@ class AuthService {
       await this.web3auth.initModal();
       
       this.isInitialized = true;
-      console.log('Web3Auth Plug and Play initialized successfully');
+      console.log('✅ Web3Auth Plug and Play initialized successfully');
 
       // Check if user is already logged in
       if (this.web3auth.connected) {
@@ -58,7 +58,7 @@ class AuthService {
       }
 
     } catch (error) {
-      console.error('Web3Auth initialization failed:', error);
+      console.error('❌ Web3Auth initialization failed:', error);
       throw error;
     }
   }
@@ -70,7 +70,7 @@ class AuthService {
         await this.initializeWeb3Auth();
       }
 
-      console.log(`Logging in with ${provider}...`);
+      console.log(`🔐 Logging in with ${provider}...`);
 
       const web3authProvider = await this.web3auth.connect(provider, {
         loginProvider: provider,
@@ -95,12 +95,12 @@ class AuthService {
         this.currentUser = user;
         this.notifyAuthCallbacks('login', user);
         
-        console.log('Social login successful:', user);
+        console.log('✅ Social login successful:', user);
         return user;
       }
 
     } catch (error) {
-      console.error(`Social login failed for ${provider}:`, error);
+      console.error(`❌ Social login failed for ${provider}:`, error);
       throw error;
     }
   }

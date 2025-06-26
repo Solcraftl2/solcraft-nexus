@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
+import WelcomePage from './components/WelcomePage';
 
 function App() {
+  const [user, setUser] = useState(null);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    console.log('Login successful:', userData);
+  };
+
   return (
-    <div>
-      <h1>TEST - SolCraft Nexus</h1>
-      <p>Se vedi questo messaggio, React funziona!</p>
+    <div className="App">
+      <WelcomePage onLogin={handleLogin} />
     </div>
   );
 }

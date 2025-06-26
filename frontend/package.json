@@ -64,6 +64,7 @@
     "tailwindcss": "^4.1.7",
     "vaul": "^1.1.2",
     "xrpl": "^4.3.0",
+    "xumm-oauth2-pkce": "^2.8.7",
     "zod": "^3.24.4"
   },
   "devDependencies": {

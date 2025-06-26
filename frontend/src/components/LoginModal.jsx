@@ -106,6 +106,97 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
   };
 
+  const handleXummConnect = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    
+    try {
+      // Importa dinamicamente il SDK XUMM OAuth2 PKCE
+      const { XummPkce } = await import('xumm-oauth2-pkce');
+      
+      // Inizializza XUMM con API key (per demo usiamo una chiave di test)
+      // In produzione, questa dovrebbe essere configurata tramite variabili d'ambiente
+      const xumm = new XummPkce('your-api-key-here', {
+        redirectUrl: window.location.origin,
+        rememberJwt: true
+      });
+
+      // Verifica se l'utente è già autenticato
+      const existingJwt = await xumm.state();
+      
+      if (existingJwt && existingJwt.me && existingJwt.me.account) {
+        // Utente già autenticato
+        const userData = {
+          name: 'XUMM User',
+          email: null,
+          provider: 'XUMM',
+          wallet: {
+            address: existingJwt.me.account,
+            type: 'XRPL',
+            network: existingJwt.me.networkType || 'mainnet'
+          },
+          isSimulated: false,
+          jwt: existingJwt.jwt,
+          message: 'Connessione XUMM esistente recuperata.'
+        };
+        
+        onLoginSuccess(userData);
+        onClose();
+        setLoading(false);
+        return;
+      }
+
+      // Avvia il processo di autorizzazione
+      const authResult = await xumm.authorize();
+      
+      if (authResult && authResult.me && authResult.me.account) {
+        const userData = {
+          name: 'XUMM User',
+          email: null,
+          provider: 'XUMM',
+          wallet: {
+            address: authResult.me.account,
+            type: 'XRPL',
+            network: authResult.me.networkType || 'mainnet'
+          },
+          isSimulated: false,
+          jwt: authResult.jwt,
+          message: 'Connessione XUMM completata con successo.'
+        };
+        
+        onLoginSuccess(userData);
+        onClose();
+      } else {
+        throw new Error('Autorizzazione XUMM fallita o cancellata');
+      }
+    } catch (error) {
+      console.error('Errore XUMM:', error);
+      
+      // In caso di errore, simula connessione per demo
+      const userData = {
+        name: 'XUMM User (Simulato)',
+        email: null,
+        provider: 'XUMM',
+        wallet: {
+          address: 'rXUMMSimulated123...',
+          type: 'XRPL',
+          network: 'testnet'
+        },
+        isSimulated: true,
+        error: error.message,
+        message: 'XUMM non disponibile. Connessione simulata per demo.'
+      };
+      
+      setTimeout(() => {
+        onLoginSuccess(userData);
+        setLoading(false);
+        onClose();
+      }, 1500);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleWalletConnect = async (wallet, event) => {
     event.preventDefault();
     
@@ -113,21 +204,27 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
       await handleCrossmarkConnect(event);
       return;
     }
+    
+    if (wallet === 'XUMM') {
+      await handleXummConnect(event);
+      return;
+    }
 
-    // Simulazione per altri wallet (XUMM, Trust)
+    // Simulazione per Trust Wallet (non supporta XRPL via web)
     setLoading(true);
     
     setTimeout(() => {
       const userData = {
-        name: `User from ${wallet}`,
-        email: `user@${wallet.toLowerCase()}.com`,
+        name: `${wallet} User (Simulato)`,
+        email: null,
         provider: wallet,
         wallet: {
           address: `r${wallet}Simulated123...`,
           type: 'XRPL',
           network: 'testnet'
         },
-        isSimulated: true
+        isSimulated: true,
+        message: `${wallet} non supporta XRPL via web. Connessione simulata per demo.`
       };
       
       onLoginSuccess(userData);
@@ -166,7 +263,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
             Scegli il tuo metodo di accesso preferito
           </p>
           <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-            ⚠️ Social Login: Demo | Crossmark: Reale/Simulato | Altri wallet: Demo
+            ⚠️ Social: Demo | Crossmark & XUMM: Reale/Simulato | Trust: Demo
           </p>
         </div>
 
@@ -224,25 +321,32 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
           </p>
           
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-            {['Crossmark', 'XUMM', 'Trust'].map((wallet) => (
+            {[
+              { name: 'Crossmark', status: 'Ready', color: '#10b981' },
+              { name: 'XUMM', status: 'Ready', color: '#3b82f6' },
+              { name: 'Trust', status: 'Demo', color: '#6b7280' }
+            ].map((wallet) => (
               <button
-                key={wallet}
-                onClick={(event) => handleWalletConnect(wallet, event)}
+                key={wallet.name}
+                onClick={(event) => handleWalletConnect(wallet.name, event)}
                 disabled={loading}
                 style={{
                   padding: '0.5rem 1rem',
-                  border: wallet === 'Crossmark' ? '2px solid #10b981' : '1px solid #3b82f6',
+                  border: `2px solid ${wallet.color}`,
                   borderRadius: '0.375rem',
-                  backgroundColor: loading ? '#f3f4f6' : (wallet === 'Crossmark' ? '#10b981' : '#3b82f6'),
+                  backgroundColor: loading ? '#f3f4f6' : wallet.color,
                   color: loading ? '#9ca3af' : 'white',
                   fontSize: '0.875rem',
                   cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: wallet === 'Crossmark' ? 'bold' : 'normal'
+                  fontWeight: wallet.status === 'Ready' ? 'bold' : 'normal'
                 }}
               >
-                {wallet === 'Crossmark' && '🚀 '}
-                {wallet}
-                {wallet === 'Crossmark' && ' (Ready)'}
+                {wallet.name === 'Crossmark' && '🚀 '}
+                {wallet.name === 'XUMM' && '💎 '}
+                {wallet.name === 'Trust' && '🔒 '}
+                {wallet.name}
+                {wallet.status === 'Ready' && ' (Ready)'}
+                {wallet.status === 'Demo' && ' (Demo)'}
               </button>
             ))}
           </div>

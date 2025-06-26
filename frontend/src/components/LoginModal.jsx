@@ -13,7 +13,10 @@ import {
   Apple,
   Shield,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Wallet,
+  Zap,
+  CreditCard
 } from 'lucide-react';
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
@@ -55,23 +58,20 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: loginForm.email,
-          password: loginForm.password
-        }),
+        body: JSON.stringify(loginForm),
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
         localStorage.setItem('authToken', result.token);
-        setSuccess('Login completato con successo!');
+        setSuccess('Login effettuato con successo!');
         setTimeout(() => {
           onLoginSuccess && onLoginSuccess(result.user);
           onClose();
         }, 1000);
       } else {
-        setError(result.message || 'Errore durante il login');
+        setError(result.message || 'Credenziali non valide');
       }
     } catch (error) {
       setError('Errore di connessione. Riprova più tardi.');
@@ -80,20 +80,13 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
   };
 
-  const handleEmailRegister = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
-    // Validazione
     if (registerForm.password !== registerForm.confirmPassword) {
       setError('Le password non coincidono');
-      setIsLoading(false);
-      return;
-    }
-
-    if (registerForm.password.length < 8) {
-      setError('La password deve essere di almeno 8 caratteri');
       setIsLoading(false);
       return;
     }
@@ -137,7 +130,6 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
 
     try {
       // Per ora simula il login OAuth
-      // In produzione, qui implementeresti il flusso OAuth reale
       const mockUser = {
         id: Date.now(),
         email: `user@${provider}.com`,
@@ -155,7 +147,71 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
         onClose();
       }, 1000);
     } catch (error) {
-      setError(`Errore login ${provider}`);
+      setError(`Errore durante il login con ${provider}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleWalletConnect = async (walletType) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      let walletAddress = null;
+      
+      switch (walletType) {
+        case 'xumm':
+          // Simulazione connessione XUMM
+          walletAddress = 'rXUMMExampleAddress1234567890';
+          break;
+        case 'crossmark':
+          // Simulazione connessione Crossmark
+          if (window.crossmark) {
+            const response = await window.crossmark.signIn();
+            walletAddress = response.address;
+          } else {
+            throw new Error('Crossmark wallet non installato');
+          }
+          break;
+        case 'trustwallet':
+          // Simulazione connessione Trust Wallet
+          walletAddress = 'rTrustWalletExample1234567890';
+          break;
+        default:
+          throw new Error('Wallet non supportato');
+      }
+
+      // Chiama l'API per autenticare con wallet
+      const response = await fetch('/.netlify/functions/auth-wallet', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletType,
+          walletAddress,
+          network: 'xrpl'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        localStorage.setItem('authToken', result.token);
+        localStorage.setItem('walletAddress', walletAddress);
+        localStorage.setItem('walletType', walletType);
+        
+        setSuccess(`Wallet ${walletType.toUpperCase()} connesso con successo!`);
+        setTimeout(() => {
+          onLoginSuccess && onLoginSuccess(result.user);
+          onClose();
+        }, 1000);
+      } else {
+        setError(result.message || 'Errore durante la connessione wallet');
+      }
+    } catch (error) {
+      setError(error.message || 'Errore di connessione wallet. Riprova più tardi.');
     } finally {
       setIsLoading(false);
     }
@@ -165,100 +221,124 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div className="flex items-center space-x-3">
-              <div className="bg-slate-900 p-2 rounded-lg">
-                <Shield className="h-6 w-6 text-white" />
+              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+                <Shield className="h-5 w-5 text-slate-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900">
-                  {activeTab === 'login' ? 'Accedi' : 'Registrati'}
-                </h2>
-                <p className="text-sm text-slate-600">SolCraft Nexus Platform</p>
+                <h2 className="text-xl font-semibold text-gray-900">Accedi</h2>
+                <p className="text-sm text-gray-500">SolCraft Nexus Platform</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 transition-colors"
             >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex border-b border-gray-200">
-            <button
-              onClick={() => setActiveTab('login')}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                activeTab === 'login'
-                  ? 'text-slate-900 border-b-2 border-slate-900'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Accedi
-            </button>
-            <button
-              onClick={() => setActiveTab('register')}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                activeTab === 'register'
-                  ? 'text-slate-900 border-b-2 border-slate-900'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Registrati
+              <X className="h-5 w-5" />
             </button>
           </div>
 
           <div className="p-6">
+            {/* Tabs */}
+            <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setActiveTab('login')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'login'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Accedi
+              </button>
+              <button
+                onClick={() => setActiveTab('register')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'register'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Registrati
+              </button>
+            </div>
+
             {/* Error/Success Messages */}
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2"
-              >
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                <span className="text-sm text-red-800">{error}</span>
-              </motion.div>
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                <span className="text-sm text-red-700">{error}</span>
+              </div>
             )}
 
             {success && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2"
-              >
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-green-800">{success}</span>
-              </motion.div>
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                <span className="text-sm text-green-700">{success}</span>
+              </div>
             )}
 
-            {/* OAuth Buttons */}
-            <div className="space-y-3 mb-6">
-              <Button
-                onClick={() => handleOAuthLogin('google')}
-                disabled={isLoading}
-                className="w-full bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                <Chrome className="h-4 w-4 mr-2" />
-                Continua con Google
-              </Button>
-              <Button
-                onClick={() => handleOAuthLogin('github')}
-                disabled={isLoading}
-                className="w-full bg-gray-900 text-white hover:bg-gray-800"
-              >
-                <Github className="h-4 w-4 mr-2" />
-                Continua con GitHub
-              </Button>
+            {/* Wallet Connection Options */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Connetti Wallet XRPL</h3>
+              <div className="space-y-2">
+                <Button
+                  onClick={() => handleWalletConnect('xumm')}
+                  disabled={isLoading}
+                  className="w-full bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                >
+                  <Wallet className="h-4 w-4 mr-2" />
+                  XUMM Wallet
+                </Button>
+                <Button
+                  onClick={() => handleWalletConnect('crossmark')}
+                  disabled={isLoading}
+                  className="w-full bg-purple-600 text-white hover:bg-purple-700 flex items-center justify-center"
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  Crossmark
+                </Button>
+                <Button
+                  onClick={() => handleWalletConnect('trustwallet')}
+                  disabled={isLoading}
+                  className="w-full bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center"
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Trust Wallet
+                </Button>
+              </div>
+            </div>
+
+            {/* OAuth Options */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Accesso Rapido</h3>
+              <div className="space-y-2">
+                <Button
+                  onClick={() => handleOAuthLogin('google')}
+                  disabled={isLoading}
+                  className="w-full bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  <Chrome className="h-4 w-4 mr-2" />
+                  Continua con Google
+                </Button>
+                <Button
+                  onClick={() => handleOAuthLogin('github')}
+                  disabled={isLoading}
+                  className="w-full bg-gray-900 text-white hover:bg-gray-800"
+                >
+                  <Github className="h-4 w-4 mr-2" />
+                  Continua con GitHub
+                </Button>
+              </div>
             </div>
 
             <div className="relative mb-6">
@@ -317,7 +397,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white"
+                  className="w-full bg-slate-900 text-white hover:bg-slate-800"
                 >
                   {isLoading ? 'Accesso in corso...' : 'Accedi'}
                 </Button>
@@ -326,7 +406,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
 
             {/* Register Form */}
             {activeTab === 'register' && (
-              <form onSubmit={handleEmailRegister} className="space-y-4">
+              <form onSubmit={handleRegister} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -371,7 +451,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                       value={registerForm.email}
                       onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-                      placeholder="mario.rossi@email.com"
+                      placeholder="mario@email.com"
                     />
                   </div>
                 </div>
@@ -420,25 +500,23 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white"
+                  className="w-full bg-slate-900 text-white hover:bg-slate-800"
                 >
-                  {isLoading ? 'Registrazione in corso...' : 'Crea Account'}
+                  {isLoading ? 'Registrazione in corso...' : 'Registrati'}
                 </Button>
               </form>
             )}
 
             {/* Footer */}
-            <div className="mt-6 text-center text-sm text-gray-600">
-              <p>
-                Continuando accetti i nostri{' '}
-                <a href="#" className="text-slate-900 hover:underline">
-                  Termini di Servizio
-                </a>{' '}
-                e{' '}
-                <a href="#" className="text-slate-900 hover:underline">
-                  Privacy Policy
-                </a>
-              </p>
+            <div className="mt-6 text-center text-xs text-gray-500">
+              Continuando accetti i nostri{' '}
+              <a href="#" className="text-slate-600 hover:text-slate-800">
+                Termini di Servizio
+              </a>{' '}
+              e{' '}
+              <a href="#" className="text-slate-600 hover:text-slate-800">
+                Privacy Policy
+              </a>
             </div>
           </div>
         </motion.div>

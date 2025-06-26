@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
+import WalletPage from './components/WalletPage';
+import AssetsPage from './components/AssetsPage';
+import TokenizePage from './components/TokenizePage';
+import MarketplacePage from './components/MarketplacePage';
+import LearnPage from './components/LearnPage';
 import LoginModal from './components/LoginModal';
 import WelcomePage from './components/WelcomePage';
 import './App.css';
@@ -59,37 +65,111 @@ function App() {
     setShowLoginModal(true);
   };
 
-  // Mostra loading durante la verifica dell'autenticazione
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Caricamento...</p>
+  // Componente per proteggere le route autenticate
+  const ProtectedRoute = ({ children }) => {
+    if (isLoading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Caricamento...</p>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Se non autenticato, mostra la pagina di benvenuto
-  if (!isAuthenticated) {
-    return (
-      <>
-        <WelcomePage onLoginClick={handleLoginClick} />
-        <LoginModal 
-          isOpen={showLoginModal}
-          onClose={() => setShowLoginModal(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      </>
-    );
-  }
+    if (!isAuthenticated) {
+      return (
+        <>
+          <WelcomePage onLoginClick={handleLoginClick} />
+          <LoginModal 
+            isOpen={showLoginModal}
+            onClose={() => setShowLoginModal(false)}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        </>
+      );
+    }
 
-  // Se autenticato, mostra il dashboard
+    return children;
+  };
+
   return (
-    <Layout currentPage="dashboard" user={user} onLogout={handleLogout}>
-      <Dashboard user={user} />
-    </Layout>
+    <Router>
+      <Routes>
+        {/* Route pubbliche */}
+        <Route path="/welcome" element={
+          <>
+            <WelcomePage onLoginClick={handleLoginClick} />
+            <LoginModal 
+              isOpen={showLoginModal}
+              onClose={() => setShowLoginModal(false)}
+              onLoginSuccess={handleLoginSuccess}
+            />
+          </>
+        } />
+
+        {/* Route protette */}
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Layout currentPage="dashboard" user={user} onLogout={handleLogout}>
+              <Dashboard user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Layout currentPage="dashboard" user={user} onLogout={handleLogout}>
+              <Dashboard user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/wallet" element={
+          <ProtectedRoute>
+            <Layout currentPage="wallet" user={user} onLogout={handleLogout}>
+              <WalletPage user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/assets" element={
+          <ProtectedRoute>
+            <Layout currentPage="assets" user={user} onLogout={handleLogout}>
+              <AssetsPage user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/tokenize" element={
+          <ProtectedRoute>
+            <Layout currentPage="tokenize" user={user} onLogout={handleLogout}>
+              <TokenizePage user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/marketplace" element={
+          <ProtectedRoute>
+            <Layout currentPage="marketplace" user={user} onLogout={handleLogout}>
+              <MarketplacePage user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/learn" element={
+          <ProtectedRoute>
+            <Layout currentPage="learn" user={user} onLogout={handleLogout}>
+              <LearnPage user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        {/* Redirect per route non trovate */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
 

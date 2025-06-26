@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wallet, 
   TrendingUp, 
@@ -11,66 +11,83 @@ import {
   Sparkles,
   Gift,
   Users,
-  BookOpen
+  BookOpen,
+  AlertCircle
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '../components/ui/button';
 import { HelpIcon, InfoBox } from '../components/ui/tooltip';
 import InteractiveGuide, { useInteractiveGuide } from '../components/ui/interactive-guide';
 
-const Dashboard = () => {
+const Dashboard = ({ user }) => {
   const [showBalance, setShowBalance] = useState(true);
   const [showWelcomeGuide, setShowWelcomeGuide] = useState(true);
-
-  // Dati simulati
-  const userStats = {
-    totalBalance: 1250.75,
-    totalAssets: 3,
-    monthlyReturn: 8.5,
+  const [userStats, setUserStats] = useState({
+    totalBalance: 0,
+    totalAssets: 0,
+    monthlyReturn: 0,
     securityScore: 95
-  };
+  });
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [myAssets, setMyAssets] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const recentTransactions = [
-    {
-      id: 1,
-      type: 'receive',
-      amount: 100,
-      currency: 'XRP',
-      description: 'Dividendi da Appartamento Milano',
-      date: '2025-06-25',
-      status: 'completed'
-    },
-    {
-      id: 2,
-      type: 'send',
-      amount: 50,
-      currency: 'XRP',
-      description: 'Acquisto token immobiliare',
-      date: '2025-06-24',
-      status: 'completed'
-    }
-  ];
+  // Carica i dati dell'utente
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user) return;
+      
+      try {
+        setIsLoading(true);
+        const token = localStorage.getItem('authToken');
+        
+        // Carica statistiche portfolio
+        const statsResponse = await fetch('/api/portfolio/balance', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (statsResponse.ok) {
+          const stats = await statsResponse.json();
+          setUserStats(stats);
+        }
 
-  const myAssets = [
-    {
-      id: 1,
-      name: 'Appartamento Milano',
-      type: 'Immobiliare',
-      value: 85000,
-      tokens: 1000,
-      yield: 6.2,
-      status: 'active'
-    },
-    {
-      id: 2,
-      name: 'Startup TechCorp',
-      type: 'Equity',
-      value: 15000,
-      tokens: 500,
-      yield: 12.8,
-      status: 'active'
-    }
-  ];
+        // Carica transazioni recenti
+        const transactionsResponse = await fetch('/api/portfolio/transactions', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (transactionsResponse.ok) {
+          const transactions = await transactionsResponse.json();
+          setRecentTransactions(transactions.slice(0, 5)); // Ultime 5
+        }
+
+        // Carica asset dell'utente
+        const assetsResponse = await fetch('/api/portfolio/assets', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (assetsResponse.ok) {
+          const assets = await assetsResponse.json();
+          setMyAssets(assets);
+        }
+
+      } catch (error) {
+        console.error('Errore caricamento dati:', error);
+        setError('Errore nel caricamento dei dati. Riprova più tardi.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUserData();
+  }, [user]);
 
   // Guide interattive
   const welcomeGuideSteps = {
@@ -98,341 +115,380 @@ const Dashboard = () => {
         title: 'Azioni Rapide',
         description: 'Usa i pulsanti di azione rapida per inviare/ricevere crypto o tokenizzare un nuovo asset. Tutto è guidato passo-passo.',
         tips: 'Se è la tua prima volta, ti consigliamo di iniziare con la guida "Come tokenizzare il mio primo asset".',
-        media: { type: 'icon', icon: '🚀' }
+        media: { type: 'icon', icon: '⚡' }
       }
     ]
   };
 
-  const { isGuideOpen, startGuide, closeGuide, completeGuide } = useInteractiveGuide(welcomeGuideSteps);
+  const { 
+    currentStep, 
+    isGuideActive, 
+    startGuide, 
+    nextStep, 
+    prevStep, 
+    endGuide 
+  } = useInteractiveGuide(welcomeGuideSteps);
 
-  const StatCard = ({ icon: Icon, title, value, subtitle, helpText }) => (
+  // Stato vuoto per nuovi utenti
+  const EmptyState = ({ icon, title, description, actionText, onAction }) => (
     <motion.div
-      whileHover={{ scale: 1.01 }}
-      className="professional-card rounded-xl p-6 shadow-sm"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="text-center py-12"
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-700">
-          <Icon size={24} className="text-slate-700 dark:text-slate-300" />
-        </div>
-        <HelpIcon content={helpText} title={title} />
-      </div>
-      <div>
-        <p className="text-2xl font-bold professional-text-primary">
-          {value}
-        </p>
-        <p className="text-sm professional-text-secondary mt-1">
-          {subtitle}
-        </p>
-      </div>
+      <div className="text-6xl mb-4">{icon}</div>
+      <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-600 mb-6 max-w-md mx-auto">{description}</p>
+      {actionText && (
+        <Button onClick={onAction} className="bg-blue-600 hover:bg-blue-700">
+          {actionText}
+        </Button>
+      )}
     </motion.div>
   );
 
-  const QuickAction = ({ icon: Icon, title, description, onClick }) => (
-    <motion.button
-      whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
-      onClick={onClick}
-      className="professional-card rounded-xl p-6 shadow-sm text-left w-full group hover:shadow-md transition-shadow"
-    >
-      <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-700 w-fit mb-4">
-        <Icon size={24} className="text-slate-700 dark:text-slate-300" />
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+        </div>
       </div>
-      <h3 className="font-semibold professional-text-primary mb-2 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors">
-        {title}
-      </h3>
-      <p className="text-sm professional-text-secondary">
-        {description}
-      </p>
-    </motion.button>
-  );
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <span className="text-red-800">{error}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8">
-      {/* Welcome Guide */}
-      <InteractiveGuide
-        steps={welcomeGuideSteps.steps}
-        isOpen={isGuideOpen}
-        onClose={closeGuide}
-        onComplete={completeGuide}
-        title="Benvenuto in SolCraft Nexus"
-        autoPlay={false}
-      />
-
-      {/* Welcome Banner */}
+    <div className="p-6 space-y-6">
+      {/* Benvenuto */}
       {showWelcomeGuide && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="professional-gradient rounded-xl p-6 text-white relative overflow-hidden"
+          className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white relative overflow-hidden"
         >
           <div className="relative z-10">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold mb-2">
-                  Benvenuto in SolCraft Nexus
-                </h2>
-                <p className="text-slate-200 mb-4">
-                  La piattaforma professionale per tokenizzare i tuoi asset. 
-                  Inizia con la nostra guida interattiva.
-                </p>
-                <div className="flex space-x-3">
-                  <Button 
-                    onClick={startGuide}
-                    className="bg-white text-slate-900 hover:bg-slate-100"
-                  >
-                    <Sparkles size={16} className="mr-2" />
-                    Inizia la Guida
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setShowWelcomeGuide(false)}
-                    className="border-white text-white hover:bg-white/10"
-                  >
-                    Salta per ora
-                  </Button>
-                </div>
-              </div>
+            <h1 className="text-2xl font-bold mb-2">
+              Benvenuto in SolCraft Nexus, {user?.firstName || 'Utente'}! 👋
+            </h1>
+            <p className="text-blue-100 mb-4">
+              La piattaforma professionale per tokenizzare i tuoi asset. Inizia con la nostra guida interattiva.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                onClick={startGuide}
+                variant="secondary"
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Inizia la Guida
+              </Button>
+              <Button 
+                onClick={() => setShowWelcomeGuide(false)}
+                variant="ghost"
+                className="text-white hover:bg-white/20"
+              >
+                Salta per ora
+              </Button>
             </div>
           </div>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12" />
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
         </motion.div>
       )}
 
-      {/* Stats Overview */}
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold professional-text-primary">
-            Panoramica
-          </h2>
-          <HelpIcon 
-            content="Qui vedi un riassunto veloce di tutto il tuo patrimonio digitale: saldo totale, numero di asset, rendimenti e livello di sicurezza."
-            title="Panoramica"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard
-            icon={Wallet}
-            title="Saldo Totale"
-            value={showBalance ? `€${userStats.totalBalance.toLocaleString()}` : '••••••'}
-            subtitle={
-              <div className="flex items-center space-x-2">
-                <span>Portafoglio principale</span>
-                <button
-                  onClick={() => setShowBalance(!showBalance)}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                >
-                  {showBalance ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            }
-            helpText="Il valore totale di tutti i tuoi asset tokenizzati e criptovalute. Include anche i dividendi accumulati."
-          />
-
-          <StatCard
-            icon={TrendingUp}
-            title="Asset Tokenizzati"
-            value={userStats.totalAssets}
-            subtitle="Asset attivi"
-            helpText="Il numero di asset che hai tokenizzato o in cui hai investito. Ogni asset genera rendimenti automatici."
-          />
-
-          <StatCard
-            icon={Gift}
-            title="Rendimento Mensile"
-            value={`+${userStats.monthlyReturn}%`}
-            subtitle="Ultimo mese"
-            helpText="Il rendimento medio dei tuoi investimenti nell'ultimo mese. Calcolato automaticamente dai dividendi ricevuti."
-          />
-
-          <StatCard
-            icon={Shield}
-            title="Sicurezza"
-            value={`${userStats.securityScore}%`}
-            subtitle="Livello protezione"
-            helpText="Il livello di sicurezza del tuo account. Include 2FA, backup del wallet e verifica dell'identità."
-          />
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold professional-text-primary">
-            Azioni Rapide
-          </h2>
-          <HelpIcon 
-            content="Usa queste azioni per operazioni comuni. Ogni azione è guidata passo-passo per massima semplicità."
-            title="Azioni Rapide"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <QuickAction
-            icon={ArrowUpRight}
-            title="Invia Crypto"
-            description="Trasferisci XRP o token in modo sicuro"
-            onClick={() => console.log('Send crypto')}
-          />
-
-          <QuickAction
-            icon={ArrowDownLeft}
-            title="Ricevi Crypto"
-            description="Genera un indirizzo per ricevere pagamenti"
-            onClick={() => console.log('Receive crypto')}
-          />
-
-          <QuickAction
-            icon={Plus}
-            title="Tokenizza Asset"
-            description="Trasforma un asset fisico in token digitali"
-            onClick={() => console.log('Tokenize asset')}
-          />
-
-          <QuickAction
-            icon={Users}
-            title="Esplora Marketplace"
-            description="Investi in asset tokenizzati da altri"
-            onClick={() => console.log('Explore marketplace')}
-          />
-        </div>
-      </div>
-
-      {/* My Assets */}
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold professional-text-primary">
-            I Miei Asset
-          </h2>
-          <div className="flex items-center space-x-3">
-            <HelpIcon 
-              content="Qui vedi tutti gli asset che possiedi. Clicca su un asset per vedere dettagli, documenti e performance."
-              title="I Miei Asset"
-            />
-            <Button size="sm" className="professional-button">
-              <Plus size={16} className="mr-2" />
-              Nuovo Asset
-            </Button>
+      {/* Statistiche Panoramica */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Wallet className="h-5 w-5 text-blue-600" />
+              <span className="text-sm font-medium text-gray-600">Portafoglio principale</span>
+            </div>
+            <HelpIcon content="Il valore totale di tutti i tuoi asset tokenizzati e crypto holdings" />
           </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-2xl font-bold text-gray-900">
+              {showBalance ? `€${userStats.totalBalance.toLocaleString()}` : '••••••'}
+            </span>
+            <button
+              onClick={() => setShowBalance(!showBalance)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              {showBalance ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-gray-600">Asset attivi</span>
+            </div>
+            <HelpIcon content="Numero di asset che hai tokenizzato o in cui hai investito" />
+          </div>
+          <span className="text-2xl font-bold text-gray-900">{userStats.totalAssets}</span>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Gift className="h-5 w-5 text-purple-600" />
+              <span className="text-sm font-medium text-gray-600">Ultimo mese</span>
+            </div>
+            <HelpIcon content="Rendimento percentuale del tuo portfolio nell'ultimo mese" />
+          </div>
+          <span className="text-2xl font-bold text-green-600">
+            +{userStats.monthlyReturn}%
+          </span>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Shield className="h-5 w-5 text-blue-600" />
+              <span className="text-sm font-medium text-gray-600">Livello protezione</span>
+            </div>
+            <HelpIcon content="Punteggio di sicurezza basato su autenticazione, backup e compliance" />
+          </div>
+          <span className="text-2xl font-bold text-blue-600">{userStats.securityScore}%</span>
+        </motion.div>
+      </div>
+
+      {/* Azioni Rapide */}
+      <div>
+        <div className="flex items-center space-x-2 mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Azioni Rapide</h2>
+          <HelpIcon content="Accesso rapido alle funzioni più utilizzate della piattaforma" />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg p-4 text-left transition-colors"
+          >
+            <ArrowUpRight className="h-6 w-6 text-red-600 mb-2" />
+            <h3 className="font-medium text-gray-900 mb-1">Invia Crypto</h3>
+            <p className="text-sm text-gray-600">Trasferisci XRP o token in modo sicuro</p>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg p-4 text-left transition-colors"
+          >
+            <ArrowDownLeft className="h-6 w-6 text-green-600 mb-2" />
+            <h3 className="font-medium text-gray-900 mb-1">Ricevi Crypto</h3>
+            <p className="text-sm text-gray-600">Genera un indirizzo per ricevere pagamenti</p>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg p-4 text-left transition-colors"
+          >
+            <Plus className="h-6 w-6 text-blue-600 mb-2" />
+            <h3 className="font-medium text-gray-900 mb-1">Tokenizza Asset</h3>
+            <p className="text-sm text-gray-600">Trasforma un asset fisico in token digitali</p>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded-lg p-4 text-left transition-colors"
+          >
+            <Users className="h-6 w-6 text-yellow-600 mb-2" />
+            <h3 className="font-medium text-gray-900 mb-1">Esplora Marketplace</h3>
+            <p className="text-sm text-gray-600">Investi in asset tokenizzati da altri</p>
+          </motion.button>
+        </div>
+      </div>
+
+      {/* I Miei Asset */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <h2 className="text-lg font-semibold text-gray-900">I Miei Asset</h2>
+            <HelpIcon content="Tutti gli asset che hai tokenizzato o in cui hai investito" />
+          </div>
+          <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+            <Plus className="w-4 h-4 mr-2" />
+            Nuovo Asset
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {myAssets.map((asset) => (
-            <motion.div
-              key={asset.id}
-              whileHover={{ scale: 1.01 }}
-              className="professional-card rounded-xl p-6 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-semibold professional-text-primary">
-                    {asset.name}
-                  </h3>
-                  <p className="text-sm professional-text-secondary">
-                    {asset.type}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold professional-text-primary">
-                    €{asset.value.toLocaleString()}
-                  </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    +{asset.yield}% annuo
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm professional-text-secondary">
-                    {asset.tokens} token posseduti
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
-                  <span className="text-sm professional-text-secondary capitalize">
+        {myAssets.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8">
+            <EmptyState
+              icon="🏠"
+              title="Nessun Asset Tokenizzato"
+              description="Inizia a tokenizzare i tuoi asset fisici per trasformarli in investimenti digitali che generano rendimenti automatici."
+              actionText="Tokenizza il Primo Asset"
+              onAction={() => console.log('Redirect to tokenization')}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {myAssets.map((asset, index) => (
+              <motion.div
+                key={asset.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{asset.name}</h3>
+                    <span className="text-sm text-gray-600">{asset.type}</span>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    asset.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
                     {asset.status}
                   </span>
                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Valore</span>
+                    <span className="font-medium">€{asset.value.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Rendimento annuo</span>
+                    <span className="font-medium text-green-600">+{asset.yield}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Token posseduti</span>
+                    <span className="font-medium">{asset.tokens}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Recent Transactions */}
+      {/* Transazioni Recenti */}
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold professional-text-primary">
-            Transazioni Recenti
-          </h2>
-          <HelpIcon 
-            content="Qui vedi tutte le tue transazioni recenti: invii, ricezioni, dividendi e acquisti di token."
-            title="Transazioni Recenti"
-          />
+        <div className="flex items-center space-x-2 mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Transazioni Recenti</h2>
+          <HelpIcon content="Le tue ultime transazioni e movimenti di portfolio" />
         </div>
 
-        <div className="professional-card rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-          {recentTransactions.map((tx, index) => (
-            <div 
-              key={tx.id}
-              className={`p-4 flex items-center justify-between ${
-                index !== recentTransactions.length - 1 ? 'border-b border-slate-200 dark:border-slate-700' : ''
-              }`}
-            >
-              <div className="flex items-center space-x-4">
-                <div className={`p-2 rounded-lg ${
-                  tx.type === 'receive' 
-                    ? 'bg-slate-100 dark:bg-slate-700' 
-                    : 'bg-slate-100 dark:bg-slate-700'
-                }`}>
-                  {tx.type === 'receive' ? (
-                    <ArrowDownLeft size={20} className="text-slate-600 dark:text-slate-400" />
-                  ) : (
-                    <ArrowUpRight size={20} className="text-slate-600 dark:text-slate-400" />
-                  )}
-                </div>
-                <div>
-                  <p className="font-medium professional-text-primary">
-                    {tx.description}
-                  </p>
-                  <p className="text-sm professional-text-secondary">
-                    {new Date(tx.date).toLocaleDateString('it-IT')}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className={`font-semibold ${
-                  tx.type === 'receive' 
-                    ? 'text-slate-700 dark:text-slate-300' 
-                    : 'text-slate-700 dark:text-slate-300'
-                }`}>
-                  {tx.type === 'receive' ? '+' : '-'}{tx.amount} {tx.currency}
-                </p>
-                <p className="text-sm professional-text-secondary capitalize">
-                  {tx.status}
-                </p>
-              </div>
+        {recentTransactions.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8">
+            <EmptyState
+              icon="📊"
+              title="Nessuna Transazione"
+              description="Le tue transazioni e movimenti di portfolio appariranno qui. Inizia facendo la tua prima operazione."
+              actionText="Esplora Marketplace"
+              onAction={() => console.log('Redirect to marketplace')}
+            />
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="divide-y divide-gray-200">
+              {recentTransactions.map((transaction, index) => (
+                <motion.div
+                  key={transaction.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-full ${
+                        transaction.type === 'receive' ? 'bg-green-100' : 'bg-red-100'
+                      }`}>
+                        {transaction.type === 'receive' ? 
+                          <ArrowDownLeft className="h-4 w-4 text-green-600" /> :
+                          <ArrowUpRight className="h-4 w-4 text-red-600" />
+                        }
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{transaction.description}</p>
+                        <p className="text-sm text-gray-600">{transaction.date}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-medium ${
+                        transaction.type === 'receive' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {transaction.type === 'receive' ? '+' : '-'}{transaction.amount} {transaction.currency}
+                      </p>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        transaction.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {transaction.status}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Educational Section */}
-      <InfoBox
-        title="Informazione"
-        type="info"
-        className="mt-8"
-      >
-        <p className="mb-2">
-          I tuoi asset tokenizzati generano rendimenti automatici che vengono distribuiti 
-          direttamente nel tuo portafoglio ogni mese.
-        </p>
-        <Button size="sm" variant="outline" className="mt-2 professional-button-outline">
-          <BookOpen size={16} className="mr-2" />
-          Scopri di più
-        </Button>
+      {/* Guida Interattiva */}
+      <InteractiveGuide
+        isActive={isGuideActive}
+        currentStep={currentStep}
+        onNext={nextStep}
+        onPrev={prevStep}
+        onEnd={endGuide}
+      />
+
+      {/* Info Box */}
+      <InfoBox className="bg-blue-50 border-blue-200">
+        <div className="flex items-start space-x-3">
+          <BookOpen className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div>
+            <h3 className="font-medium text-blue-900 mb-1">💡 Suggerimento</h3>
+            <p className="text-sm text-blue-800">
+              I tuoi asset tokenizzati generano rendimenti automatici che vengono distribuiti 
+              direttamente nel tuo portafoglio ogni mese.
+            </p>
+          </div>
+        </div>
       </InfoBox>
     </div>
   );

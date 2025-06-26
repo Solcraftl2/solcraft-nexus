@@ -25,63 +25,66 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Verifica autenticazione
+    // Estrai il token dall'header Authorization
     const authHeader = event.headers.authorization || event.headers.Authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Token mancante' }),
+        body: JSON.stringify({ error: 'Token mancante o formato non valido' }),
       };
     }
 
-    const token = authHeader.substring(7);
+    const token = authHeader.substring(7); // Rimuovi "Bearer "
+    
+    // Verifica il token JWT
     const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
     
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       
-      // Simula il caricamento del balance dal database
-      // In produzione, qui faresti query a Supabase per ottenere i dati reali
-      const portfolioBalance = {
-        totalBalance: 0, // Inizialmente vuoto per nuovi utenti
-        totalAssets: 0,
-        monthlyReturn: 0,
-        securityScore: 95,
-        lastUpdated: new Date().toISOString(),
-        currency: 'EUR',
-        breakdown: {
-          realEstate: 0,
-          commodities: 0,
-          equity: 0,
-          crypto: 0
-        }
+      // Simula il recupero dei dati utente dal database
+      // In produzione, qui faresti una query al database Supabase
+      const userData = {
+        id: decoded.userId,
+        email: decoded.email,
+        firstName: decoded.firstName || 'Utente',
+        lastName: decoded.lastName || '',
+        isVerified: true,
+        createdAt: decoded.iat ? new Date(decoded.iat * 1000).toISOString() : new Date().toISOString()
       };
 
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify(portfolioBalance),
+        body: JSON.stringify({
+          success: true,
+          user: userData,
+          message: 'Token valido'
+        }),
       };
 
     } catch (jwtError) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Token non valido' }),
+        body: JSON.stringify({ 
+          error: 'Token non valido o scaduto',
+          details: jwtError.message 
+        }),
       };
     }
 
   } catch (error) {
-    console.error('Errore portfolio balance:', error);
+    console.error('Errore verifica autenticazione:', error);
     
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         error: 'Errore interno del server',
-        message: 'Errore durante il caricamento del portfolio'
+        message: 'Errore durante la verifica dell\'autenticazione'
       }),
     };
   }

@@ -42,27 +42,14 @@ exports.handler = async (event, context) => {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       
-      // Simula il caricamento del balance dal database
-      // In produzione, qui faresti query a Supabase per ottenere i dati reali
-      const portfolioBalance = {
-        totalBalance: 0, // Inizialmente vuoto per nuovi utenti
-        totalAssets: 0,
-        monthlyReturn: 0,
-        securityScore: 95,
-        lastUpdated: new Date().toISOString(),
-        currency: 'EUR',
-        breakdown: {
-          realEstate: 0,
-          commodities: 0,
-          equity: 0,
-          crypto: 0
-        }
-      };
+      // Per nuovi utenti, restituisce array vuoto
+      // In produzione, qui faresti query a Supabase per ottenere gli asset reali
+      const assets = [];
 
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify(portfolioBalance),
+        body: JSON.stringify(assets),
       };
 
     } catch (jwtError) {
@@ -74,14 +61,14 @@ exports.handler = async (event, context) => {
     }
 
   } catch (error) {
-    console.error('Errore portfolio balance:', error);
+    console.error('Errore portfolio assets:', error);
     
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         error: 'Errore interno del server',
-        message: 'Errore durante il caricamento del portfolio'
+        message: 'Errore durante il caricamento degli asset'
       }),
     };
   }

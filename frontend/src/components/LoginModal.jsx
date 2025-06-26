@@ -16,7 +16,10 @@ import {
   AlertCircle,
   Wallet,
   Zap,
-  CreditCard
+  CreditCard,
+  Users,
+  Key,
+  Globe
 } from 'lucide-react';
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
@@ -217,6 +220,48 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
   };
 
+  const handleWeb3Auth = async (provider = 'google') => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Simulazione Web3Auth con MPC technology
+      const response = await fetch('/.netlify/functions/auth-web3auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: provider,
+          loginType: 'social',
+          mpcEnabled: true,
+          network: 'xrpl'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        localStorage.setItem('authToken', result.token);
+        localStorage.setItem('web3AuthProvider', provider);
+        localStorage.setItem('walletAddress', result.walletAddress);
+        localStorage.setItem('authMethod', 'web3auth');
+        
+        setSuccess(`Web3Auth con ${provider} completato! Wallet MPC generato.`);
+        setTimeout(() => {
+          onLoginSuccess && onLoginSuccess(result.user);
+          onClose();
+        }, 1000);
+      } else {
+        setError(result.message || 'Errore durante l\'autenticazione Web3Auth');
+      }
+    } catch (error) {
+      setError('Errore di connessione Web3Auth. Riprova più tardi.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -316,6 +361,40 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                   Trust Wallet
                 </Button>
               </div>
+            </div>
+
+            {/* Web3Auth MPC Options */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Web3Auth (MPC Technology)</h3>
+              <div className="space-y-2">
+                <Button
+                  onClick={() => handleWeb3Auth('google')}
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white hover:from-green-600 hover:to-blue-600 flex items-center justify-center"
+                >
+                  <Key className="h-4 w-4 mr-2" />
+                  Web3Auth + Google
+                </Button>
+                <Button
+                  onClick={() => handleWeb3Auth('twitter')}
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-blue-400 to-blue-600 text-white hover:from-blue-500 hover:to-blue-700 flex items-center justify-center"
+                >
+                  <Globe className="h-4 w-4 mr-2" />
+                  Web3Auth + Twitter
+                </Button>
+                <Button
+                  onClick={() => handleWeb3Auth('discord')}
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-600 hover:to-purple-600 flex items-center justify-center"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Web3Auth + Discord
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                🔒 Sicurezza MPC avanzata - Wallet auto-generato senza seed phrase
+              </p>
             </div>
 
             {/* OAuth Options */}

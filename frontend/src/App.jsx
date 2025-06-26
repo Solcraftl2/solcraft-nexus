@@ -1,175 +1,79 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
-import WalletPage from './components/WalletPage';
-import AssetsPage from './components/AssetsPage';
-import TokenizePage from './components/TokenizePage';
-import MarketplacePage from './components/MarketplacePage';
-import LearnPage from './components/LearnPage';
-import LoginModal from './components/LoginModal';
-import WelcomePage from './components/WelcomePage';
-import './App.css';
+import React from 'react';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Controlla se l'utente è già autenticato al caricamento
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        if (token) {
-          // Verifica se il token è valido
-          const response = await fetch('/api/auth/verify', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          
-          if (response.ok) {
-            const userData = await response.json();
-            setUser(userData);
-            setIsAuthenticated(true);
-          } else {
-            localStorage.removeItem('authToken');
-          }
-        }
-      } catch (error) {
-        console.error('Errore verifica autenticazione:', error);
-        localStorage.removeItem('authToken');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
-
-  const handleLoginSuccess = (userData) => {
-    setUser(userData);
-    setIsAuthenticated(true);
-    setShowLoginModal(false);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    setUser(null);
-    setIsAuthenticated(false);
-  };
-
-  const handleLoginClick = () => {
-    setShowLoginModal(true);
-  };
-
-  // Componente per proteggere le route autenticate
-  const ProtectedRoute = ({ children }) => {
-    if (isLoading) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Caricamento...</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (!isAuthenticated) {
-      return (
-        <>
-          <WelcomePage onLoginClick={handleLoginClick} />
-          <LoginModal 
-            isOpen={showLoginModal}
-            onClose={() => setShowLoginModal(false)}
-            onLoginSuccess={handleLoginSuccess}
-          />
-        </>
-      );
-    }
-
-    return children;
-  };
-
   return (
-    <Router>
-      <Routes>
-        {/* Route pubbliche */}
-        <Route path="/welcome" element={
-          <>
-            <WelcomePage onLoginClick={handleLoginClick} />
-            <LoginModal 
-              isOpen={showLoginModal}
-              onClose={() => setShowLoginModal(false)}
-              onLoginSuccess={handleLoginSuccess}
-            />
-          </>
-        } />
-
-        {/* Route protette */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Layout currentPage="dashboard" user={user} onLogout={handleLogout}>
-              <Dashboard user={user} />
-            </Layout>
-          </ProtectedRoute>
-        } />
+    <div style={{
+      padding: '2rem',
+      fontFamily: 'Arial, sans-serif',
+      textAlign: 'center',
+      backgroundColor: '#f8fafc',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center'
+    }}>
+      <h1 style={{
+        color: '#1a202c',
+        fontSize: '2.5rem',
+        marginBottom: '1rem'
+      }}>
+        🚀 SolCraft Nexus
+      </h1>
+      
+      <p style={{
+        color: '#4a5568',
+        fontSize: '1.2rem',
+        marginBottom: '2rem',
+        maxWidth: '600px'
+      }}>
+        Piattaforma di Tokenizzazione RWA su XRPL
+      </p>
+      
+      <div style={{
+        backgroundColor: 'white',
+        padding: '2rem',
+        borderRadius: '1rem',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        maxWidth: '400px',
+        width: '100%'
+      }}>
+        <h2 style={{
+          color: '#2d3748',
+          marginBottom: '1rem'
+        }}>
+          Test di Funzionamento
+        </h2>
         
-        <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <Layout currentPage="dashboard" user={user} onLogout={handleLogout}>
-              <Dashboard user={user} />
-            </Layout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/wallet" element={
-          <ProtectedRoute>
-            <Layout currentPage="wallet" user={user} onLogout={handleLogout}>
-              <WalletPage user={user} />
-            </Layout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/assets" element={
-          <ProtectedRoute>
-            <Layout currentPage="assets" user={user} onLogout={handleLogout}>
-              <AssetsPage user={user} />
-            </Layout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/tokenize" element={
-          <ProtectedRoute>
-            <Layout currentPage="tokenize" user={user} onLogout={handleLogout}>
-              <TokenizePage user={user} />
-            </Layout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/marketplace" element={
-          <ProtectedRoute>
-            <Layout currentPage="marketplace" user={user} onLogout={handleLogout}>
-              <MarketplacePage user={user} />
-            </Layout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/learn" element={
-          <ProtectedRoute>
-            <Layout currentPage="learn" user={user} onLogout={handleLogout}>
-              <LearnPage user={user} />
-            </Layout>
-          </ProtectedRoute>
-        } />
-
-        {/* Redirect per route non trovate */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+        <p style={{
+          color: '#718096',
+          marginBottom: '1.5rem'
+        }}>
+          Se vedi questo messaggio, React funziona correttamente!
+        </p>
+        
+        <button style={{
+          backgroundColor: '#3b82f6',
+          color: 'white',
+          padding: '0.75rem 1.5rem',
+          border: 'none',
+          borderRadius: '0.5rem',
+          fontSize: '1rem',
+          cursor: 'pointer',
+          width: '100%'
+        }}>
+          Accedi alla Piattaforma
+        </button>
+      </div>
+      
+      <div style={{
+        marginTop: '2rem',
+        color: '#a0aec0',
+        fontSize: '0.9rem'
+      }}>
+        Deploy Test - {new Date().toLocaleString()}
+      </div>
+    </div>
   );
 }
 

@@ -1,495 +1,545 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Wallet, 
-  TrendingUp, 
-  Shield, 
-  Plus, 
-  ArrowUpRight, 
-  ArrowDownLeft,
-  Eye,
-  EyeOff,
-  Sparkles,
-  Gift,
-  Users,
-  BookOpen,
-  AlertCircle
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Button } from '../components/ui/button';
-import { HelpIcon, InfoBox } from '../components/ui/tooltip';
-import InteractiveGuide, { useInteractiveGuide } from '../components/ui/interactive-guide';
+  sampleUserProfile, 
+  samplePortfolio, 
+  sampleTransactions, 
+  sampleNotifications,
+  samplePerformanceData,
+  sampleAssetAllocation,
+  sampleMarketTrends 
+} from '../data/sampleData';
 
-const Dashboard = ({ user }) => {
-  const [showBalance, setShowBalance] = useState(true);
-  const [showWelcomeGuide, setShowWelcomeGuide] = useState(true);
-  const [userStats, setUserStats] = useState({
-    totalBalance: 0,
-    totalAssets: 0,
-    monthlyReturn: 0,
-    securityScore: 95
-  });
-  const [recentTransactions, setRecentTransactions] = useState([]);
-  const [myAssets, setMyAssets] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+const Dashboard = ({ user, onNavigate }) => {
+  const [notifications, setNotifications] = useState(sampleNotifications);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [portfolioData, setPortfolioData] = useState(samplePortfolio);
+  const [performanceData] = useState(samplePerformanceData);
+  const [assetAllocation] = useState(sampleAssetAllocation);
+  const [marketTrends] = useState(sampleMarketTrends);
 
-  // Carica i dati dell'utente
-  useEffect(() => {
-    const loadUserData = async () => {
-      if (!user) return;
-      
-      try {
-        setIsLoading(true);
-        const token = localStorage.getItem('authToken');
-        
-        // Carica statistiche portfolio
-        const balanceResponse = await fetch('/.netlify/functions/portfolio-balance', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (statsResponse.ok) {
-          const stats = await statsResponse.json();
-          setUserStats(stats);
-        }
+  // Calculate portfolio metrics
+  const totalValue = portfolioData.reduce((sum, item) => sum + item.current_value, 0);
+  const totalInvested = portfolioData.reduce((sum, item) => sum + item.total_invested, 0);
+  const totalGain = totalValue - totalInvested;
+  const totalGainPercentage = ((totalGain / totalInvested) * 100).toFixed(1);
 
-        // Carica transazioni recenti
-        const transactionsResponse = await fetch('/api/portfolio/transactions', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (transactionsResponse.ok) {
-          const transactions = await transactionsResponse.json();
-          setRecentTransactions(transactions.slice(0, 5)); // Ultime 5
-        }
+  const unreadNotifications = notifications.filter(n => !n.read).length;
 
-        // Carica asset dell'utente
-        const assetsResponse = await fetch('/api/portfolio/assets', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (assetsResponse.ok) {
-          const assets = await assetsResponse.json();
-          setMyAssets(assets);
-        }
-
-      } catch (error) {
-        console.error('Errore caricamento dati:', error);
-        setError('Errore nel caricamento dei dati. Riprova più tardi.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadUserData();
-  }, [user]);
-
-  // Guide interattive
-  const welcomeGuideSteps = {
-    id: 'welcome_guide',
-    steps: [
-      {
-        title: 'Benvenuto in SolCraft Nexus',
-        description: 'Questa è la tua dashboard personale dove puoi vedere tutto in un colpo d\'occhio. Qui trovi il saldo del tuo portafoglio, i tuoi asset tokenizzati e le transazioni recenti.',
-        tips: 'Ogni sezione ha un\'icona ? che ti spiega nel dettaglio cosa fa. Non esitare a cliccarci!',
-        media: { type: 'icon', icon: '🏠' }
-      },
-      {
-        title: 'Il Tuo Portafoglio',
-        description: 'Qui vedi il valore totale dei tuoi asset. Puoi nascondere il saldo per privacy cliccando sull\'icona dell\'occhio. Il portafoglio è protetto con crittografia militare.',
-        tips: 'Il saldo viene aggiornato in tempo reale quando ricevi dividendi o fai transazioni.',
-        media: { type: 'icon', icon: '👁️' }
-      },
-      {
-        title: 'I Tuoi Asset Tokenizzati',
-        description: 'Qui vedi tutti gli asset che hai tokenizzato o in cui hai investito. Ogni asset genera rendimenti automatici che vengono distribuiti nel tuo portafoglio.',
-        tips: 'Clicca su un asset per vedere tutti i dettagli, la documentazione e la performance storica.',
-        media: { type: 'icon', icon: '📊' }
-      },
-      {
-        title: 'Azioni Rapide',
-        description: 'Usa i pulsanti di azione rapida per inviare/ricevere crypto o tokenizzare un nuovo asset. Tutto è guidato passo-passo.',
-        tips: 'Se è la tua prima volta, ti consigliamo di iniziare con la guida "Come tokenizzare il mio primo asset".',
-        media: { type: 'icon', icon: '⚡' }
-      }
-    ]
+  const markNotificationAsRead = (id) => {
+    setNotifications(prev => 
+      prev.map(notif => 
+        notif.id === id ? { ...notif, read: true } : notif
+      )
+    );
   };
 
-  const { 
-    currentStep, 
-    isGuideActive, 
-    startGuide, 
-    nextStep, 
-    prevStep, 
-    endGuide 
-  } = useInteractiveGuide(welcomeGuideSteps);
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('it-IT', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount);
+  };
 
-  // Stato vuoto per nuovi utenti
-  const EmptyState = ({ icon, title, description, actionText, onAction }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="text-center py-12"
-    >
-      <div className="text-6xl mb-4">{icon}</div>
-      <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600 mb-6 max-w-md mx-auto">{description}</p>
-      {actionText && (
-        <Button onClick={onAction} className="bg-blue-600 hover:bg-blue-700">
-          {actionText}
-        </Button>
-      )}
-    </motion.div>
-  );
-
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
-          <AlertCircle className="h-5 w-5 text-red-600" />
-          <span className="text-red-800">{error}</span>
-        </div>
-      </div>
-    );
-  }
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Benvenuto */}
-      {showWelcomeGuide && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white relative overflow-hidden"
-        >
-          <div className="relative z-10">
-            <h1 className="text-2xl font-bold mb-2">
-              Benvenuto in SolCraft Nexus, {user?.firstName || 'Utente'}! 👋
-            </h1>
-            <p className="text-blue-100 mb-4">
-              La piattaforma professionale per tokenizzare i tuoi asset. Inizia con la nostra guida interattiva.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Button 
-                onClick={startGuide}
-                variant="secondary"
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Inizia la Guida
-              </Button>
-              <Button 
-                onClick={() => setShowWelcomeGuide(false)}
-                variant="ghost"
-                className="text-white hover:bg-white/20"
-              >
-                Salta per ora
-              </Button>
-            </div>
-          </div>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-        </motion.div>
-      )}
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '2rem 1rem'
+    }}>
+      {/* Header */}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: '20px',
+        padding: '1.5rem 2rem',
+        marginBottom: '2rem',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '1rem'
+      }}>
+        <div>
+          <h1 style={{ 
+            margin: 0, 
+            color: '#1a202c',
+            fontSize: '2rem',
+            fontWeight: '700'
+          }}>
+            🚀 SolCraft Nexus Dashboard
+          </h1>
+          <p style={{ 
+            margin: '0.5rem 0 0 0', 
+            color: '#4a5568',
+            fontSize: '1.1rem'
+          }}>
+            Benvenuto, <strong>{user?.name || sampleUserProfile.full_name}</strong>
+          </p>
+          <p style={{ 
+            margin: '0.25rem 0 0 0', 
+            color: '#718096',
+            fontSize: '0.9rem'
+          }}>
+            Wallet: {user?.address || sampleUserProfile.wallet_address}
+          </p>
+        </div>
 
-      {/* Statistiche Panoramica */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <Wallet className="h-5 w-5 text-blue-600" />
-              <span className="text-sm font-medium text-gray-600">Portafoglio principale</span>
-            </div>
-            <HelpIcon content="Il valore totale di tutti i tuoi asset tokenizzati e crypto holdings" />
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-gray-900">
-              {showBalance ? `€${userStats.totalBalance.toLocaleString()}` : '••••••'}
-            </span>
+        {/* Navigation Menu */}
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          {['wallet', 'assets', 'tokenize', 'marketplace', 'learn'].map(page => (
             <button
-              onClick={() => setShowBalance(!showBalance)}
-              className="text-gray-400 hover:text-gray-600"
+              key={page}
+              onClick={() => onNavigate(page)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                textTransform: 'capitalize',
+                transition: 'all 0.3s ease',
+                fontSize: '0.9rem'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 10px 20px rgba(102, 126, 234, 0.3)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = 'none';
+              }}
             >
-              {showBalance ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              {page === 'wallet' && '💼'} 
+              {page === 'assets' && '🏠'} 
+              {page === 'tokenize' && '🪙'} 
+              {page === 'marketplace' && '🛒'} 
+              {page === 'learn' && '📚'} 
+              {' ' + page}
             </button>
-          </div>
-        </motion.div>
+          ))}
+          
+          {/* Notifications */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              style={{
+                padding: '0.75rem',
+                background: unreadNotifications > 0 ? '#EF4444' : '#6B7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              🔔
+              {unreadNotifications > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-5px',
+                  right: '-5px',
+                  background: '#DC2626',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
+                  fontSize: '0.7rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {unreadNotifications}
+                </span>
+              )}
+            </button>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-              <span className="text-sm font-medium text-gray-600">Asset attivi</span>
-            </div>
-            <HelpIcon content="Numero di asset che hai tokenizzato o in cui hai investito" />
+            {showNotifications && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                background: 'white',
+                borderRadius: '12px',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+                width: '350px',
+                maxHeight: '400px',
+                overflowY: 'auto',
+                zIndex: 1000,
+                marginTop: '0.5rem'
+              }}>
+                <div style={{ padding: '1rem', borderBottom: '1px solid #E5E7EB' }}>
+                  <h3 style={{ margin: 0, color: '#1F2937' }}>Notifiche</h3>
+                </div>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#6B7280' }}>
+                    Nessuna notifica
+                  </div>
+                ) : (
+                  notifications.map(notification => (
+                    <div
+                      key={notification.id}
+                      onClick={() => markNotificationAsRead(notification.id)}
+                      style={{
+                        padding: '1rem',
+                        borderBottom: '1px solid #F3F4F6',
+                        cursor: 'pointer',
+                        background: notification.read ? 'white' : '#F0F9FF',
+                        transition: 'background 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                        <span style={{ fontSize: '1.2rem' }}>
+                          {notification.type === 'success' && '✅'}
+                          {notification.type === 'info' && 'ℹ️'}
+                          {notification.type === 'warning' && '⚠️'}
+                          {notification.type === 'error' && '❌'}
+                        </span>
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ 
+                            margin: '0 0 0.25rem 0', 
+                            fontSize: '0.9rem',
+                            fontWeight: notification.read ? '500' : '600',
+                            color: '#1F2937'
+                          }}>
+                            {notification.title}
+                          </h4>
+                          <p style={{ 
+                            margin: '0 0 0.5rem 0', 
+                            fontSize: '0.8rem',
+                            color: '#6B7280',
+                            lineHeight: '1.4'
+                          }}>
+                            {notification.message}
+                          </p>
+                          <span style={{ 
+                            fontSize: '0.7rem', 
+                            color: '#9CA3AF' 
+                          }}>
+                            {formatDate(notification.created_at)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
-          <span className="text-2xl font-bold text-gray-900">{userStats.totalAssets}</span>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <Gift className="h-5 w-5 text-purple-600" />
-              <span className="text-sm font-medium text-gray-600">Ultimo mese</span>
-            </div>
-            <HelpIcon content="Rendimento percentuale del tuo portfolio nell'ultimo mese" />
-          </div>
-          <span className="text-2xl font-bold text-green-600">
-            +{userStats.monthlyReturn}%
-          </span>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <Shield className="h-5 w-5 text-blue-600" />
-              <span className="text-sm font-medium text-gray-600">Livello protezione</span>
-            </div>
-            <HelpIcon content="Punteggio di sicurezza basato su autenticazione, backup e compliance" />
-          </div>
-          <span className="text-2xl font-bold text-blue-600">{userStats.securityScore}%</span>
-        </motion.div>
+        </div>
       </div>
 
-      {/* Azioni Rapide */}
-      <div>
-        <div className="flex items-center space-x-2 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Azioni Rapide</h2>
-          <HelpIcon content="Accesso rapido alle funzioni più utilizzate della piattaforma" />
+      {/* Portfolio Overview */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '1.5rem',
+        marginBottom: '2rem'
+      }}>
+        <div style={{
+          background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+          borderRadius: '20px',
+          padding: '2rem',
+          color: 'white',
+          boxShadow: '0 20px 40px rgba(16, 185, 129, 0.3)'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
+            💼 Valore Portafoglio
+          </h3>
+          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+            {formatCurrency(totalValue)}
+          </p>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+            <span style={{ color: totalGain >= 0 ? '#D1FAE5' : '#FEE2E2' }}>
+              {totalGain >= 0 ? '↗️' : '↘️'} {formatCurrency(Math.abs(totalGain))} ({totalGainPercentage}%)
+            </span>
+          </p>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg p-4 text-left transition-colors"
-          >
-            <ArrowUpRight className="h-6 w-6 text-red-600 mb-2" />
-            <h3 className="font-medium text-gray-900 mb-1">Invia Crypto</h3>
-            <p className="text-sm text-gray-600">Trasferisci XRP o token in modo sicuro</p>
-          </motion.button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg p-4 text-left transition-colors"
-          >
-            <ArrowDownLeft className="h-6 w-6 text-green-600 mb-2" />
-            <h3 className="font-medium text-gray-900 mb-1">Ricevi Crypto</h3>
-            <p className="text-sm text-gray-600">Genera un indirizzo per ricevere pagamenti</p>
-          </motion.button>
+        <div style={{
+          background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+          borderRadius: '20px',
+          padding: '2rem',
+          color: 'white',
+          boxShadow: '0 20px 40px rgba(59, 130, 246, 0.3)'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
+            🏠 Asset Tokenizzati
+          </h3>
+          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+            {portfolioData.length}
+          </p>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+            Immobiliare, Startup, Arte
+          </p>
+        </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg p-4 text-left transition-colors"
-          >
-            <Plus className="h-6 w-6 text-blue-600 mb-2" />
-            <h3 className="font-medium text-gray-900 mb-1">Tokenizza Asset</h3>
-            <p className="text-sm text-gray-600">Trasforma un asset fisico in token digitali</p>
-          </motion.button>
+        <div style={{
+          background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+          borderRadius: '20px',
+          padding: '2rem',
+          color: 'white',
+          boxShadow: '0 20px 40px rgba(139, 92, 246, 0.3)'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
+            📈 Performance
+          </h3>
+          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+            +{totalGainPercentage}%
+          </p>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+            Ultimi 6 mesi
+          </p>
+        </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded-lg p-4 text-left transition-colors"
-          >
-            <Users className="h-6 w-6 text-yellow-600 mb-2" />
-            <h3 className="font-medium text-gray-900 mb-1">Esplora Marketplace</h3>
-            <p className="text-sm text-gray-600">Investi in asset tokenizzati da altri</p>
-          </motion.button>
+        <div style={{
+          background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+          borderRadius: '20px',
+          padding: '2rem',
+          color: 'white',
+          boxShadow: '0 20px 40px rgba(245, 158, 11, 0.3)'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
+            💰 Investimento Totale
+          </h3>
+          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+            {formatCurrency(totalInvested)}
+          </p>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+            Capitale investito
+          </p>
         </div>
       </div>
 
-      {/* I Miei Asset */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2">
-            <h2 className="text-lg font-semibold text-gray-900">I Miei Asset</h2>
-            <HelpIcon content="Tutti gli asset che hai tokenizzato o in cui hai investito" />
-          </div>
-          <Button className="bg-purple-600 hover:bg-purple-700 text-white">
-            <Plus className="w-4 h-4 mr-2" />
-            Nuovo Asset
-          </Button>
-        </div>
-
-        {myAssets.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-8">
-            <EmptyState
-              icon="🏠"
-              title="Nessun Asset Tokenizzato"
-              description="Inizia a tokenizzare i tuoi asset fisici per trasformarli in investimenti digitali che generano rendimenti automatici."
-              actionText="Tokenizza il Primo Asset"
-              onAction={() => console.log('Redirect to tokenization')}
-            />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {myAssets.map((asset, index) => (
-              <motion.div
-                key={asset.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{asset.name}</h3>
-                    <span className="text-sm text-gray-600">{asset.type}</span>
-                  </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    asset.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {asset.status}
-                  </span>
+      {/* Charts and Analytics */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: '2rem',
+        marginBottom: '2rem'
+      }}>
+        {/* Performance Chart */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '20px',
+          padding: '2rem',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
+            📊 Performance vs Benchmark
+          </h3>
+          <div style={{ height: '200px', display: 'flex', alignItems: 'end', gap: '1rem' }}>
+            {performanceData.map((data, index) => (
+              <div key={index} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'end', marginBottom: '0.5rem' }}>
+                  <div style={{
+                    width: '20px',
+                    height: `${(data.portfolio / 20000) * 150}px`,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    borderRadius: '4px 4px 0 0'
+                  }}></div>
+                  <div style={{
+                    width: '20px',
+                    height: `${(data.benchmark / 20000) * 150}px`,
+                    background: '#E5E7EB',
+                    borderRadius: '4px 4px 0 0'
+                  }}></div>
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Valore</span>
-                    <span className="font-medium">€{asset.value.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Rendimento annuo</span>
-                    <span className="font-medium text-green-600">+{asset.yield}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Token posseduti</span>
-                    <span className="font-medium">{asset.tokens}</span>
-                  </div>
-                </div>
-              </motion.div>
+                <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>{data.month}</span>
+              </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Transazioni Recenti */}
-      <div>
-        <div className="flex items-center space-x-2 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Transazioni Recenti</h2>
-          <HelpIcon content="Le tue ultime transazioni e movimenti di portfolio" />
-        </div>
-
-        {recentTransactions.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-8">
-            <EmptyState
-              icon="📊"
-              title="Nessuna Transazione"
-              description="Le tue transazioni e movimenti di portfolio appariranno qui. Inizia facendo la tua prima operazione."
-              actionText="Esplora Marketplace"
-              onAction={() => console.log('Redirect to marketplace')}
-            />
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="divide-y divide-gray-200">
-              {recentTransactions.map((transaction, index) => (
-                <motion.div
-                  key={transaction.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="p-4 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-full ${
-                        transaction.type === 'receive' ? 'bg-green-100' : 'bg-red-100'
-                      }`}>
-                        {transaction.type === 'receive' ? 
-                          <ArrowDownLeft className="h-4 w-4 text-green-600" /> :
-                          <ArrowUpRight className="h-4 w-4 text-red-600" />
-                        }
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{transaction.description}</p>
-                        <p className="text-sm text-gray-600">{transaction.date}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-medium ${
-                        transaction.type === 'receive' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {transaction.type === 'receive' ? '+' : '-'}{transaction.amount} {transaction.currency}
-                      </p>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        transaction.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {transaction.status}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', fontSize: '0.9rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ width: '12px', height: '12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '2px' }}></div>
+              <span>Portfolio</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ width: '12px', height: '12px', background: '#E5E7EB', borderRadius: '2px' }}></div>
+              <span>Benchmark</span>
             </div>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Guida Interattiva */}
-      <InteractiveGuide
-        isActive={isGuideActive}
-        currentStep={currentStep}
-        onNext={nextStep}
-        onPrev={prevStep}
-        onEnd={endGuide}
-      />
-
-      {/* Info Box */}
-      <InfoBox className="bg-blue-50 border-blue-200">
-        <div className="flex items-start space-x-3">
-          <BookOpen className="h-5 w-5 text-blue-600 mt-0.5" />
-          <div>
-            <h3 className="font-medium text-blue-900 mb-1">💡 Suggerimento</h3>
-            <p className="text-sm text-blue-800">
-              I tuoi asset tokenizzati generano rendimenti automatici che vengono distribuiti 
-              direttamente nel tuo portafoglio ogni mese.
-            </p>
+        {/* Asset Allocation */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '20px',
+          padding: '2rem',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
+            🥧 Allocazione Asset
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {assetAllocation.map((asset, index) => (
+              <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ 
+                  width: '12px', 
+                  height: '12px', 
+                  borderRadius: '50%',
+                  background: ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B'][index]
+                }}></div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <span style={{ fontSize: '0.9rem', color: '#374151' }}>{asset.name}</span>
+                    <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#1F2937' }}>
+                      {asset.percentage}%
+                    </span>
+                  </div>
+                  <div style={{ 
+                    width: '100%', 
+                    height: '6px', 
+                    background: '#F3F4F6', 
+                    borderRadius: '3px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${asset.percentage}%`,
+                      height: '100%',
+                      background: ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B'][index],
+                      transition: 'width 1s ease'
+                    }}></div>
+                  </div>
+                </div>
+                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#1F2937', minWidth: '80px', textAlign: 'right' }}>
+                  {formatCurrency(asset.value)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
-      </InfoBox>
+      </div>
+
+      {/* Market Trends & Recent Activity */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: '2rem'
+      }}>
+        {/* Market Trends */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '20px',
+          padding: '2rem',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
+            📈 Trend di Mercato
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {marketTrends.map((trend, index) => (
+              <div key={index} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '1rem',
+                background: '#F9FAFB',
+                borderRadius: '12px',
+                border: '1px solid #F3F4F6'
+              }}>
+                <span style={{ color: '#374151', fontWeight: '500' }}>{trend.category}</span>
+                <span style={{ 
+                  color: trend.color, 
+                  fontWeight: '700',
+                  fontSize: '1.1rem'
+                }}>
+                  {trend.trend}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Transactions */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '20px',
+          padding: '2rem',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
+            🔄 Transazioni Recenti
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {sampleTransactions.slice(0, 3).map(transaction => (
+              <div key={transaction.id} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '1rem',
+                background: '#F9FAFB',
+                borderRadius: '12px',
+                border: '1px solid #F3F4F6'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <span style={{ fontSize: '1.2rem' }}>
+                      {transaction.transaction_type === 'buy' && '🛒'}
+                      {transaction.transaction_type === 'sell' && '💰'}
+                      {transaction.transaction_type === 'dividend' && '💎'}
+                    </span>
+                    <span style={{ fontWeight: '600', color: '#1F2937', textTransform: 'capitalize' }}>
+                      {transaction.transaction_type}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#6B7280' }}>
+                    {transaction.assets.symbol} • {transaction.tokens} token
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#9CA3AF' }}>
+                    {formatDate(transaction.created_at)}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ 
+                    margin: 0, 
+                    fontWeight: '700', 
+                    color: transaction.transaction_type === 'dividend' ? '#10B981' : '#1F2937'
+                  }}>
+                    {transaction.transaction_type === 'dividend' ? '+' : ''}{formatCurrency(transaction.total_amount)}
+                  </p>
+                  <p style={{ 
+                    margin: 0, 
+                    fontSize: '0.8rem',
+                    color: transaction.status === 'completed' ? '#10B981' : '#F59E0B'
+                  }}>
+                    {transaction.status === 'completed' ? '✅ Completata' : '⏳ In corso'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => onNavigate('wallet')}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              marginTop: '1rem',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontWeight: '600',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            Vedi Tutte le Transazioni
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

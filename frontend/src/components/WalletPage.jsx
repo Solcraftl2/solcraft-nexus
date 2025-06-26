@@ -1,539 +1,333 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { 
+  sampleUserProfile, 
+  samplePortfolio, 
+  sampleTransactions, 
+  sampleOrders,
+  sampleAssets 
+} from '../data/sampleData';
 
-const WalletPage = ({ user }) => {
-  const [selectedTab, setSelectedTab] = useState('overview');
-  const [transactions] = useState([
-    {
-      id: 1,
-      type: 'receive',
-      amount: '+250.00 XRP',
-      from: 'rDNvpJMWqxQtCkjQ3wQpLrTwKjBF8CX2dm',
-      date: '2025-06-26',
-      time: '14:30',
-      status: 'confirmed',
-      hash: '8F4B2C1A9E7D6F3B5A8C2E1D4F7B9A6C3E8D1F4B7A9C2E5D8F1B4A7C9E2D5F8'
-    },
-    {
-      id: 2,
-      type: 'send',
-      amount: '-100.00 XRP',
-      to: 'rLNaPoKeeBjZe2qs6x52yVPZpZ8td4dc6w',
-      date: '2025-06-25',
-      time: '09:15',
-      status: 'confirmed',
-      hash: '3A7F9C2E5D8B1F4A7C9E2D5F8B1A4C7E9D2F5A8C1E4D7F9B2A5C8E1D4F7B9A'
-    },
-    {
-      id: 3,
-      type: 'receive',
-      amount: '+500.00 XRP',
-      from: 'rMPCGeneratedAddress123456789',
-      date: '2025-06-24',
-      time: '16:45',
-      status: 'confirmed',
-      hash: '9E2D5F8B1A4C7E9D2F5A8C1E4D7F9B2A5C8E1D4F7B9A3C6E9D2F5A8B1E4D7F'
+const WalletPage = ({ user, onNavigate }) => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [portfolioData] = useState(samplePortfolio);
+  const [transactions] = useState(sampleTransactions);
+  const [orders] = useState(sampleOrders);
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendAddress, setSendAddress] = useState('');
+  const [receiveAmount, setReceiveAmount] = useState('100');
+
+  // Calculate metrics
+  const totalValue = portfolioData.reduce((sum, item) => sum + item.current_value, 0);
+  const totalInvested = portfolioData.reduce((sum, item) => sum + item.total_invested, 0);
+  const totalGain = totalValue - totalInvested;
+  const totalGainPercentage = ((totalGain / totalInvested) * 100).toFixed(1);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('it-IT', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const generateQRCode = (data) => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data)}`;
+  };
+
+  const handleSend = () => {
+    if (!sendAmount || !sendAddress) {
+      alert('Inserisci importo e indirizzo di destinazione');
+      return;
     }
-  ]);
+    alert(`Transazione inviata: ${sendAmount} EUR a ${sendAddress}`);
+    setSendAmount('');
+    setSendAddress('');
+  };
 
-  const [assets] = useState([
-    {
-      id: 1,
-      symbol: 'XRP',
-      name: 'XRP Ledger',
-      balance: '1,250.75',
-      value: '€625.38',
-      change: '+2.5%',
-      icon: '💎'
-    },
-    {
-      id: 2,
-      symbol: 'RWA-RE01',
-      name: 'Real Estate Token #1',
-      balance: '50.00',
-      value: '€2,500.00',
-      change: '+8.2%',
-      icon: '🏠'
-    },
-    {
-      id: 3,
-      symbol: 'RWA-ST02',
-      name: 'Startup Equity Token',
-      balance: '25.00',
-      value: '€1,875.00',
-      change: '+15.7%',
-      icon: '🚀'
-    }
-  ]);
-
-  const totalBalance = assets.reduce((sum, asset) => {
-    return sum + parseFloat(asset.value.replace('€', '').replace(',', ''));
-  }, 0);
+  const tabs = [
+    { id: 'overview', label: 'Panoramica', icon: '📊' },
+    { id: 'assets', label: 'Asset', icon: '🏠' },
+    { id: 'transactions', label: 'Transazioni', icon: '🔄' },
+    { id: 'send', label: 'Invia', icon: '📤' },
+    { id: 'receive', label: 'Ricevi', icon: '📥' }
+  ];
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#f8f9fa',
-      fontFamily: 'Arial, sans-serif'
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '2rem 1rem'
     }}>
       {/* Header */}
       <div style={{
-        background: 'white',
-        padding: '2rem',
-        borderBottom: '1px solid #e2e8f0',
-        marginBottom: '2rem'
+        background: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: '20px',
+        padding: '1.5rem 2rem',
+        marginBottom: '2rem',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '1rem'
       }}>
-        <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div>
-            <h1 style={{
-              fontSize: '2.5rem',
-              fontWeight: 'bold',
-              color: '#1e293b',
-              margin: '0 0 0.5rem 0'
-            }}>
-              💰 Portafoglio
-            </h1>
-            <p style={{
-              color: '#64748b',
-              fontSize: '1.1rem',
-              margin: 0
-            }}>
-              Gestione completa dei tuoi asset digitali e tokenizzati
-            </p>
-          </div>
-          
-          <div style={{
-            textAlign: 'right'
+        <div>
+          <button
+            onClick={() => onNavigate('dashboard')}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              marginRight: '1rem'
+            }}
+          >
+            ← 
+          </button>
+          <h1 style={{ 
+            margin: 0, 
+            color: '#1a202c',
+            fontSize: '2rem',
+            fontWeight: '700',
+            display: 'inline'
           }}>
-            <div style={{
-              fontSize: '2.5rem',
-              fontWeight: 'bold',
-              color: '#10b981',
-              marginBottom: '0.5rem'
-            }}>
-              €{totalBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
-            </div>
-            <div style={{
-              color: '#64748b',
-              fontSize: '1rem'
-            }}>
-              Valore Totale Portafoglio
-            </div>
-          </div>
+            💼 Wallet
+          </h1>
+        </div>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '1rem',
+          background: '#F3F4F6',
+          padding: '0.75rem 1rem',
+          borderRadius: '12px'
+        }}>
+          <span style={{ fontSize: '0.9rem', color: '#6B7280' }}>Saldo Totale:</span>
+          <span style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1F2937' }}>
+            {formatCurrency(totalValue)}
+          </span>
         </div>
       </div>
 
+      {/* Tab Navigation */}
       <div style={{
-        maxWidth: '1400px',
-        margin: '0 auto',
-        padding: '0 2rem'
+        background: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: '20px',
+        padding: '1rem',
+        marginBottom: '2rem',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
       }}>
-        {/* Navigation Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: '1rem',
-          marginBottom: '2rem',
-          borderBottom: '1px solid #e2e8f0'
+        <div style={{ 
+          display: 'flex', 
+          gap: '0.5rem',
+          overflowX: 'auto',
+          paddingBottom: '0.5rem'
         }}>
-          {[
-            { id: 'overview', label: '📊 Panoramica', desc: 'Saldo e statistiche' },
-            { id: 'assets', label: '💎 Asset', desc: 'Token e criptovalute' },
-            { id: 'transactions', label: '📋 Transazioni', desc: 'Cronologia movimenti' },
-            { id: 'send', label: '📤 Invia', desc: 'Trasferisci fondi' },
-            { id: 'receive', label: '📥 Ricevi', desc: 'Genera indirizzo' }
-          ].map(tab => (
+          {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setSelectedTab(tab.id)}
+              onClick={() => setActiveTab(tab.id)}
               style={{
                 padding: '1rem 1.5rem',
+                background: activeTab === tab.id 
+                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                  : 'transparent',
+                color: activeTab === tab.id ? 'white' : '#6B7280',
                 border: 'none',
-                background: selectedTab === tab.id ? '#f8fafc' : 'transparent',
-                borderBottom: selectedTab === tab.id ? '3px solid #3b82f6' : '3px solid transparent',
+                borderRadius: '12px',
                 cursor: 'pointer',
-                transition: 'all 0.3s',
-                textAlign: 'left'
+                fontWeight: '600',
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap',
+                fontSize: '0.9rem'
               }}
             >
-              <div style={{
-                fontWeight: selectedTab === tab.id ? 'bold' : 'normal',
-                color: selectedTab === tab.id ? '#1e293b' : '#64748b',
-                fontSize: '1rem',
-                marginBottom: '0.2rem'
-              }}>
-                {tab.label}
-              </div>
-              <div style={{
-                fontSize: '0.8rem',
-                color: '#94a3b8'
-              }}>
-                {tab.desc}
-              </div>
+              {tab.icon} {tab.label}
             </button>
           ))}
         </div>
+      </div>
 
+      {/* Tab Content */}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: '20px',
+        padding: '2rem',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+        minHeight: '500px'
+      }}>
         {/* Overview Tab */}
-        {selectedTab === 'overview' && (
+        {activeTab === 'overview' && (
           <div>
+            <h2 style={{ margin: '0 0 2rem 0', color: '#1F2937' }}>📊 Panoramica Wallet</h2>
+            
+            {/* Metrics Cards */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '2rem',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '1.5rem',
               marginBottom: '2rem'
             }}>
               <div style={{
-                background: 'white',
-                padding: '2rem',
-                borderRadius: '12px',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                borderRadius: '16px',
+                padding: '1.5rem',
+                color: 'white'
               }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                  marginBottom: '1.5rem'
-                }}>
-                  <div style={{
-                    width: '50px',
-                    height: '50px',
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    borderRadius: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.5rem'
-                  }}>
-                    💰
-                  </div>
-                  <div>
-                    <h3 style={{
-                      margin: 0,
-                      fontSize: '1.3rem',
-                      color: '#1e293b'
-                    }}>
-                      Saldo Totale
-                    </h3>
-                    <p style={{
-                      margin: 0,
-                      color: '#64748b',
-                      fontSize: '0.9rem'
-                    }}>
-                      Tutti gli asset
-                    </p>
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: '2.2rem',
-                  fontWeight: 'bold',
-                  color: '#10b981',
-                  marginBottom: '0.5rem'
-                }}>
-                  €{totalBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
-                </div>
-                <div style={{
-                  color: '#10b981',
-                  fontSize: '0.9rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <span>↗️</span>
-                  +8.5% questo mese
-                </div>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', opacity: 0.9 }}>
+                  Valore Totale
+                </h3>
+                <p style={{ margin: 0, fontSize: '2rem', fontWeight: '700' }}>
+                  {formatCurrency(totalValue)}
+                </p>
               </div>
 
               <div style={{
-                background: 'white',
-                padding: '2rem',
-                borderRadius: '12px',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                borderRadius: '16px',
+                padding: '1.5rem',
+                color: 'white'
               }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                  marginBottom: '1.5rem'
-                }}>
-                  <div style={{
-                    width: '50px',
-                    height: '50px',
-                    background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                    borderRadius: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.5rem'
-                  }}>
-                    💎
-                  </div>
-                  <div>
-                    <h3 style={{
-                      margin: 0,
-                      fontSize: '1.3rem',
-                      color: '#1e293b'
-                    }}>
-                      Asset Diversi
-                    </h3>
-                    <p style={{
-                      margin: 0,
-                      color: '#64748b',
-                      fontSize: '0.9rem'
-                    }}>
-                      Portafoglio diversificato
-                    </p>
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: '2.2rem',
-                  fontWeight: 'bold',
-                  color: '#3b82f6',
-                  marginBottom: '0.5rem'
-                }}>
-                  {assets.length}
-                </div>
-                <div style={{
-                  color: '#64748b',
-                  fontSize: '0.9rem'
-                }}>
-                  Criptovalute e RWA
-                </div>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', opacity: 0.9 }}>
+                  Investimento
+                </h3>
+                <p style={{ margin: 0, fontSize: '2rem', fontWeight: '700' }}>
+                  {formatCurrency(totalInvested)}
+                </p>
               </div>
 
               <div style={{
-                background: 'white',
-                padding: '2rem',
-                borderRadius: '12px',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                borderRadius: '16px',
+                padding: '1.5rem',
+                color: 'white'
               }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                  marginBottom: '1.5rem'
-                }}>
-                  <div style={{
-                    width: '50px',
-                    height: '50px',
-                    background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-                    borderRadius: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.5rem'
-                  }}>
-                    📈
-                  </div>
-                  <div>
-                    <h3 style={{
-                      margin: 0,
-                      fontSize: '1.3rem',
-                      color: '#1e293b'
-                    }}>
-                      Performance
-                    </h3>
-                    <p style={{
-                      margin: 0,
-                      color: '#64748b',
-                      fontSize: '0.9rem'
-                    }}>
-                      Rendimento 30gg
-                    </p>
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: '2.2rem',
-                  fontWeight: 'bold',
-                  color: '#8b5cf6',
-                  marginBottom: '0.5rem'
-                }}>
-                  +12.3%
-                </div>
-                <div style={{
-                  color: '#8b5cf6',
-                  fontSize: '0.9rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <span>🚀</span>
-                  Trend positivo
-                </div>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', opacity: 0.9 }}>
+                  Guadagno/Perdita
+                </h3>
+                <p style={{ margin: 0, fontSize: '2rem', fontWeight: '700' }}>
+                  {formatCurrency(totalGain)}
+                </p>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+                  ({totalGainPercentage}%)
+                </p>
+              </div>
+
+              <div style={{
+                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                borderRadius: '16px',
+                padding: '1.5rem',
+                color: 'white'
+              }}>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', opacity: 0.9 }}>
+                  Asset Posseduti
+                </h3>
+                <p style={{ margin: 0, fontSize: '2rem', fontWeight: '700' }}>
+                  {portfolioData.length}
+                </p>
               </div>
             </div>
 
-            {/* Quick Actions */}
+            {/* Wallet Info */}
             <div style={{
-              background: 'white',
-              padding: '2rem',
-              borderRadius: '12px',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              background: '#F9FAFB',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              border: '1px solid #E5E7EB'
             }}>
-              <h3 style={{
-                fontSize: '1.5rem',
-                fontWeight: 'bold',
-                color: '#1e293b',
-                marginBottom: '1.5rem'
-              }}>
-                ⚡ Azioni Rapide
-              </h3>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '1rem'
-              }}>
-                {[
-                  { action: 'send', label: '📤 Invia Fondi', desc: 'Trasferisci XRP o token' },
-                  { action: 'receive', label: '📥 Ricevi Fondi', desc: 'Genera indirizzo wallet' },
-                  { action: 'swap', label: '🔄 Scambia', desc: 'Converti tra asset' },
-                  { action: 'stake', label: '🏦 Staking', desc: 'Guadagna rendimenti' }
-                ].map(item => (
-                  <button
-                    key={item.action}
-                    onClick={() => setSelectedTab(item.action)}
-                    style={{
-                      padding: '1.5rem',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '12px',
-                      background: 'white',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s',
-                      textAlign: 'left'
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.borderColor = '#3b82f6';
-                      e.target.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.borderColor = '#e2e8f0';
-                      e.target.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    <div style={{
-                      fontWeight: 'bold',
-                      color: '#1e293b',
-                      marginBottom: '0.5rem'
-                    }}>
-                      {item.label}
-                    </div>
-                    <div style={{
-                      color: '#64748b',
-                      fontSize: '0.9rem'
-                    }}>
-                      {item.desc}
-                    </div>
-                  </button>
-                ))}
+              <h3 style={{ margin: '0 0 1rem 0', color: '#1F2937' }}>Informazioni Wallet</h3>
+              <div style={{ display: 'grid', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6B7280' }}>Tipo Wallet:</span>
+                  <span style={{ fontWeight: '600', color: '#1F2937', textTransform: 'uppercase' }}>
+                    {user?.walletType || sampleUserProfile.wallet_type}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6B7280' }}>Indirizzo:</span>
+                  <span style={{ fontWeight: '600', color: '#1F2937', fontFamily: 'monospace' }}>
+                    {user?.address || sampleUserProfile.wallet_address}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6B7280' }}>Status KYC:</span>
+                  <span style={{ 
+                    fontWeight: '600', 
+                    color: sampleUserProfile.kyc_status === 'approved' ? '#10B981' : '#F59E0B',
+                    textTransform: 'capitalize'
+                  }}>
+                    {sampleUserProfile.kyc_status === 'approved' ? '✅ Approvato' : '⏳ In corso'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Assets Tab */}
-        {selectedTab === 'assets' && (
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '2rem',
-              borderBottom: '1px solid #e2e8f0'
-            }}>
-              <h3 style={{
-                fontSize: '1.5rem',
-                fontWeight: 'bold',
-                color: '#1e293b',
-                margin: 0
-              }}>
-                💎 I Tuoi Asset
-              </h3>
-              <p style={{
-                color: '#64748b',
-                margin: '0.5rem 0 0 0'
-              }}>
-                Gestisci e monitora tutti i tuoi token e criptovalute
-              </p>
-            </div>
-            
-            <div style={{ padding: '0' }}>
-              {assets.map(asset => (
-                <div
-                  key={asset.id}
-                  style={{
-                    padding: '1.5rem 2rem',
-                    borderBottom: '1px solid #f1f5f9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    transition: 'background 0.3s'
-                  }}
-                  onMouseOver={(e) => e.target.style.background = '#f8fafc'}
-                  onMouseOut={(e) => e.target.style.background = 'white'}
-                >
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '1rem'
-                  }}>
+        {activeTab === 'assets' && (
+          <div>
+            <h2 style={{ margin: '0 0 2rem 0', color: '#1F2937' }}>🏠 I Tuoi Asset</h2>
+            <div style={{ display: 'grid', gap: '1.5rem' }}>
+              {portfolioData.map(item => (
+                <div key={item.id} style={{
+                  background: '#F9FAFB',
+                  borderRadius: '16px',
+                  padding: '1.5rem',
+                  border: '1px solid #E5E7EB',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{
                       width: '50px',
                       height: '50px',
-                      background: 'linear-gradient(135deg, #f1f5f9, #e2e8f0)',
                       borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: '1.5rem'
                     }}>
-                      {asset.icon}
+                      {item.assets.asset_categories.icon}
                     </div>
                     <div>
-                      <div style={{
-                        fontWeight: 'bold',
-                        color: '#1e293b',
-                        fontSize: '1.1rem'
-                      }}>
-                        {asset.symbol}
-                      </div>
-                      <div style={{
-                        color: '#64748b',
-                        fontSize: '0.9rem'
-                      }}>
-                        {asset.name}
-                      </div>
+                      <h3 style={{ margin: '0 0 0.25rem 0', color: '#1F2937' }}>
+                        {item.assets.name}
+                      </h3>
+                      <p style={{ margin: '0 0 0.25rem 0', color: '#6B7280', fontSize: '0.9rem' }}>
+                        {item.assets.symbol} • {item.tokens_owned} token posseduti
+                      </p>
+                      <p style={{ margin: 0, color: '#9CA3AF', fontSize: '0.8rem' }}>
+                        Acquistato il {formatDate(item.created_at)}
+                      </p>
                     </div>
                   </div>
-                  
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{
-                      fontWeight: 'bold',
-                      color: '#1e293b',
-                      fontSize: '1.1rem'
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '1.2rem', fontWeight: '700', color: '#1F2937' }}>
+                      {formatCurrency(item.current_value)}
+                    </p>
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem', color: '#6B7280' }}>
+                      Investito: {formatCurrency(item.total_invested)}
+                    </p>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: '0.9rem', 
+                      fontWeight: '600',
+                      color: item.current_value >= item.total_invested ? '#10B981' : '#EF4444'
                     }}>
-                      {asset.balance} {asset.symbol}
-                    </div>
-                    <div style={{
-                      color: '#64748b',
-                      fontSize: '0.9rem'
-                    }}>
-                      {asset.value}
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    color: asset.change.startsWith('+') ? '#10b981' : '#ef4444',
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem',
-                    textAlign: 'right'
-                  }}>
-                    {asset.change}
+                      {item.current_value >= item.total_invested ? '+' : ''}{formatCurrency(item.current_value - item.total_invested)}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -542,109 +336,64 @@ const WalletPage = ({ user }) => {
         )}
 
         {/* Transactions Tab */}
-        {selectedTab === 'transactions' && (
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '2rem',
-              borderBottom: '1px solid #e2e8f0'
-            }}>
-              <h3 style={{
-                fontSize: '1.5rem',
-                fontWeight: 'bold',
-                color: '#1e293b',
-                margin: 0
-              }}>
-                📋 Cronologia Transazioni
-              </h3>
-              <p style={{
-                color: '#64748b',
-                margin: '0.5rem 0 0 0'
-              }}>
-                Tutte le tue transazioni recenti su XRPL
-              </p>
-            </div>
-            
-            <div style={{ padding: '0' }}>
-              {transactions.map(tx => (
-                <div
-                  key={tx.id}
-                  style={{
-                    padding: '1.5rem 2rem',
-                    borderBottom: '1px solid #f1f5f9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    transition: 'background 0.3s'
-                  }}
-                  onMouseOver={(e) => e.target.style.background = '#f8fafc'}
-                  onMouseOut={(e) => e.target.style.background = 'white'}
-                >
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '1rem'
-                  }}>
+        {activeTab === 'transactions' && (
+          <div>
+            <h2 style={{ margin: '0 0 2rem 0', color: '#1F2937' }}>🔄 Cronologia Transazioni</h2>
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              {transactions.map(transaction => (
+                <div key={transaction.id} style={{
+                  background: '#F9FAFB',
+                  borderRadius: '16px',
+                  padding: '1.5rem',
+                  border: '1px solid #E5E7EB',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{
                       width: '50px',
                       height: '50px',
-                      background: tx.type === 'receive' 
-                        ? 'linear-gradient(135deg, #10b981, #059669)' 
-                        : 'linear-gradient(135deg, #ef4444, #dc2626)',
                       borderRadius: '12px',
+                      background: transaction.transaction_type === 'buy' ? '#3B82F6' : 
+                                 transaction.transaction_type === 'sell' ? '#EF4444' : '#10B981',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '1.5rem',
-                      color: 'white'
+                      fontSize: '1.5rem'
                     }}>
-                      {tx.type === 'receive' ? '📥' : '📤'}
+                      {transaction.transaction_type === 'buy' && '🛒'}
+                      {transaction.transaction_type === 'sell' && '💰'}
+                      {transaction.transaction_type === 'dividend' && '💎'}
                     </div>
                     <div>
-                      <div style={{
-                        fontWeight: 'bold',
-                        color: '#1e293b',
-                        fontSize: '1.1rem'
-                      }}>
-                        {tx.type === 'receive' ? 'Ricevuto' : 'Inviato'}
-                      </div>
-                      <div style={{
-                        color: '#64748b',
-                        fontSize: '0.9rem'
-                      }}>
-                        {tx.type === 'receive' ? `Da: ${tx.from.substring(0, 20)}...` : `A: ${tx.to.substring(0, 20)}...`}
-                      </div>
-                      <div style={{
-                        color: '#94a3b8',
-                        fontSize: '0.8rem'
-                      }}>
-                        {tx.date} alle {tx.time}
-                      </div>
+                      <h3 style={{ margin: '0 0 0.25rem 0', color: '#1F2937', textTransform: 'capitalize' }}>
+                        {transaction.transaction_type} {transaction.assets.symbol}
+                      </h3>
+                      <p style={{ margin: '0 0 0.25rem 0', color: '#6B7280', fontSize: '0.9rem' }}>
+                        {transaction.tokens} token • {formatCurrency(transaction.price_per_token)} per token
+                      </p>
+                      <p style={{ margin: 0, color: '#9CA3AF', fontSize: '0.8rem' }}>
+                        {formatDate(transaction.created_at)}
+                      </p>
                     </div>
                   </div>
-                  
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{
-                      fontWeight: 'bold',
-                      color: tx.type === 'receive' ? '#10b981' : '#ef4444',
-                      fontSize: '1.1rem'
+                    <p style={{ 
+                      margin: '0 0 0.25rem 0', 
+                      fontSize: '1.2rem', 
+                      fontWeight: '700',
+                      color: transaction.transaction_type === 'dividend' ? '#10B981' : '#1F2937'
                     }}>
-                      {tx.amount}
-                    </div>
-                    <div style={{
-                      color: '#10b981',
-                      fontSize: '0.8rem',
-                      background: '#f0fdf4',
-                      padding: '0.2rem 0.5rem',
-                      borderRadius: '4px',
-                      display: 'inline-block'
+                      {transaction.transaction_type === 'dividend' ? '+' : ''}{formatCurrency(transaction.total_amount)}
+                    </p>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: '0.9rem',
+                      color: transaction.status === 'completed' ? '#10B981' : '#F59E0B'
                     }}>
-                      ✅ Confermata
-                    </div>
+                      {transaction.status === 'completed' ? '✅ Completata' : '⏳ In corso'}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -653,276 +402,197 @@ const WalletPage = ({ user }) => {
         )}
 
         {/* Send Tab */}
-        {selectedTab === 'send' && (
-          <div style={{
-            background: 'white',
-            padding: '2rem',
-            borderRadius: '12px',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-            maxWidth: '600px'
-          }}>
-            <h3 style={{
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              color: '#1e293b',
-              marginBottom: '1rem'
-            }}>
-              📤 Invia Fondi
-            </h3>
-            <p style={{
-              color: '#64748b',
-              marginBottom: '2rem'
-            }}>
-              Trasferisci XRP o token ad altri wallet XRPL
-            </p>
+        {activeTab === 'send' && (
+          <div>
+            <h2 style={{ margin: '0 0 2rem 0', color: '#1F2937' }}>📤 Invia Fondi</h2>
+            <div style={{ maxWidth: '500px', margin: '0 auto' }}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#374151', fontWeight: '600' }}>
+                  Importo (EUR)
+                </label>
+                <input
+                  type="number"
+                  value={sendAmount}
+                  onChange={(e) => setSendAmount(e.target.value)}
+                  placeholder="0.00"
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    border: '2px solid #E5E7EB',
+                    borderRadius: '12px',
+                    fontSize: '1.1rem',
+                    outline: 'none',
+                    transition: 'border-color 0.3s ease'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#E5E7EB'}
+                />
+              </div>
 
-            <form style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div>
-                <label style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>
+              <div style={{ marginBottom: '2rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#374151', fontWeight: '600' }}>
                   Indirizzo Destinatario
                 </label>
                 <input
                   type="text"
-                  placeholder="rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH"
+                  value={sendAddress}
+                  onChange={(e) => setSendAddress(e.target.value)}
+                  placeholder="rN7n7otQDd6FczFgLdSqnVgqiTZUA9CN1xJ"
                   style={{
                     width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '8px',
+                    padding: '1rem',
+                    border: '2px solid #E5E7EB',
+                    borderRadius: '12px',
                     fontSize: '1rem',
-                    transition: 'border-color 0.3s'
+                    outline: 'none',
+                    transition: 'border-color 0.3s ease',
+                    fontFamily: 'monospace'
                   }}
-                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#E5E7EB'}
                 />
-              </div>
-
-              <div>
-                <label style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>
-                  Importo
-                </label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    style={{
-                      flex: 1,
-                      padding: '0.75rem',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '8px',
-                      fontSize: '1rem',
-                      transition: 'border-color 0.3s'
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                  />
-                  <select style={{
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    background: 'white'
-                  }}>
-                    <option>XRP</option>
-                    <option>RWA-RE01</option>
-                    <option>RWA-ST02</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>
-                  Memo (Opzionale)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Descrizione transazione"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    transition: 'border-color 0.3s'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                />
-              </div>
-
-              <div style={{
-                background: '#f0f9ff',
-                border: '1px solid #bae6fd',
-                borderRadius: '8px',
-                padding: '1rem'
-              }}>
-                <div style={{
-                  fontSize: '0.9rem',
-                  color: '#0369a1',
-                  fontWeight: '500',
-                  marginBottom: '0.5rem'
-                }}>
-                  💡 Riepilogo Transazione
-                </div>
-                <div style={{
-                  fontSize: '0.8rem',
-                  color: '#0369a1'
-                }}>
-                  • Commissione di rete: ~0.00001 XRP<br/>
-                  • Tempo di conferma: ~3-5 secondi<br/>
-                  • La transazione sarà irreversibile una volta confermata
-                </div>
               </div>
 
               <button
-                type="submit"
+                onClick={handleSend}
                 style={{
                   width: '100%',
-                  padding: '1rem',
-                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  padding: '1rem 2rem',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '8px',
-                  fontWeight: 'bold',
-                  fontSize: '1rem',
+                  borderRadius: '12px',
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
                   cursor: 'pointer',
-                  transition: 'all 0.3s'
+                  transition: 'all 0.3s ease'
                 }}
-                onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
-                onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                onMouseOver={(e) => {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 10px 20px rgba(102, 126, 234, 0.3)';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                }}
               >
                 📤 Invia Transazione
               </button>
-            </form>
+
+              {sendAmount && sendAddress && (
+                <div style={{
+                  marginTop: '1.5rem',
+                  padding: '1rem',
+                  background: '#F0F9FF',
+                  borderRadius: '12px',
+                  border: '1px solid #BAE6FD'
+                }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#0369A1' }}>Riepilogo Transazione</h4>
+                  <p style={{ margin: '0 0 0.25rem 0', color: '#0284C7' }}>
+                    Importo: <strong>{formatCurrency(parseFloat(sendAmount))}</strong>
+                  </p>
+                  <p style={{ margin: 0, color: '#0284C7', fontSize: '0.9rem' }}>
+                    Destinatario: <code>{sendAddress}</code>
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Receive Tab */}
-        {selectedTab === 'receive' && (
-          <div style={{
-            background: 'white',
-            padding: '2rem',
-            borderRadius: '12px',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-            maxWidth: '600px',
-            textAlign: 'center'
-          }}>
-            <h3 style={{
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              color: '#1e293b',
-              marginBottom: '1rem'
-            }}>
-              📥 Ricevi Fondi
-            </h3>
-            <p style={{
-              color: '#64748b',
-              marginBottom: '2rem'
-            }}>
-              Condividi questo indirizzo per ricevere XRP o token
-            </p>
+        {activeTab === 'receive' && (
+          <div>
+            <h2 style={{ margin: '0 0 2rem 0', color: '#1F2937' }}>📥 Ricevi Fondi</h2>
+            <div style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
+              <div style={{ marginBottom: '2rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#374151', fontWeight: '600' }}>
+                  Importo da Ricevere (EUR)
+                </label>
+                <input
+                  type="number"
+                  value={receiveAmount}
+                  onChange={(e) => setReceiveAmount(e.target.value)}
+                  placeholder="100.00"
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    border: '2px solid #E5E7EB',
+                    borderRadius: '12px',
+                    fontSize: '1.1rem',
+                    outline: 'none',
+                    transition: 'border-color 0.3s ease',
+                    textAlign: 'center'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#E5E7EB'}
+                />
+              </div>
 
-            <div style={{
-              background: '#f8fafc',
-              border: '2px solid #e2e8f0',
-              borderRadius: '12px',
-              padding: '2rem',
-              marginBottom: '2rem'
-            }}>
-              <div style={{
-                width: '150px',
-                height: '150px',
-                background: 'white',
-                border: '2px solid #e2e8f0',
-                borderRadius: '8px',
-                margin: '0 auto 1.5rem auto',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '3rem'
-              }}>
-                📱
-              </div>
-              
-              <div style={{
-                fontSize: '0.9rem',
-                color: '#64748b',
-                marginBottom: '1rem'
-              }}>
-                Il tuo indirizzo XRPL:
-              </div>
-              
               <div style={{
                 background: 'white',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '1rem',
-                fontFamily: 'monospace',
-                fontSize: '0.9rem',
-                color: '#1e293b',
-                wordBreak: 'break-all',
-                marginBottom: '1rem'
+                padding: '2rem',
+                borderRadius: '16px',
+                border: '2px solid #E5E7EB',
+                marginBottom: '1.5rem'
               }}>
-                {user?.address || 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH'}
+                <img 
+                  src={generateQRCode(`${user?.address || sampleUserProfile.wallet_address}?amount=${receiveAmount}`)}
+                  alt="QR Code"
+                  style={{ width: '200px', height: '200px', borderRadius: '12px' }}
+                />
               </div>
-              
-              <button
-                style={{
-                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.75rem 1.5rem',
+
+              <div style={{
+                background: '#F9FAFB',
+                padding: '1.5rem',
+                borderRadius: '12px',
+                border: '1px solid #E5E7EB',
+                marginBottom: '1.5rem'
+              }}>
+                <h4 style={{ margin: '0 0 1rem 0', color: '#1F2937' }}>Il Tuo Indirizzo Wallet</h4>
+                <div style={{
+                  background: 'white',
+                  padding: '1rem',
                   borderRadius: '8px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s'
-                }}
-                onClick={() => {
-                  navigator.clipboard.writeText(user?.address || 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH');
-                  alert('Indirizzo copiato negli appunti!');
-                }}
-              >
-                📋 Copia Indirizzo
-              </button>
-            </div>
-
-            <div style={{
-              background: '#fef3c7',
-              border: '1px solid #fbbf24',
-              borderRadius: '8px',
-              padding: '1rem',
-              textAlign: 'left'
-            }}>
-              <div style={{
-                fontSize: '0.9rem',
-                color: '#92400e',
-                fontWeight: '500',
-                marginBottom: '0.5rem'
-              }}>
-                ⚠️ Importante
+                  border: '1px solid #D1D5DB',
+                  fontFamily: 'monospace',
+                  fontSize: '0.9rem',
+                  color: '#374151',
+                  wordBreak: 'break-all'
+                }}>
+                  {user?.address || sampleUserProfile.wallet_address}
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(user?.address || sampleUserProfile.wallet_address);
+                    alert('Indirizzo copiato negli appunti!');
+                  }}
+                  style={{
+                    marginTop: '1rem',
+                    padding: '0.5rem 1rem',
+                    background: '#6B7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  📋 Copia Indirizzo
+                </button>
               </div>
+
               <div style={{
-                fontSize: '0.8rem',
-                color: '#92400e'
+                background: '#FEF3C7',
+                padding: '1rem',
+                borderRadius: '12px',
+                border: '1px solid #F59E0B'
               }}>
-                • Invia solo XRP e token compatibili XRPL a questo indirizzo<br/>
-                • Non inviare altre criptovalute (Bitcoin, Ethereum, ecc.)<br/>
-                • Verifica sempre l'indirizzo prima di inviare fondi
+                <p style={{ margin: 0, color: '#92400E', fontSize: '0.9rem' }}>
+                  ⚠️ Condividi questo QR code o indirizzo solo con persone fidate. 
+                  Verifica sempre l'importo prima di confermare la transazione.
+                </p>
               </div>
             </div>
           </div>

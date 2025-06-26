@@ -1,7 +1,7 @@
 import { WEB3AUTH_NETWORK } from "@web3auth/modal";
 
-// Real Web3Auth Configuration following official documentation
-const clientId = "BHgArYmWwSeq21czpcarYh0EVq2WWOzflX-NTK-tY1-1pauPzHKRRLgpABkmYiIV_og9jAvoIxQ8L3Smrwe04Lw"; // Official example from docs
+// Real Web3Auth Configuration - SolCraft Nexus Project
+const clientId = "BI6yYQeCPTi4iCyJueGU9LFWZx8ecYxfldMsr7USMY0MrICSTynJk2Mu5p3DYg5zfLWo5OAakl66F3PUZdWeN7A"; // Real Client ID from Web3Auth Dashboard
 
 export const web3AuthContextConfig = {
   web3AuthOptions: {
@@ -23,8 +23,8 @@ export const web3AuthContextConfig = {
         primary: "#3b82f6",
       },
       mode: "light",
-      logoLight: "https://web3auth.io/images/web3authlog.png",
-      logoDark: "https://web3auth.io/images/web3authlogodark.png",
+      logoLight: "https://solcraft-nexus-tokenize-v1.vercel.app/favicon.ico",
+      logoDark: "https://solcraft-nexus-tokenize-v1.vercel.app/favicon.ico",
       defaultLanguage: "en",
       loginGridCol: 3,
       primaryButton: "externalLogin",

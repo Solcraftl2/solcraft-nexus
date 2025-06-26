@@ -23,8 +23,8 @@ export const Web3AuthProvider = ({ children }) => {
   useEffect(() => {
     const init = async () => {
       try {
-        // Real Web3Auth configuration following official docs
-        const clientId = "BHgArYmWwSeq21czpcarYh0EVq2WWOzflX-NTK-tY1-1pauPzHKRRLgpABkmYiIV_og9jAvoIxQ8L3Smrwe04Lw";
+        // Real Web3Auth configuration with actual Client ID
+        const clientId = "BI6yYQeCPTi4iCyJueGU9LFWZx8ecYxfldMsr7USMY0MrICSTynJk2Mu5p3DYg5zfLWo5OAakl66F3PUZdWeN7A";
         
         const web3AuthInstance = new Web3Auth({
           clientId,

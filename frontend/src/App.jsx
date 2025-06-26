@@ -367,7 +367,7 @@ const Dashboard = ({ user, onLogout }) => {
           </h3>
           <p style={{
             marginBottom: '1.5rem',
-            opacity: 0.9'
+            opacity: 0.9
           }}>
             La piattaforma è ora completamente funzionale con React Router e sistema di autenticazione. 
             Prossimi step: integrazione database Supabase e funzionalità avanzate.

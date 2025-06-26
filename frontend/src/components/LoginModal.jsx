@@ -1,100 +1,110 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import authService from '../services/authService';
 
 const LoginModal = ({ onClose, onLoginSuccess }) => {
   const [activeTab, setActiveTab] = useState('wallet');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [authStatus, setAuthStatus] = useState(null);
+
+  useEffect(() => {
+    // Get initial auth status
+    const status = authService.getAuthStatus();
+    setAuthStatus(status);
+
+    // Subscribe to auth state changes
+    const unsubscribe = authService.onAuthStateChange((event, user) => {
+      if (event === 'login' && user) {
+        onLoginSuccess(user);
+        onClose();
+      }
+      setAuthStatus(authService.getAuthStatus());
+    });
+
+    return unsubscribe;
+  }, [onLoginSuccess, onClose]);
+
+  // Handle real wallet login
+  const handleWalletLogin = async (walletType) => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const user = await authService.loginWithXRPLWallet(walletType);
+      console.log('Wallet login successful:', user);
+    } catch (error) {
+      console.error('Wallet login failed:', error);
+      setError(error.message || 'Failed to connect wallet');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle social login
+  const handleSocialLogin = async (provider) => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const user = await authService.loginWithSocial(provider);
+      console.log('Social login successful:', user);
+    } catch (error) {
+      console.error('Social login failed:', error);
+      setError(error.message || `Failed to login with ${provider}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Wallet XRPL Authentication
   const handleXUMMLogin = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      // Simulazione XUMM login
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      onLoginSuccess({
-        type: 'xumm',
-        address: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
-        name: 'XUMM Wallet User'
-      });
-    } catch (err) {
-      setError('Errore durante il login con XUMM');
-    } finally {
-      setIsLoading(false);
-    }
+    await handleWalletLogin('xumm');
   };
 
   const handleCrossmarkLogin = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      // Simulazione Crossmark login
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      onLoginSuccess({
-        type: 'crossmark',
-        address: 'rDNvpJMWqxQtCkjQ3wQpLrTwKjBF8CX2dm',
-        name: 'Crossmark User'
-      });
-    } catch (err) {
-      setError('Errore durante il login con Crossmark');
-    } finally {
-      setIsLoading(false);
-    }
+    await handleWalletLogin('crossmark');
   };
 
   const handleTrustWalletLogin = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      // Simulazione Trust Wallet login
-      await new Promise(resolve => setTimeout(resolve, 1800));
-      onLoginSuccess({
-        type: 'trustwallet',
-        address: 'rLNaPoKeeBjZe2qs6x52yVPZpZ8td4dc6w',
-        name: 'Trust Wallet User'
-      });
-    } catch (err) {
-      setError('Errore durante il login con Trust Wallet');
-    } finally {
-      setIsLoading(false);
-    }
+    await handleWalletLogin('trust');
   };
 
-  // Web3Auth MPC Authentication
-  const handleWeb3AuthLogin = async (provider) => {
-    setIsLoading(true);
-    setError('');
-    try {
-      // Simulazione Web3Auth login
-      await new Promise(resolve => setTimeout(resolve, 2500));
-      onLoginSuccess({
-        type: 'web3auth',
-        provider: provider,
-        address: 'rMPCGeneratedAddress123456789',
-        name: `${provider} User`,
-        email: `user@${provider.toLowerCase()}.com`
-      });
-    } catch (err) {
-      setError(`Errore durante il login con ${provider}`);
-    } finally {
-      setIsLoading(false);
-    }
+  // Social + MPC Authentication
+  const handleGoogleMPCLogin = async () => {
+    await handleSocialLogin('google');
   };
 
-  // Traditional Email/Password
-  const handleEmailLogin = async (email, password) => {
+  const handleTwitterMPCLogin = async () => {
+    await handleSocialLogin('twitter');
+  };
+
+  const handleDiscordMPCLogin = async () => {
+    await handleSocialLogin('discord');
+  };
+
+  // Traditional Email Authentication
+  const handleEmailLogin = async () => {
     setIsLoading(true);
     setError('');
     try {
-      // Simulazione email login
+      // For now, simulate email login - in production this would integrate with Supabase Auth
       await new Promise(resolve => setTimeout(resolve, 1000));
-      onLoginSuccess({
-        type: 'email',
-        email: email,
-        name: 'Email User'
-      });
+      
+      const user = {
+        id: 'email_user_' + Date.now(),
+        name: 'Email User',
+        email: 'user@example.com',
+        provider: 'email',
+        loginType: 'email',
+        walletAddress: null,
+        isVerified: true,
+        loginTime: new Date().toISOString()
+      };
+
+      onLoginSuccess(user);
+      onClose();
     } catch (err) {
-      setError('Credenziali non valide');
+      setError('Errore durante il login con email');
     } finally {
       setIsLoading(false);
     }

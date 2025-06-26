@@ -1,224 +1,510 @@
-// Servizio per connessione wallet reale
-class WalletService {
+// XRPL Wallet Service
+// Gestisce le connessioni e interazioni con i wallet XRPL
+
+import { XummSdk } from 'xumm-sdk';
+import sdk from '@crossmarkio/sdk';
+import { Web3Auth } from '@web3auth/modal';
+import { OpenloginAdapter } from '@web3auth/openlogin-adapter';
+import { CHAIN_NAMESPACES } from '@web3auth/base';
+
+class XRPLWalletService {
   constructor() {
+    this.xumm = null;
+    this.crossmark = sdk;
+    this.web3auth = null;
     this.connectedWallet = null;
-    this.walletType = null;
-    this.address = null;
-    this.balance = null;
+    this.userAddress = null;
+    
+    this.initializeServices();
   }
 
-  // Connessione XUMM Wallet (XRP Ledger)
-  async connectXUMM() {
+  // Initialize all wallet services
+  async initializeServices() {
+    this.initializeXumm();
+    await this.initializeWeb3Auth();
+  }
+
+  // Initialize XUMM SDK
+  initializeXumm() {
+    const apiKey = process.env.REACT_APP_XUMM_API_KEY || 'demo-key';
+    const apiSecret = process.env.REACT_APP_XUMM_API_SECRET || 'demo-secret';
+    
     try {
-      // Simulazione connessione XUMM
-      if (typeof window !== 'undefined' && window.xumm) {
-        const result = await window.xumm.authorize();
-        if (result.success) {
+      this.xumm = new XummSdk(apiKey, apiSecret);
+    } catch (error) {
+      console.warn('XUMM SDK initialization failed:', error);
+      this.xumm = null;
+    }
+  }
+
+  // Initialize Web3Auth
+  async initializeWeb3Auth() {
+    try {
+      const clientId = process.env.REACT_APP_WEB3AUTH_CLIENT_ID || 'demo-client-id';
+      
+      this.web3auth = new Web3Auth({
+        clientId,
+        web3AuthNetwork: 'sapphire_mainnet', // or testnet
+        chainConfig: {
+          chainNamespace: CHAIN_NAMESPACES.OTHER,
+          chainId: '0x1', // XRPL doesn't use standard chain IDs
+          rpcTarget: 'https://xrpl.ws',
+          displayName: 'XRPL Mainnet',
+          blockExplorer: 'https://livenet.xrpl.org',
+          ticker: 'XRP',
+          tickerName: 'XRP',
+        },
+      });
+
+      const openloginAdapter = new OpenloginAdapter({
+        loginSettings: {
+          mfaLevel: 'optional',
+        },
+        adapterSettings: {
+          whiteLabel: {
+            name: 'SolCraft Nexus',
+            logoLight: 'https://solcraft-nexus.com/logo-light.png',
+            logoDark: 'https://solcraft-nexus.com/logo-dark.png',
+            defaultLanguage: 'it',
+            dark: true,
+          },
+        },
+      });
+
+      this.web3auth.configureAdapter(openloginAdapter);
+      await this.web3auth.initModal();
+    } catch (error) {
+      console.warn('Web3Auth initialization failed:', error);
+      this.web3auth = null;
+    }
+  }
+
+  // XUMM Wallet Methods
+  async connectXumm() {
+    if (!this.xumm) {
+      throw new Error('XUMM SDK not initialized');
+    }
+
+    try {
+      // Create sign-in payload
+      const payload = {
+        txjson: {
+          TransactionType: 'SignIn'
+        },
+        options: {
+          submit: false,
+          multisign: false,
+          expire: 5 // 5 minutes
+        },
+        custom_meta: {
+          identifier: 'solcraft-nexus-login',
+          blob: {
+            purpose: 'SolCraft Nexus Platform Authentication',
+            created: Date.now(),
+            version: '1.0.0'
+          }
+        }
+      };
+
+      const xummPayload = await this.xumm.payload.create(payload);
+      
+      if (!xummPayload) {
+        throw new Error('Failed to create XUMM payload');
+      }
+
+      return {
+        uuid: xummPayload.uuid,
+        qr: xummPayload.refs.qr_png,
+        deeplink: xummPayload.next.always,
+        websocket: xummPayload.refs.websocket_status
+      };
+    } catch (error) {
+      console.error('XUMM connection error:', error);
+      throw new Error(`XUMM connection failed: ${error.message}`);
+    }
+  }
+
+  async waitForXummSignIn(uuid) {
+    if (!this.xumm) {
+      throw new Error('XUMM SDK not initialized');
+    }
+
+    return new Promise((resolve, reject) => {
+      const subscription = this.xumm.payload.subscribe(uuid, (event) => {
+        if (event.data.signed === true) {
           this.connectedWallet = 'xumm';
-          this.walletType = 'XUMM';
-          this.address = result.account;
-          await this.updateBalance();
-          return {
-            success: true,
-            address: this.address,
-            walletType: this.walletType
-          };
-        }
-      } else {
-        // Fallback: apri XUMM app
-        const xummPayload = {
-          txjson: {
-            TransactionType: "SignIn"
-          }
-        };
-        
-        // In produzione, qui si userebbe l'API XUMM reale
-        window.open('https://xumm.app/', '_blank');
-        
-        return {
-          success: false,
-          message: 'Apri XUMM app per completare la connessione'
-        };
-      }
-    } catch (error) {
-      console.error('Errore connessione XUMM:', error);
-      return {
-        success: false,
-        message: 'Errore durante la connessione a XUMM'
-      };
-    }
-  }
-
-  // Connessione MetaMask
-  async connectMetaMask() {
-    try {
-      if (typeof window !== 'undefined' && window.ethereum) {
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts'
-        });
-        
-        if (accounts.length > 0) {
-          this.connectedWallet = 'metamask';
-          this.walletType = 'MetaMask';
-          this.address = accounts[0];
-          await this.updateBalance();
+          this.userAddress = event.data.account;
           
-          return {
+          subscription.resolve();
+          resolve({
             success: true,
-            address: this.address,
-            walletType: this.walletType
-          };
+            account: event.data.account,
+            txHash: event.data.txid,
+            wallet: 'xumm'
+          });
+        } else if (event.data.signed === false) {
+          subscription.resolve();
+          reject(new Error('XUMM sign-in was cancelled by user'));
         }
-      } else {
-        return {
-          success: false,
-          message: 'MetaMask non installato. Installa MetaMask per continuare.'
-        };
-      }
-    } catch (error) {
-      console.error('Errore connessione MetaMask:', error);
-      return {
-        success: false,
-        message: 'Errore durante la connessione a MetaMask'
-      };
-    }
+      });
+
+      // Auto-cleanup after 5 minutes
+      setTimeout(() => {
+        subscription.resolve();
+        reject(new Error('XUMM sign-in timeout'));
+      }, 300000);
+    });
   }
 
-  // Connessione WalletConnect
-  async connectWalletConnect() {
+  // Crossmark Wallet Methods
+  async connectCrossmark() {
     try {
-      // Simulazione WalletConnect
-      const walletConnectModal = document.createElement('div');
-      walletConnectModal.innerHTML = `
-        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-          <div style="background: white; padding: 20px; border-radius: 10px; text-align: center;">
-            <h3>Connetti Wallet</h3>
-            <p>Scansiona il QR code con il tuo wallet mobile</p>
-            <div style="width: 200px; height: 200px; background: #f0f0f0; margin: 20px auto; display: flex; align-items: center; justify-content: center;">
-              QR CODE
-            </div>
-            <button onclick="this.parentElement.parentElement.remove()" style="margin: 10px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px;">Chiudi</button>
-          </div>
-        </div>
-      `;
+      if (!this.crossmark) {
+        throw new Error('Crossmark SDK not available');
+      }
+
+      // Check if Crossmark extension is installed
+      const isInstalled = await this.isCrossmarkInstalled();
+      if (!isInstalled) {
+        throw new Error('Crossmark extension not installed. Please install from Chrome Web Store.');
+      }
+
+      // Sign in with Crossmark
+      const response = await this.crossmark.async.signInAndWait();
       
-      document.body.appendChild(walletConnectModal);
+      if (!response || !response.response || !response.response.data) {
+        throw new Error('Invalid Crossmark response');
+      }
+
+      const userAddress = response.response.data.address;
       
+      this.connectedWallet = 'crossmark';
+      this.userAddress = userAddress;
+
       return {
-        success: false,
-        message: 'Scansiona il QR code con il tuo wallet'
+        success: true,
+        account: userAddress,
+        wallet: 'crossmark'
       };
     } catch (error) {
-      console.error('Errore WalletConnect:', error);
-      return {
-        success: false,
-        message: 'Errore durante la connessione WalletConnect'
-      };
+      console.error('Crossmark connection error:', error);
+      throw new Error(`Crossmark connection failed: ${error.message}`);
     }
   }
 
-  // Aggiorna balance
-  async updateBalance() {
+  async isCrossmarkInstalled() {
     try {
-      if (this.connectedWallet === 'xumm') {
-        // Simulazione balance XRP
-        this.balance = {
-          XRP: Math.random() * 1000,
-          currency: 'XRP'
-        };
-      } else if (this.connectedWallet === 'metamask') {
-        // Simulazione balance ETH
-        const balance = await window.ethereum.request({
-          method: 'eth_getBalance',
-          params: [this.address, 'latest']
-        });
-        this.balance = {
-          ETH: parseInt(balance, 16) / Math.pow(10, 18),
-          currency: 'ETH'
-        };
-      }
+      // Check if Crossmark is available
+      return !!this.crossmark && typeof this.crossmark.async !== 'undefined';
     } catch (error) {
-      console.error('Errore aggiornamento balance:', error);
+      return false;
     }
   }
 
-  // Disconnetti wallet
-  disconnect() {
-    this.connectedWallet = null;
-    this.walletType = null;
-    this.address = null;
-    this.balance = null;
-  }
-
-  // Invia transazione
-  async sendTransaction(to, amount, currency = 'XRP') {
+  // Trust Wallet Methods
+  async connectTrustWallet() {
     try {
-      if (!this.connectedWallet) {
-        throw new Error('Nessun wallet connesso');
+      const trustProvider = this.detectTrustWallet();
+      
+      if (!trustProvider) {
+        // Check if mobile
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+          // Redirect to Trust Wallet mobile app
+          const deepLink = `trust://open_url?coin_id=144&url=${encodeURIComponent(window.location.href)}`;
+          window.location.href = deepLink;
+          throw new Error('Redirecting to Trust Wallet mobile app...');
+        } else {
+          throw new Error('Trust Wallet not detected. Please install the browser extension or use mobile app.');
+        }
       }
 
-      if (this.connectedWallet === 'xumm' && currency === 'XRP') {
-        // Transazione XRP via XUMM
-        const payload = {
-          txjson: {
-            TransactionType: 'Payment',
-            Destination: to,
-            Amount: (amount * 1000000).toString(), // XRP in drops
-          }
-        };
-
-        // In produzione, qui si userebbe l'API XUMM reale
-        return {
-          success: true,
-          txHash: 'mock_tx_' + Date.now(),
-          message: 'Transazione inviata con successo'
-        };
-      } else if (this.connectedWallet === 'metamask' && currency === 'ETH') {
-        // Transazione ETH via MetaMask
-        const txHash = await window.ethereum.request({
-          method: 'eth_sendTransaction',
-          params: [{
-            from: this.address,
-            to: to,
-            value: (amount * Math.pow(10, 18)).toString(16)
-          }]
-        });
-
-        return {
-          success: true,
-          txHash: txHash,
-          message: 'Transazione inviata con successo'
-        };
+      // Request account access
+      const accounts = await trustProvider.request({ 
+        method: 'eth_requestAccounts' 
+      });
+      
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No Trust Wallet accounts available');
       }
-    } catch (error) {
-      console.error('Errore invio transazione:', error);
+
+      const userAddress = accounts[0];
+      
+      this.connectedWallet = 'trust';
+      this.userAddress = userAddress;
+
       return {
-        success: false,
-        message: 'Errore durante l\'invio della transazione'
+        success: true,
+        account: userAddress,
+        wallet: 'trust'
       };
+    } catch (error) {
+      console.error('Trust Wallet connection error:', error);
+      throw error;
     }
   }
 
-  // Genera indirizzo per ricevere
-  getReceiveAddress() {
-    return this.address;
-  }
-
-  // Stato connessione
-  isConnected() {
-    return !!this.connectedWallet;
-  }
-
-  // Info wallet
-  getWalletInfo() {
-    return {
-      connected: this.isConnected(),
-      walletType: this.walletType,
-      address: this.address,
-      balance: this.balance
+  detectTrustWallet() {
+    const isTrust = (ethereum) => {
+      return !!ethereum?.isTrust || !!ethereum?.isTrustWallet;
     };
+
+    // Search for Trust Wallet provider
+    const trustProvider = 
+      isTrust(window.ethereum) ||
+      window.trustwallet ||
+      window.ethereum?.providers?.find(
+        (provider) => provider.isTrust || provider.isTrustWallet
+      );
+
+    return trustProvider;
+  }
+
+  // Web3Auth MPC Methods
+  async connectWeb3Auth(loginProvider) {
+    if (!this.web3auth) {
+      throw new Error('Web3Auth not initialized');
+    }
+
+    try {
+      const web3authProvider = await this.web3auth.connect();
+      
+      if (!web3authProvider) {
+        throw new Error('Web3Auth connection failed');
+      }
+
+      // Get user info
+      const user = await this.web3auth.getUserInfo();
+      
+      // Generate XRPL-compatible address (mock for now)
+      const mockAddress = 'rWeb3Auth' + Math.random().toString(36).substr(2, 9);
+      
+      this.connectedWallet = 'web3auth';
+      this.userAddress = mockAddress;
+
+      return {
+        success: true,
+        account: mockAddress,
+        wallet: 'web3auth',
+        provider: loginProvider,
+        userInfo: {
+          email: user.email,
+          name: user.name,
+          profileImage: user.profileImage,
+          verifier: user.verifier,
+          verifierId: user.verifierId
+        }
+      };
+    } catch (error) {
+      console.error('Web3Auth connection error:', error);
+      throw new Error(`Web3Auth ${loginProvider} connection failed: ${error.message}`);
+    }
+  }
+
+  async disconnectWeb3Auth() {
+    if (this.web3auth && this.web3auth.connected) {
+      await this.web3auth.logout();
+    }
+  }
+
+  // Generic Wallet Methods
+  async getAccountInfo(address) {
+    try {
+      // Use XRPL public API to get account info
+      const response = await fetch('https://xrpl.ws', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: 'account_info',
+          params: [{
+            account: address,
+            strict: true,
+            ledger_index: 'current',
+            queue: true
+          }]
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.result && data.result.account_data) {
+        return {
+          address: data.result.account_data.Account,
+          balance: data.result.account_data.Balance,
+          sequence: data.result.account_data.Sequence,
+          flags: data.result.account_data.Flags
+        };
+      } else {
+        throw new Error('Account not found or invalid');
+      }
+    } catch (error) {
+      console.error('Error fetching account info:', error);
+      throw new Error(`Failed to fetch account info: ${error.message}`);
+    }
+  }
+
+  async getAccountTransactions(address, limit = 10) {
+    try {
+      const response = await fetch('https://xrpl.ws', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: 'account_tx',
+          params: [{
+            account: address,
+            limit: limit,
+            ledger_index_min: -1,
+            ledger_index_max: -1
+          }]
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.result && data.result.transactions) {
+        return data.result.transactions.map(tx => ({
+          hash: tx.tx.hash,
+          type: tx.tx.TransactionType,
+          account: tx.tx.Account,
+          destination: tx.tx.Destination,
+          amount: tx.tx.Amount,
+          fee: tx.tx.Fee,
+          sequence: tx.tx.Sequence,
+          date: tx.tx.date,
+          ledger_index: tx.tx.ledger_index,
+          validated: tx.validated
+        }));
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      throw new Error(`Failed to fetch transactions: ${error.message}`);
+    }
+  }
+
+  // Supabase Integration Methods
+  async saveUserToDatabase(userData) {
+    try {
+      // This would integrate with Supabase
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          address: userData.account,
+          wallet_type: userData.wallet,
+          user_info: userData.userInfo || null,
+          created_at: new Date().toISOString()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save user to database');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Database save error:', error);
+      // Don't throw - this is not critical for login
+      return null;
+    }
+  }
+
+  async getUserFromDatabase(address) {
+    try {
+      const response = await fetch(`/api/users/${address}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        }
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Database fetch error:', error);
+      return null;
+    }
+  }
+
+  // Utility Methods
+  isConnected() {
+    return !!this.connectedWallet && !!this.userAddress;
+  }
+
+  getConnectedWallet() {
+    return this.connectedWallet;
+  }
+
+  getConnectedAddress() {
+    return this.userAddress;
+  }
+
+  async disconnect() {
+    // Disconnect Web3Auth if connected
+    if (this.connectedWallet === 'web3auth') {
+      await this.disconnectWeb3Auth();
+    }
+    
+    this.connectedWallet = null;
+    this.userAddress = null;
+    localStorage.removeItem('authToken');
+  }
+
+  // Create authentication token
+  createAuthToken(walletData) {
+    const authData = {
+      ...walletData,
+      timestamp: Date.now(),
+      expires: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+    };
+
+    return btoa(JSON.stringify(authData));
+  }
+
+  // Validate authentication token
+  validateAuthToken(token) {
+    try {
+      const authData = JSON.parse(atob(token));
+      
+      if (authData.expires < Date.now()) {
+        return { valid: false, reason: 'Token expired' };
+      }
+
+      return { valid: true, data: authData };
+    } catch (error) {
+      return { valid: false, reason: 'Invalid token format' };
+    }
+  }
+
+  // Auto-restore session
+  async restoreSession() {
+    const token = localStorage.getItem('authToken');
+    if (!token) return null;
+
+    const validation = this.validateAuthToken(token);
+    if (!validation.valid) {
+      localStorage.removeItem('authToken');
+      return null;
+    }
+
+    this.connectedWallet = validation.data.wallet;
+    this.userAddress = validation.data.account;
+
+    return validation.data;
   }
 }
 
-export default new WalletService();
+// Export singleton instance
+export default new XRPLWalletService();
 

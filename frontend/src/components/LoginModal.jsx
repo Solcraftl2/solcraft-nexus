@@ -19,18 +19,25 @@ import {
   CreditCard,
   Users,
   Key,
-  Globe
+  Globe,
+  QrCode,
+  Smartphone,
+  ExternalLink,
+  Loader,
+  Twitter,
+  MessageCircle
 } from 'lucide-react';
 
-// Import Crossmark SDK
-import sdk from "@crossmarkio/sdk";
+// Import wallet service
+import walletService from '../services/walletService';
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
-  const [activeTab, setActiveTab] = useState('login');
+  const [activeTab, setActiveTab] = useState('wallet');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [xummData, setXummData] = useState(null);
 
   // Form states
   const [loginForm, setLoginForm] = useState({
@@ -50,24 +57,138 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     if (isOpen) {
       setError(null);
       setSuccess(null);
+      setXummData(null);
     }
   }, [isOpen]);
 
-  // Trust Wallet Detection
-  const detectTrustWallet = () => {
-    const isTrust = (ethereum) => {
-      return !!ethereum?.isTrust || !!ethereum?.isTrustWallet;
-    };
+  // XUMM Wallet Authentication
+  const handleXummLogin = async () => {
+    setIsLoading(true);
+    setError(null);
 
-    // Cerca Trust Wallet provider
-    const trustProvider = 
-      isTrust(window.ethereum) ||
-      window.trustwallet ||
-      window.ethereum?.providers?.find(
-        (provider) => provider.isTrust || provider.isTrustWallet
-      );
+    try {
+      // Create XUMM payload
+      const xummPayload = await walletService.connectXumm();
+      setXummData(xummPayload);
 
-    return trustProvider;
+      // Wait for user to sign in
+      const result = await walletService.waitForXummSignIn(xummPayload.uuid);
+      
+      if (result.success) {
+        // Save to database
+        await walletService.saveUserToDatabase(result);
+        
+        // Create auth token
+        const authToken = walletService.createAuthToken(result);
+        localStorage.setItem('authToken', authToken);
+
+        setSuccess('Login XUMM completato con successo!');
+        setIsLoading(false);
+
+        setTimeout(() => {
+          onLoginSuccess && onLoginSuccess(result);
+          onClose();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('XUMM Login Error:', error);
+      setError(error.message || 'Errore durante il login XUMM');
+      setIsLoading(false);
+      setXummData(null);
+    }
+  };
+
+  // Crossmark Wallet Authentication
+  const handleCrossmarkLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await walletService.connectCrossmark();
+      
+      if (result.success) {
+        // Save to database
+        await walletService.saveUserToDatabase(result);
+        
+        // Create auth token
+        const authToken = walletService.createAuthToken(result);
+        localStorage.setItem('authToken', authToken);
+
+        setSuccess('Login Crossmark completato con successo!');
+        setIsLoading(false);
+
+        setTimeout(() => {
+          onLoginSuccess && onLoginSuccess(result);
+          onClose();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Crossmark Login Error:', error);
+      setError(error.message || 'Errore durante il login Crossmark');
+      setIsLoading(false);
+    }
+  };
+
+  // Trust Wallet Authentication
+  const handleTrustWalletLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await walletService.connectTrustWallet();
+      
+      if (result.success) {
+        // Save to database
+        await walletService.saveUserToDatabase(result);
+        
+        // Create auth token
+        const authToken = walletService.createAuthToken(result);
+        localStorage.setItem('authToken', authToken);
+
+        setSuccess('Login Trust Wallet completato con successo!');
+        setIsLoading(false);
+
+        setTimeout(() => {
+          onLoginSuccess && onLoginSuccess(result);
+          onClose();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Trust Wallet Login Error:', error);
+      setError(error.message || 'Errore durante il login Trust Wallet');
+      setIsLoading(false);
+    }
+  };
+
+  // Web3Auth MPC Login
+  const handleWeb3AuthLogin = async (provider) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await walletService.connectWeb3Auth(provider);
+      
+      if (result.success) {
+        // Save to database
+        await walletService.saveUserToDatabase(result);
+        
+        // Create auth token
+        const authToken = walletService.createAuthToken(result);
+        localStorage.setItem('authToken', authToken);
+
+        setSuccess(`Login ${provider} completato con successo!`);
+        setIsLoading(false);
+
+        setTimeout(() => {
+          onLoginSuccess && onLoginSuccess(result);
+          onClose();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Web3Auth Login Error:', error);
+      setError(error.message || `Errore durante il login ${provider}`);
+      setIsLoading(false);
+    }
   };
 
   const handleEmailLogin = async (e) => {
@@ -105,14 +226,13 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
     if (registerForm.password !== registerForm.confirmPassword) {
       setError('Le password non coincidono');
-      setIsLoading(false);
       return;
     }
+
+    setIsLoading(true);
+    setError(null);
 
     try {
       const response = await fetch('/.netlify/functions/auth-register', {
@@ -120,23 +240,14 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          firstName: registerForm.firstName,
-          lastName: registerForm.lastName,
-          email: registerForm.email,
-          password: registerForm.password
-        }),
+        body: JSON.stringify(registerForm),
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
-        localStorage.setItem('authToken', result.token);
-        setSuccess('Registrazione completata con successo!');
-        setTimeout(() => {
-          onLoginSuccess && onLoginSuccess(result.user);
-          onClose();
-        }, 1000);
+        setSuccess('Registrazione completata! Effettua il login.');
+        setActiveTab('login');
       } else {
         setError(result.message || 'Errore durante la registrazione');
       }
@@ -147,567 +258,475 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
   };
 
-  const handleOAuthLogin = async (provider) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Per ora simula il login OAuth
-      const mockUser = {
-        id: Date.now(),
-        email: `user@${provider}.com`,
-        firstName: 'Utente',
-        lastName: provider.charAt(0).toUpperCase() + provider.slice(1),
-        provider: provider
-      };
-
-      const mockToken = 'mock-jwt-token-' + Date.now();
-      localStorage.setItem('authToken', mockToken);
-      
-      setSuccess(`Login con ${provider} completato!`);
-      setTimeout(() => {
-        onLoginSuccess && onLoginSuccess(mockUser);
-        onClose();
-      }, 1000);
-    } catch (error) {
-      setError(`Errore durante il login con ${provider}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleWalletConnect = async (walletType) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      let walletAddress = null;
-      let walletData = null;
-      
-      switch (walletType) {
-        case 'xumm':
-          // Simulazione connessione XUMM
-          walletAddress = 'rXUMMExampleAddress1234567890';
-          break;
-          
-        case 'crossmark':
-          try {
-            // INTEGRAZIONE REALE CROSSMARK SDK
-            console.log('Tentativo di connessione Crossmark...');
-            
-            // Verifica se Crossmark è disponibile
-            if (!sdk) {
-              throw new Error('Crossmark SDK non disponibile');
-            }
-
-            // Connessione con Crossmark SDK ufficiale
-            const signInResponse = await sdk.async.signInAndWait();
-            
-            if (signInResponse && signInResponse.response && signInResponse.response.data) {
-              walletAddress = signInResponse.response.data.address;
-              walletData = {
-                address: walletAddress,
-                publicKey: signInResponse.response.data.publicKey || null,
-                network: 'xrpl-mainnet'
-              };
-              
-              console.log('Crossmark connesso:', walletData);
-            } else {
-              throw new Error('Risposta Crossmark non valida');
-            }
-          } catch (crossmarkError) {
-            console.error('Errore Crossmark:', crossmarkError);
-            throw new Error('Errore durante la connessione Crossmark: ' + crossmarkError.message);
-          }
-          break;
-          
-        case 'trustwallet':
-          try {
-            // INTEGRAZIONE REALE TRUST WALLET
-            console.log('Tentativo di connessione Trust Wallet...');
-            
-            const trustProvider = detectTrustWallet();
-            
-            if (!trustProvider) {
-              // Fallback: Apri Trust Wallet download o WalletConnect
-              const userChoice = confirm(
-                'Trust Wallet non rilevato. Vuoi:\n' +
-                '- OK: Aprire il download di Trust Wallet\n' +
-                '- Annulla: Usare WalletConnect per mobile'
-              );
-              
-              if (userChoice) {
-                window.open('https://trustwallet.com/browser-extension/', '_blank');
-                throw new Error('Installa Trust Wallet browser extension e riprova');
-              } else {
-                // Implementa WalletConnect fallback
-                throw new Error('WalletConnect per Trust Wallet mobile non ancora implementato');
-              }
-            }
-
-            // Richiesta connessione Trust Wallet
-            const accounts = await trustProvider.request({
-              method: 'eth_requestAccounts'
-            });
-
-            if (accounts && accounts.length > 0) {
-              // Per XRPL, convertiamo l'address Ethereum in formato XRPL
-              // Questo è un esempio - in produzione serve conversione reale
-              walletAddress = 'rTrust' + accounts[0].slice(2, 32) + 'XRPL';
-              walletData = {
-                address: walletAddress,
-                ethAddress: accounts[0],
-                provider: 'trustwallet',
-                network: 'xrpl-mainnet'
-              };
-              
-              console.log('Trust Wallet connesso:', walletData);
-            } else {
-              throw new Error('Nessun account Trust Wallet disponibile');
-            }
-          } catch (trustError) {
-            console.error('Errore Trust Wallet:', trustError);
-            throw new Error('Errore durante la connessione Trust Wallet: ' + trustError.message);
-          }
-          break;
-          
-        default:
-          throw new Error('Wallet non supportato');
-      }
-
-      if (!walletAddress) {
-        throw new Error('Indirizzo wallet non ottenuto');
-      }
-
-      // Chiama l'API per autenticare con wallet
-      const response = await fetch('/.netlify/functions/auth-wallet', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletType,
-          walletAddress,
-          walletData,
-          network: 'xrpl'
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        localStorage.setItem('authToken', result.token);
-        localStorage.setItem('walletAddress', walletAddress);
-        localStorage.setItem('walletType', walletType);
-        
-        if (walletData) {
-          localStorage.setItem('walletData', JSON.stringify(walletData));
-        }
-        
-        setSuccess(`Wallet ${walletType.toUpperCase()} connesso con successo!`);
-        setTimeout(() => {
-          onLoginSuccess && onLoginSuccess(result.user);
-          onClose();
-        }, 1000);
-      } else {
-        setError(result.message || 'Errore durante la connessione wallet');
-      }
-    } catch (error) {
-      console.error('Errore wallet connect:', error);
-      setError(error.message || 'Errore di connessione wallet. Riprova più tardi.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleWeb3Auth = async (provider = 'google') => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Simulazione Web3Auth con MPC technology
-      const response = await fetch('/.netlify/functions/auth-web3auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          provider: provider,
-          loginType: 'social',
-          mpcEnabled: true,
-          network: 'xrpl'
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        localStorage.setItem('authToken', result.token);
-        localStorage.setItem('web3AuthProvider', provider);
-        localStorage.setItem('walletAddress', result.walletAddress);
-        localStorage.setItem('authMethod', 'web3auth');
-        
-        setSuccess(`Web3Auth con ${provider} completato! Wallet MPC generato.`);
-        setTimeout(() => {
-          onLoginSuccess && onLoginSuccess(result.user);
-          onClose();
-        }, 1000);
-      } else {
-        setError(result.message || 'Errore durante l\'autenticazione Web3Auth');
-      }
-    } catch (error) {
-      setError('Errore di connessione Web3Auth. Riprova più tardi.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-                <Shield className="h-5 w-5 text-slate-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Accedi</h2>
-                <p className="text-sm text-gray-500">SolCraft Nexus Platform</p>
-              </div>
+          <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                Accedi a SolCraft Nexus
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                Connetti il tuo wallet o usa le credenziali
+              </p>
             </div>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X size={20} />
+            </Button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-slate-200 dark:border-slate-700">
             <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              onClick={() => setActiveTab('wallet')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeTab === 'wallet'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
             >
-              <X className="h-5 w-5" />
+              <div className="flex items-center justify-center space-x-2">
+                <Wallet size={16} />
+                <span>Wallet XRPL</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('web3auth')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeTab === 'web3auth'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <Key size={16} />
+                <span>Web3Auth MPC</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('login')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeTab === 'login'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <Mail size={16} />
+                <span>Email</span>
+              </div>
             </button>
           </div>
 
           <div className="p-6">
-            {/* Tabs */}
-            <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('login')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'login'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Accedi
-              </button>
-              <button
-                onClick={() => setActiveTab('register')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'register'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Registrati
-              </button>
-            </div>
-
             {/* Error/Success Messages */}
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-                <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                <span className="text-sm text-red-700">{error}</span>
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center space-x-2 text-red-700 dark:text-red-400"
+              >
+                <AlertCircle size={16} />
+                <span className="text-sm">{error}</span>
+              </motion.div>
             )}
 
             {success && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                <span className="text-sm text-green-700">{success}</span>
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center space-x-2 text-green-700 dark:text-green-400"
+              >
+                <CheckCircle size={16} />
+                <span className="text-sm">{success}</span>
+              </motion.div>
             )}
 
-            {/* Wallet Connection Options */}
-            <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Connetti Wallet XRPL</h3>
-              <div className="space-y-2">
-                <Button
-                  onClick={() => handleWalletConnect('xumm')}
-                  disabled={isLoading}
-                  className="w-full bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
-                >
-                  <Wallet className="h-4 w-4 mr-2" />
-                  XUMM Wallet
-                </Button>
-                <Button
-                  onClick={() => handleWalletConnect('crossmark')}
-                  disabled={isLoading}
-                  className="w-full bg-purple-600 text-white hover:bg-purple-700 flex items-center justify-center"
-                >
-                  <Zap className="h-4 w-4 mr-2" />
-                  Crossmark (SDK Integrato)
-                </Button>
-                <Button
-                  onClick={() => handleWalletConnect('trustwallet')}
-                  disabled={isLoading}
-                  className="w-full bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center"
-                >
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Trust Wallet (Integrato)
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                🔒 Connessione diretta con wallet XRPL - Nessuna registrazione richiesta
-              </p>
-            </div>
+            {/* XRPL Wallet Tab */}
+            {activeTab === 'wallet' && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <div className="text-center mb-6">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                    Connetti Wallet XRPL
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Scegli il tuo wallet XRPL preferito per accedere alla piattaforma
+                  </p>
+                </div>
 
-            {/* Web3Auth MPC Options */}
-            <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Web3Auth (MPC Technology)</h3>
-              <div className="space-y-2">
+                {/* XUMM Wallet */}
                 <Button
-                  onClick={() => handleWeb3Auth('google')}
+                  onClick={handleXummLogin}
                   disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white hover:from-green-600 hover:to-blue-600 flex items-center justify-center"
+                  className="w-full flex items-center justify-center space-x-3 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                 >
-                  <Key className="h-4 w-4 mr-2" />
-                  Web3Auth + Google
+                  <QrCode size={20} />
+                  <span>XUMM Wallet</span>
+                  {isLoading && xummData && <Loader size={16} className="animate-spin" />}
                 </Button>
-                <Button
-                  onClick={() => handleWeb3Auth('twitter')}
-                  disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-blue-400 to-blue-600 text-white hover:from-blue-500 hover:to-blue-700 flex items-center justify-center"
-                >
-                  <Globe className="h-4 w-4 mr-2" />
-                  Web3Auth + Twitter
-                </Button>
-                <Button
-                  onClick={() => handleWeb3Auth('discord')}
-                  disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-600 hover:to-purple-600 flex items-center justify-center"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Web3Auth + Discord
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                🔒 Sicurezza MPC avanzata - Wallet auto-generato senza seed phrase
-              </p>
-            </div>
 
-            {/* OAuth Options */}
-            <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Accesso Rapido</h3>
-              <div className="space-y-2">
-                <Button
-                  onClick={() => handleOAuthLogin('google')}
-                  disabled={isLoading}
-                  className="w-full bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                >
-                  <Chrome className="h-4 w-4 mr-2" />
-                  Continua con Google
-                </Button>
-                <Button
-                  onClick={() => handleOAuthLogin('github')}
-                  disabled={isLoading}
-                  className="w-full bg-gray-900 text-white hover:bg-gray-800"
-                >
-                  <Github className="h-4 w-4 mr-2" />
-                  Continua con GitHub
-                </Button>
-              </div>
-            </div>
+                {/* XUMM QR Code */}
+                {xummData && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-white p-4 rounded-lg border-2 border-dashed border-blue-300 text-center"
+                  >
+                    <img src={xummData.qr} alt="XUMM QR Code" className="mx-auto mb-2 max-w-48" />
+                    <p className="text-sm text-slate-600 mb-2">
+                      Scansiona con l'app XUMM per accedere
+                    </p>
+                    <div className="flex justify-center space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(xummData.deeplink, '_blank')}
+                      >
+                        <Smartphone size={14} className="mr-1" />
+                        Apri XUMM
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
 
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">oppure</span>
-              </div>
-            </div>
+                {/* Crossmark Wallet */}
+                <Button
+                  onClick={handleCrossmarkLogin}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="w-full flex items-center justify-center space-x-3 py-3"
+                >
+                  <Chrome size={20} />
+                  <span>Crossmark Wallet</span>
+                  {isLoading && <Loader size={16} className="animate-spin" />}
+                </Button>
 
-            {/* Login Form */}
+                {/* Trust Wallet */}
+                <Button
+                  onClick={handleTrustWalletLogin}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="w-full flex items-center justify-center space-x-3 py-3"
+                >
+                  <Shield size={20} />
+                  <span>Trust Wallet</span>
+                  {isLoading && <Loader size={16} className="animate-spin" />}
+                </Button>
+              </motion.div>
+            )}
+
+            {/* Web3Auth MPC Tab */}
+            {activeTab === 'web3auth' && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <div className="text-center mb-6">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                    Web3Auth MPC
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Accedi con i tuoi account social usando tecnologia MPC avanzata
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => handleWeb3AuthLogin('Google')}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center space-x-3 py-3 bg-red-600 hover:bg-red-700"
+                >
+                  <Chrome size={20} />
+                  <span>Continua con Google</span>
+                  {isLoading && <Loader size={16} className="animate-spin" />}
+                </Button>
+
+                <Button
+                  onClick={() => handleWeb3AuthLogin('GitHub')}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="w-full flex items-center justify-center space-x-3 py-3"
+                >
+                  <Github size={20} />
+                  <span>Continua con GitHub</span>
+                  {isLoading && <Loader size={16} className="animate-spin" />}
+                </Button>
+
+                <Button
+                  onClick={() => handleWeb3AuthLogin('Twitter')}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="w-full flex items-center justify-center space-x-3 py-3"
+                >
+                  <Twitter size={20} />
+                  <span>Continua con Twitter</span>
+                  {isLoading && <Loader size={16} className="animate-spin" />}
+                </Button>
+
+                <Button
+                  onClick={() => handleWeb3AuthLogin('Discord')}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="w-full flex items-center justify-center space-x-3 py-3"
+                >
+                  <MessageCircle size={20} />
+                  <span>Continua con Discord</span>
+                  {isLoading && <Loader size={16} className="animate-spin" />}
+                </Button>
+
+                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <Key size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-blue-800 dark:text-blue-300">
+                      <p className="font-medium mb-1">Tecnologia MPC Avanzata</p>
+                      <p className="text-xs">
+                        Multi-Party Computation per massima sicurezza. 
+                        Le tue chiavi private non vengono mai condivise.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Email Login Tab */}
             {activeTab === 'login' && (
-              <form onSubmit={handleEmailLogin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="email"
-                      required
-                      value={loginForm.email}
-                      onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-                      placeholder="tua@email.com"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={loginForm.password}
-                      onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                      className="w-full pl-10 pr-12 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-                      placeholder="Password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full bg-slate-900 text-white hover:bg-slate-800"
-                >
-                  {isLoading ? 'Accesso in corso...' : 'Accedi'}
-                </Button>
-              </form>
-            )}
-
-            {/* Register Form */}
-            {activeTab === 'register' && (
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+              >
+                <form onSubmit={handleEmailLogin} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nome
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Email
                     </label>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Mail size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                       <input
-                        type="text"
+                        type="email"
                         required
-                        value={registerForm.firstName}
-                        onChange={(e) => setRegisterForm({...registerForm, firstName: e.target.value})}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-                        placeholder="Nome"
+                        value={loginForm.email}
+                        onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        placeholder="inserisci@email.com"
                       />
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Cognome
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Password
                     </label>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Lock size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                        className="w-full pl-10 pr-12 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        placeholder="Password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <Loader size={16} className="animate-spin" />
+                        <span>Accesso in corso...</span>
+                      </div>
+                    ) : (
+                      'Accedi'
+                    )}
+                  </Button>
+                </form>
+
+                <div className="mt-6 text-center">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Non hai un account?{' '}
+                    <button
+                      onClick={() => setActiveTab('register')}
+                      className="text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Registrati
+                    </button>
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Register Tab */}
+            {activeTab === 'register' && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+              >
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Nome
+                      </label>
+                      <div className="relative">
+                        <User size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          required
+                          value={registerForm.firstName}
+                          onChange={(e) => setRegisterForm({...registerForm, firstName: e.target.value})}
+                          className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                          placeholder="Nome"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Cognome
+                      </label>
                       <input
                         type="text"
                         required
                         value={registerForm.lastName}
                         onChange={(e) => setRegisterForm({...registerForm, lastName: e.target.value})}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
                         placeholder="Cognome"
                       />
                     </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="email"
-                      required
-                      value={registerForm.email}
-                      onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-                      placeholder="tua@email.com"
-                    />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        value={registerForm.email}
+                        onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        placeholder="inserisci@email.com"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={registerForm.password}
-                      onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
-                      className="w-full pl-10 pr-12 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-                      placeholder="Password"
-                    />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <Lock size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="password"
+                        required
+                        value={registerForm.password}
+                        onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        placeholder="Password"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Conferma Password
+                    </label>
+                    <div className="relative">
+                      <Lock size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="password"
+                        required
+                        value={registerForm.confirmPassword}
+                        onChange={(e) => setRegisterForm({...registerForm, confirmPassword: e.target.value})}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        placeholder="Conferma Password"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <Loader size={16} className="animate-spin" />
+                        <span>Registrazione in corso...</span>
+                      </div>
+                    ) : (
+                      'Registrati'
+                    )}
+                  </Button>
+                </form>
+
+                <div className="mt-6 text-center">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Hai già un account?{' '}
                     <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      onClick={() => setActiveTab('login')}
+                      className="text-blue-600 hover:text-blue-700 font-medium"
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      Accedi
                     </button>
-                  </div>
+                  </p>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Conferma Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={registerForm.confirmPassword}
-                      onChange={(e) => setRegisterForm({...registerForm, confirmPassword: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-                      placeholder="Conferma Password"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full bg-slate-900 text-white hover:bg-slate-800"
-                >
-                  {isLoading ? 'Registrazione in corso...' : 'Registrati'}
-                </Button>
-              </form>
+              </motion.div>
             )}
+          </div>
 
-            {/* Footer */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-xs text-gray-500 text-center">
-                Continuando accetti i nostri{' '}
-                <a href="#" className="text-slate-600 hover:text-slate-800">
-                  Termini di Servizio
-                </a>{' '}
-                e{' '}
-                <a href="#" className="text-slate-600 hover:text-slate-800">
-                  Privacy Policy
-                </a>
-              </p>
+          {/* Footer */}
+          <div className="px-6 py-4 bg-slate-50 dark:bg-slate-700 rounded-b-2xl">
+            <div className="flex items-center justify-center space-x-4 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center space-x-1">
+                <Shield size={12} />
+                <span>Sicurezza Bancaria</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <CheckCircle size={12} />
+                <span>Compliance EU</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Zap size={12} />
+                <span>XRPL Native</span>
+              </div>
             </div>
           </div>
         </motion.div>
-      </div>
+      </motion.div>
     </AnimatePresence>
   );
 };

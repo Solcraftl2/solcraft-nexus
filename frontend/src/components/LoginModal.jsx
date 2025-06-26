@@ -6,17 +6,40 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   if (!isOpen) return null;
 
   const handleSocialLogin = async (provider) => {
+    console.log(`🔧 Login simulato con ${provider}`);
     setLoading(true);
     
-    // Simulazione login per ora (sarà sostituito con Web3Auth reale)
+    // Simulazione login funzionante
     setTimeout(() => {
       const userData = {
         name: `User from ${provider}`,
         email: `user@${provider.toLowerCase()}.com`,
         provider: provider,
-        wallet: null // Sarà popolato con Web3Auth
+        wallet: null,
+        isSimulated: true // Flag per indicare che è simulato
       };
       
+      console.log('✅ Login simulato completato:', userData);
+      onLoginSuccess(userData);
+      setLoading(false);
+      onClose();
+    }, 1500);
+  };
+
+  const handleWalletConnect = async (wallet) => {
+    console.log(`🔧 Wallet simulato: ${wallet}`);
+    setLoading(true);
+    
+    setTimeout(() => {
+      const userData = {
+        name: `User from ${wallet}`,
+        email: `user@${wallet.toLowerCase()}.com`,
+        provider: wallet,
+        wallet: null,
+        isSimulated: true
+      };
+      
+      console.log('✅ Wallet simulato completato:', userData);
       onLoginSuccess(userData);
       setLoading(false);
       onClose();
@@ -42,14 +65,18 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
         padding: '2rem',
         maxWidth: '400px',
         width: '90%',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+        position: 'relative'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
             Accedi a SolCraft Nexus
           </h2>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
             Scegli il tuo metodo di accesso preferito
+          </p>
+          <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+            ⚠️ Modalità Demo - Autenticazione simulata
           </p>
         </div>
 
@@ -110,7 +137,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
             {['Crossmark', 'XUMM', 'Trust'].map((wallet) => (
               <button
                 key={wallet}
-                onClick={() => handleSocialLogin(wallet)}
+                onClick={() => handleWalletConnect(wallet)}
                 disabled={loading}
                 style={{
                   padding: '0.5rem 1rem',

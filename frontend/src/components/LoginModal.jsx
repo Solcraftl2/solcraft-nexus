@@ -6,8 +6,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   if (!isOpen) return null;
 
   const handleSocialLogin = async (provider, event) => {
-    event.preventDefault(); // Impedisce comportamento di default
-    console.log(`🔧 Login simulato con ${provider}`);
+    event.preventDefault();
     setLoading(true);
     
     // Simulazione login funzionante per provider sociali
@@ -17,10 +16,9 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
         email: `user@${provider.toLowerCase()}.com`,
         provider: provider,
         wallet: null,
-        isSimulated: true // Flag per indicare che è simulato
+        isSimulated: true
       };
       
-      console.log('✅ Login simulato completato:', userData);
       onLoginSuccess(userData);
       setLoading(false);
       onClose();
@@ -28,53 +26,95 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   };
 
   const handleCrossmarkConnect = async (event) => {
-    // TEST 1: Alert immediato per confermare che arriviamo qui
-    alert('🎯 STEP 1: Handler Crossmark chiamato!');
-    
     event.preventDefault();
-    
-    // TEST 2: Alert dopo preventDefault
-    alert('🎯 STEP 2: preventDefault eseguito!');
+    setLoading(true);
     
     try {
-      // TEST 3: Alert prima dell'import
-      alert('🎯 STEP 3: Prima dell\'import SDK...');
-      
-      // Provo l'import in modo diverso
-      const sdk = await import('@crossmarkio/sdk');
-      
-      // TEST 4: Alert dopo l'import
-      alert('🎯 STEP 4: Import SDK completato!');
-      
-      // TEST 5: Controllo window.crossmark
-      alert(`🎯 STEP 5: window.crossmark = ${!!window.crossmark}`);
-      
+      // Verifica se Crossmark è installato
       if (!window.crossmark) {
-        alert('❌ Crossmark non installato');
+        // Crossmark non installato - mostra messaggio e simula connessione
+        const userData = {
+          name: 'Crossmark User (Simulato)',
+          email: null,
+          provider: 'Crossmark',
+          wallet: {
+            address: 'rCrossmarkSimulated123...',
+            type: 'XRPL',
+            network: 'testnet'
+          },
+          isSimulated: true,
+          message: 'Crossmark non installato. Connessione simulata per demo.'
+        };
+        
+        setTimeout(() => {
+          onLoginSuccess(userData);
+          setLoading(false);
+          onClose();
+        }, 1500);
         return;
       }
+
+      // Crossmark è installato - connessione reale
+      const signInResponse = await window.crossmark.signInAndWait();
       
-      alert('🎯 STEP 6: Crossmark trovato, procedo...');
-      
+      if (signInResponse && signInResponse.response && signInResponse.response.data) {
+        const { address } = signInResponse.response.data;
+        
+        // Recupera informazioni sessione
+        const sessionResponse = await window.crossmark.getUserSession();
+
+        const userData = {
+          name: 'Crossmark User',
+          email: null,
+          provider: 'Crossmark',
+          wallet: {
+            address: address,
+            type: 'XRPL',
+            network: 'mainnet'
+          },
+          isSimulated: false,
+          session: sessionResponse
+        };
+        
+        onLoginSuccess(userData);
+        onClose();
+      } else {
+        throw new Error('Risposta Crossmark non valida');
+      }
     } catch (error) {
-      alert(`❌ ERRORE: ${error.message}`);
+      // In caso di errore, simula connessione per demo
+      const userData = {
+        name: 'Crossmark User (Errore)',
+        email: null,
+        provider: 'Crossmark',
+        wallet: {
+          address: 'rCrossmarkError123...',
+          type: 'XRPL',
+          network: 'testnet'
+        },
+        isSimulated: true,
+        error: error.message
+      };
+      
+      setTimeout(() => {
+        onLoginSuccess(userData);
+        setLoading(false);
+        onClose();
+      }, 1500);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleWalletConnect = async (wallet, event) => {
-    // TEST GENERALE: Alert per tutti i wallet
-    alert(`🔧 WALLET HANDLER: ${wallet}`);
-    
     event.preventDefault();
     
     if (wallet === 'Crossmark') {
-      alert('🚀 ROUTING TO CROSSMARK...');
       await handleCrossmarkConnect(event);
       return;
     }
 
     // Simulazione per altri wallet (XUMM, Trust)
-    alert(`✅ SIMULAZIONE: ${wallet}`);
     setLoading(true);
     
     setTimeout(() => {
@@ -83,7 +123,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
         email: `user@${wallet.toLowerCase()}.com`,
         provider: wallet,
         wallet: {
-          address: 'rSimulatedAddress123...',
+          address: `r${wallet}Simulated123...`,
           type: 'XRPL',
           network: 'testnet'
         },
@@ -126,7 +166,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
             Scegli il tuo metodo di accesso preferito
           </p>
           <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-            ⚠️ Social Login: Demo | Crossmark: Debug | Altri wallet: Demo
+            ⚠️ Social Login: Demo | Crossmark: Reale/Simulato | Altri wallet: Demo
           </p>
         </div>
 
@@ -200,9 +240,9 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                   fontWeight: wallet === 'Crossmark' ? 'bold' : 'normal'
                 }}
               >
-                {wallet === 'Crossmark' && '🔍 '}
+                {wallet === 'Crossmark' && '🚀 '}
                 {wallet}
-                {wallet === 'Crossmark' && ' (Debug)'}
+                {wallet === 'Crossmark' && ' (Ready)'}
               </button>
             ))}
           </div>

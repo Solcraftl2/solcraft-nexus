@@ -50,7 +50,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -99,7 +99,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
+      const response = await fetch('/api/auth-register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

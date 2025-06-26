@@ -6,6 +6,7 @@ import {
   revenueStreams,
   marketData 
 } from '../data/insuranceData';
+import oracleService from '../services/oracleService';
 
 const RiskMarketplace = ({ user, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('browse');
@@ -18,6 +19,76 @@ const RiskMarketplace = ({ user, onNavigate }) => {
   const [showInvestModal, setShowInvestModal] = useState(false);
   const [userPortfolio, setUserPortfolio] = useState([]);
   const [watchlist, setWatchlist] = useState([]);
+  const [oracleStatus, setOracleStatus] = useState(null);
+  const [triggerEvents, setTriggerEvents] = useState([]);
+  const [monitoredTokens, setMonitoredTokens] = useState(new Set());
+
+  // Initialize oracle service and monitoring
+  useEffect(() => {
+    const initializeOracle = async () => {
+      try {
+        const status = oracleService.getStatus();
+        setOracleStatus(status);
+        
+        // Start monitoring all available tokens
+        availableRiskTokens.forEach(token => {
+          if (!monitoredTokens.has(token.id)) {
+            startTokenMonitoring(token);
+          }
+        });
+        
+      } catch (error) {
+        console.error('Failed to initialize oracle service:', error);
+      }
+    };
+
+    initializeOracle();
+
+    // Update oracle status periodically
+    const statusInterval = setInterval(() => {
+      const status = oracleService.getStatus();
+      setOracleStatus(status);
+    }, 30000);
+
+    return () => {
+      clearInterval(statusInterval);
+      // Cleanup subscriptions
+      monitoredTokens.forEach(tokenId => {
+        oracleService.unsubscribeTrigger(tokenId);
+      });
+    };
+  }, []);
+
+  // Start monitoring a specific token
+  const startTokenMonitoring = (token) => {
+    const handleTriggerEvent = (triggerResult) => {
+      console.log(`🚨 Trigger event for ${token.name}:`, triggerResult);
+      
+      const event = {
+        id: Date.now(),
+        tokenId: token.id,
+        tokenName: token.name,
+        triggerResult,
+        timestamp: new Date(),
+        severity: triggerResult.isTriggered ? 'high' : 'low'
+      };
+      
+      setTriggerEvents(prev => [event, ...prev.slice(0, 49)]); // Keep last 50 events
+    };
+
+    oracleService.subscribeTrigger(token.id, token.trigger, handleTriggerEvent);
+    setMonitoredTokens(prev => new Set([...prev, token.id]));
+  };
+
+  // Stop monitoring a specific token
+  const stopTokenMonitoring = (tokenId) => {
+    oracleService.unsubscribeTrigger(tokenId);
+    setMonitoredTokens(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(tokenId);
+      return newSet;
+    });
+  };
 
   // Filter and sort tokens
   const filteredTokens = availableRiskTokens

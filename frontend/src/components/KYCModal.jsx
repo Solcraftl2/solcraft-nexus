@@ -1,574 +1,695 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { KYCService } from '../services/kycService';
 
-const KYCModal = ({ isOpen, onClose, user, onKYCComplete }) => {
+const KYCModal = ({ isOpen, onClose, user, onKYCUpdate }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
-    // Step 1: Informazioni personali
+  const [success, setSuccess] = useState('');
+  const [kycData, setKycData] = useState(null);
+  
+  // Form data
+  const [personalInfo, setPersonalInfo] = useState({
     firstName: '',
     lastName: '',
     dateOfBirth: '',
     nationality: '',
-    phoneNumber: '',
-    
-    // Step 2: Indirizzo
     address: '',
     city: '',
     postalCode: '',
     country: '',
-    
-    // Step 3: Documenti
-    documentType: 'passport',
-    documentNumber: '',
-    documentExpiry: '',
-    documentFront: null,
-    documentBack: null,
-    
-    // Step 4: Verifica indirizzo
-    addressDocument: null,
-    addressDocumentType: 'utility_bill'
+    phone: ''
   });
+  
+  const [phoneOTP, setPhoneOTP] = useState('');
+  const [documents, setDocuments] = useState({});
+  const [uploadProgress, setUploadProgress] = useState({});
 
-  if (!isOpen) return null;
-
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleFileUpload = (field, file) => {
-    if (file && file.size > 5 * 1024 * 1024) { // 5MB limit
-      setError('Il file deve essere inferiore a 5MB');
-      return;
+  useEffect(() => {
+    if (isOpen && user) {
+      loadKYCData();
     }
-    
-    setFormData(prev => ({
-      ...prev,
-      [field]: file
-    }));
-    setError('');
-  };
+  }, [isOpen, user]);
 
-  const validateStep = (step) => {
-    switch (step) {
-      case 1:
-        return formData.firstName && formData.lastName && formData.dateOfBirth && 
-               formData.nationality && formData.phoneNumber;
-      case 2:
-        return formData.address && formData.city && formData.postalCode && formData.country;
-      case 3:
-        return formData.documentType && formData.documentNumber && 
-               formData.documentExpiry && formData.documentFront;
-      case 4:
-        return formData.addressDocument && formData.addressDocumentType;
-      default:
-        return false;
+  const loadKYCData = async () => {
+    setLoading(true);
+    const result = await KYCService.getUserKYCStatus(user.id);
+    if (result.success) {
+      setKycData(result);
+      // Determina step corrente basato su stato KYC
+      if (result.kycStatus === 'not_started') {
+        setCurrentStep(1);
+      } else if (result.kycLevel === 0) {
+        setCurrentStep(2);
+      } else if (result.kycLevel === 1) {
+        setCurrentStep(3);
+      } else {
+        setCurrentStep(4);
+      }
     }
+    setLoading(false);
   };
 
-  const nextStep = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(prev => Math.min(prev + 1, 5));
-      setError('');
-    } else {
-      setError('Completa tutti i campi richiesti per continuare');
-    }
-  };
-
-  const prevStep = () => {
-    setCurrentStep(prev => Math.max(prev - 1, 1));
-    setError('');
-  };
-
-  const submitKYC = async () => {
+  const handlePersonalInfoSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
     setError('');
     
-    try {
-      // Simula invio dati KYC
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // In produzione, qui invieresti i dati a un servizio KYC reale
-      const kycData = {
-        userId: user.userId,
-        personalInfo: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          dateOfBirth: formData.dateOfBirth,
-          nationality: formData.nationality,
-          phoneNumber: formData.phoneNumber
-        },
-        address: {
-          address: formData.address,
-          city: formData.city,
-          postalCode: formData.postalCode,
-          country: formData.country
-        },
-        documents: {
-          identity: {
-            type: formData.documentType,
-            number: formData.documentNumber,
-            expiry: formData.documentExpiry,
-            frontImage: formData.documentFront?.name,
-            backImage: formData.documentBack?.name
-          },
-          address: {
-            type: formData.addressDocumentType,
-            document: formData.addressDocument?.name
-          }
-        },
-        status: 'pending_review',
-        submittedAt: new Date().toISOString()
-      };
-      
-      console.log('KYC Data submitted:', kycData);
-      
-      onKYCComplete({
-        status: 'pending_review',
-        level: 2,
-        message: 'Documenti inviati con successo. Verifica in corso (24-48 ore).'
-      });
-      
-      onClose();
-    } catch (error) {
-      console.error('Errore invio KYC:', error);
-      setError('Errore durante l\'invio. Riprova più tardi.');
-    } finally {
-      setLoading(false);
+    const result = await KYCService.startKYCProcess(user.id, personalInfo);
+    if (result.success) {
+      setSuccess('Informazioni personali salvate con successo!');
+      setCurrentStep(2);
+      await loadKYCData();
+    } else {
+      setError(result.error);
     }
+    setLoading(false);
   };
 
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-              📋 Informazioni Personali
-            </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Nome *
-                </label>
-                <input
-                  type="text"
-                  value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                  placeholder="Mario"
-                />
+  const handlePhoneVerification = async () => {
+    setLoading(true);
+    setError('');
+    
+    const result = await KYCService.verifyPhone(user.id, personalInfo.phone);
+    if (result.success) {
+      setSuccess('OTP inviato al tuo telefono!');
+    } else {
+      setError(result.error);
+    }
+    setLoading(false);
+  };
+
+  const handleOTPConfirm = async () => {
+    setLoading(true);
+    setError('');
+    
+    const result = await KYCService.confirmPhoneOTP(user.id, phoneOTP);
+    if (result.success) {
+      setSuccess('Telefono verificato con successo!');
+      setCurrentStep(3);
+      await loadKYCData();
+      if (onKYCUpdate) onKYCUpdate();
+    } else {
+      setError(result.error);
+    }
+    setLoading(false);
+  };
+
+  const handleDocumentUpload = async (documentType, file) => {
+    setLoading(true);
+    setError('');
+    setUploadProgress({ ...uploadProgress, [documentType]: 0 });
+    
+    const result = await KYCService.uploadDocument(user.id, documentType, file);
+    if (result.success) {
+      setDocuments({ ...documents, [documentType]: result.document });
+      setSuccess(`${KYCService.DOCUMENT_TYPES[documentType]} caricato con successo!`);
+      await loadKYCData();
+      if (onKYCUpdate) onKYCUpdate();
+    } else {
+      setError(result.error);
+    }
+    
+    setUploadProgress({ ...uploadProgress, [documentType]: 100 });
+    setLoading(false);
+  };
+
+  const renderProgressBar = () => {
+    const steps = [
+      { id: 1, name: 'Info Personali', completed: currentStep > 1 },
+      { id: 2, name: 'Verifica Telefono', completed: currentStep > 2 },
+      { id: 3, name: 'Documenti', completed: currentStep > 3 },
+      { id: 4, name: 'Completato', completed: currentStep >= 4 }
+    ];
+
+    return (
+      <div style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          {steps.map((step, index) => (
+            <div key={step.id} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+              <div style={{
+                width: '2rem',
+                height: '2rem',
+                borderRadius: '50%',
+                backgroundColor: step.completed ? '#10b981' : currentStep === step.id ? '#3b82f6' : '#e5e7eb',
+                color: step.completed || currentStep === step.id ? 'white' : '#6b7280',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.875rem',
+                fontWeight: '600'
+              }}>
+                {step.completed ? '✓' : step.id}
               </div>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Cognome *
-                </label>
-                <input
-                  type="text"
-                  value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                  placeholder="Rossi"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                Data di Nascita *
-              </label>
-              <input
-                type="date"
-                value={formData.dateOfBirth}
-                onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '1rem'
-                }}
-              />
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Nazionalità *
-                </label>
-                <select
-                  value={formData.nationality}
-                  onChange={(e) => handleInputChange('nationality', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                >
-                  <option value="">Seleziona...</option>
-                  <option value="IT">Italia</option>
-                  <option value="US">Stati Uniti</option>
-                  <option value="GB">Regno Unito</option>
-                  <option value="DE">Germania</option>
-                  <option value="FR">Francia</option>
-                  <option value="ES">Spagna</option>
-                </select>
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Telefono *
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phoneNumber}
-                  onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                  placeholder="+39 123 456 7890"
-                />
-              </div>
-            </div>
-          </div>
-        );
-        
-      case 2:
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-              🏠 Indirizzo di Residenza
-            </h3>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                Indirizzo *
-              </label>
-              <input
-                type="text"
-                value={formData.address}
-                onChange={(e) => handleInputChange('address', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '1rem'
-                }}
-                placeholder="Via Roma 123"
-              />
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Città *
-                </label>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                  placeholder="Milano"
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  CAP *
-                </label>
-                <input
-                  type="text"
-                  value={formData.postalCode}
-                  onChange={(e) => handleInputChange('postalCode', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                  placeholder="20100"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                Paese *
-              </label>
-              <select
-                value={formData.country}
-                onChange={(e) => handleInputChange('country', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '1rem'
-                }}
-              >
-                <option value="">Seleziona...</option>
-                <option value="IT">Italia</option>
-                <option value="US">Stati Uniti</option>
-                <option value="GB">Regno Unito</option>
-                <option value="DE">Germania</option>
-                <option value="FR">Francia</option>
-                <option value="ES">Spagna</option>
-              </select>
-            </div>
-          </div>
-        );
-        
-      case 3:
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-              🆔 Documento di Identità
-            </h3>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                Tipo Documento *
-              </label>
-              <select
-                value={formData.documentType}
-                onChange={(e) => handleInputChange('documentType', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '1rem'
-                }}
-              >
-                <option value="passport">Passaporto</option>
-                <option value="id_card">Carta d'Identità</option>
-                <option value="driving_license">Patente di Guida</option>
-              </select>
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Numero Documento *
-                </label>
-                <input
-                  type="text"
-                  value={formData.documentNumber}
-                  onChange={(e) => handleInputChange('documentNumber', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                  placeholder="AB1234567"
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Data Scadenza *
-                </label>
-                <input
-                  type="date"
-                  value={formData.documentExpiry}
-                  onChange={(e) => handleInputChange('documentExpiry', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                Fronte Documento * (Max 5MB)
-              </label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => handleFileUpload('documentFront', e.target.files[0])}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '1rem'
-                }}
-              />
-              {formData.documentFront && (
-                <p style={{ fontSize: '0.875rem', color: '#10b981', marginTop: '0.5rem' }}>
-                  ✅ {formData.documentFront.name}
-                </p>
+              <span style={{
+                marginLeft: '0.5rem',
+                fontSize: '0.875rem',
+                color: step.completed ? '#10b981' : currentStep === step.id ? '#3b82f6' : '#6b7280',
+                fontWeight: currentStep === step.id ? '600' : '400'
+              }}>
+                {step.name}
+              </span>
+              {index < steps.length - 1 && (
+                <div style={{
+                  flex: 1,
+                  height: '2px',
+                  backgroundColor: step.completed ? '#10b981' : '#e5e7eb',
+                  marginLeft: '1rem'
+                }} />
               )}
             </div>
-            
-            {formData.documentType !== 'passport' && (
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                  Retro Documento (Max 5MB)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => handleFileUpload('documentBack', e.target.files[0])}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '1rem'
-                  }}
-                />
-                {formData.documentBack && (
-                  <p style={{ fontSize: '0.875rem', color: '#10b981', marginTop: '0.5rem' }}>
-                    ✅ {formData.documentBack.name}
-                  </p>
-                )}
-              </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderKYCLevel = () => {
+    if (!kycData) return null;
+    
+    const level = kycData.levelInfo;
+    return (
+      <div style={{
+        padding: '1rem',
+        backgroundColor: '#f8fafc',
+        borderRadius: '0.5rem',
+        border: `2px solid ${level.color}`,
+        marginBottom: '1.5rem'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h4 style={{ margin: 0, color: level.color, fontWeight: '600' }}>
+              Livello KYC: {level.name}
+            </h4>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.875rem', color: '#6b7280' }}>
+              Limite transazioni: {level.limit === Infinity ? 'Illimitato' : `€${level.limit.toLocaleString()}`}
+            </p>
+          </div>
+          <div style={{
+            width: '3rem',
+            height: '3rem',
+            borderRadius: '50%',
+            backgroundColor: level.color,
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.25rem',
+            fontWeight: 'bold'
+          }}>
+            {kycData.kycLevel}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStep1 = () => (
+    <form onSubmit={handlePersonalInfoSubmit}>
+      <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600' }}>
+        📋 Informazioni Personali
+      </h3>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Nome *
+          </label>
+          <input
+            type="text"
+            value={personalInfo.firstName}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, firstName: e.target.value })}
+            required
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+        
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Cognome *
+          </label>
+          <input
+            type="text"
+            value={personalInfo.lastName}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, lastName: e.target.value })}
+            required
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Data di Nascita *
+          </label>
+          <input
+            type="date"
+            value={personalInfo.dateOfBirth}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, dateOfBirth: e.target.value })}
+            required
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+        
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Nazionalità *
+          </label>
+          <select
+            value={personalInfo.nationality}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, nationality: e.target.value })}
+            required
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          >
+            <option value="">Seleziona...</option>
+            <option value="IT">Italia</option>
+            <option value="US">Stati Uniti</option>
+            <option value="GB">Regno Unito</option>
+            <option value="DE">Germania</option>
+            <option value="FR">Francia</option>
+            <option value="ES">Spagna</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+          Indirizzo *
+        </label>
+        <input
+          type="text"
+          value={personalInfo.address}
+          onChange={(e) => setPersonalInfo({ ...personalInfo, address: e.target.value })}
+          required
+          placeholder="Via, numero civico"
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '1rem'
+          }}
+        />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Città *
+          </label>
+          <input
+            type="text"
+            value={personalInfo.city}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, city: e.target.value })}
+            required
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+        
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            CAP *
+          </label>
+          <input
+            type="text"
+            value={personalInfo.postalCode}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, postalCode: e.target.value })}
+            required
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+        
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Paese *
+          </label>
+          <select
+            value={personalInfo.country}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, country: e.target.value })}
+            required
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          >
+            <option value="">Seleziona...</option>
+            <option value="IT">Italia</option>
+            <option value="US">Stati Uniti</option>
+            <option value="GB">Regno Unito</option>
+            <option value="DE">Germania</option>
+            <option value="FR">Francia</option>
+            <option value="ES">Spagna</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '1.5rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+          Telefono *
+        </label>
+        <input
+          type="tel"
+          value={personalInfo.phone}
+          onChange={(e) => setPersonalInfo({ ...personalInfo, phone: e.target.value })}
+          required
+          placeholder="+39 123 456 7890"
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '1rem'
+          }}
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        style={{
+          width: '100%',
+          padding: '0.75rem',
+          backgroundColor: '#3b82f6',
+          color: 'white',
+          border: 'none',
+          borderRadius: '0.5rem',
+          fontSize: '1rem',
+          fontWeight: '600',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          opacity: loading ? 0.7 : 1
+        }}
+      >
+        {loading ? 'Salvataggio...' : 'Continua'}
+      </button>
+    </form>
+  );
+
+  const renderStep2 = () => (
+    <div>
+      <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600' }}>
+        📱 Verifica Telefono
+      </h3>
+      
+      <p style={{ marginBottom: '1.5rem', color: '#6b7280' }}>
+        Verifica il tuo numero di telefono per aumentare la sicurezza del tuo account.
+      </p>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+          Numero di Telefono
+        </label>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            type="tel"
+            value={personalInfo.phone}
+            onChange={(e) => setPersonalInfo({ ...personalInfo, phone: e.target.value })}
+            style={{
+              flex: 1,
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+          <button
+            onClick={handlePhoneVerification}
+            disabled={loading || !personalInfo.phone}
+            style={{
+              padding: '0.75rem 1rem',
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading || !personalInfo.phone ? 0.7 : 1
+            }}
+          >
+            Invia OTP
+          </button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '1.5rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+          Codice OTP
+        </label>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            type="text"
+            value={phoneOTP}
+            onChange={(e) => setPhoneOTP(e.target.value)}
+            placeholder="123456"
+            maxLength={6}
+            style={{
+              flex: 1,
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem',
+              textAlign: 'center',
+              letterSpacing: '0.1em'
+            }}
+          />
+          <button
+            onClick={handleOTPConfirm}
+            disabled={loading || phoneOTP.length !== 6}
+            style={{
+              padding: '0.75rem 1rem',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading || phoneOTP.length !== 6 ? 0.7 : 1
+            }}
+          >
+            Verifica
+          </button>
+        </div>
+      </div>
+
+      <div style={{
+        padding: '1rem',
+        backgroundColor: '#fef3c7',
+        borderRadius: '0.5rem',
+        border: '1px solid #f59e0b'
+      }}>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e' }}>
+          💡 <strong>Suggerimento:</strong> Il codice OTP verrà inviato via SMS al numero fornito. 
+          Il codice è valido per 10 minuti.
+        </p>
+      </div>
+    </div>
+  );
+
+  const renderStep3 = () => {
+    const DocumentUpload = ({ type, title, description, required = false }) => {
+      const hasDocument = kycData?.documents?.find(doc => doc.document_type === type);
+      
+      return (
+        <div style={{
+          padding: '1rem',
+          border: '2px dashed #d1d5db',
+          borderRadius: '0.5rem',
+          marginBottom: '1rem',
+          backgroundColor: hasDocument ? '#f0f9ff' : '#fafafa'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>
+              {title} {required && <span style={{ color: '#dc2626' }}>*</span>}
+            </h4>
+            {hasDocument && (
+              <span style={{
+                padding: '0.25rem 0.5rem',
+                backgroundColor: hasDocument.status === 'verified' ? '#10b981' : 
+                                hasDocument.status === 'rejected' ? '#dc2626' : '#f59e0b',
+                color: 'white',
+                borderRadius: '0.25rem',
+                fontSize: '0.75rem',
+                fontWeight: '600'
+              }}>
+                {hasDocument.status === 'verified' ? 'Verificato' :
+                 hasDocument.status === 'rejected' ? 'Rifiutato' : 'In Revisione'}
+              </span>
             )}
           </div>
-        );
-        
-      case 4:
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-              📄 Verifica Indirizzo
-            </h3>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                Tipo Documento *
-              </label>
-              <select
-                value={formData.addressDocumentType}
-                onChange={(e) => handleInputChange('addressDocumentType', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '1rem'
-                }}
-              >
-                <option value="utility_bill">Bolletta (Luce/Gas/Acqua)</option>
-                <option value="bank_statement">Estratto Conto Bancario</option>
-                <option value="tax_document">Documento Fiscale</option>
-                <option value="rental_agreement">Contratto di Affitto</option>
-              </select>
-            </div>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                Documento Indirizzo * (Max 5MB)
-              </label>
-              <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
-                Il documento deve essere recente (ultimi 3 mesi) e mostrare chiaramente nome e indirizzo
-              </p>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => handleFileUpload('addressDocument', e.target.files[0])}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '1rem'
-                }}
-              />
-              {formData.addressDocument && (
-                <p style={{ fontSize: '0.875rem', color: '#10b981', marginTop: '0.5rem' }}>
-                  ✅ {formData.addressDocument.name}
+          
+          <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
+            {description}
+          </p>
+          
+          {!hasDocument ? (
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) handleDocumentUpload(type, file);
+              }}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.25rem'
+              }}
+            />
+          ) : (
+            <div style={{
+              padding: '0.5rem',
+              backgroundColor: 'white',
+              borderRadius: '0.25rem',
+              fontSize: '0.875rem'
+            }}>
+              📄 {hasDocument.file_name}
+              {hasDocument.rejection_reason && (
+                <p style={{ margin: '0.5rem 0 0 0', color: '#dc2626', fontSize: '0.75rem' }}>
+                  Motivo rifiuto: {hasDocument.rejection_reason}
                 </p>
               )}
             </div>
-          </div>
-        );
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div>
+        <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600' }}>
+          📄 Caricamento Documenti
+        </h3>
         
-      case 5:
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'center' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-              ✅ Riepilogo Verifica
-            </h3>
-            
-            <div style={{ 
-              backgroundColor: '#f0f9ff', 
-              padding: '1.5rem', 
-              borderRadius: '0.5rem',
-              border: '1px solid #0ea5e9'
-            }}>
-              <h4 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '1rem', color: '#0369a1' }}>
-                Dati da Verificare:
-              </h4>
-              
-              <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <p><strong>Nome:</strong> {formData.firstName} {formData.lastName}</p>
-                <p><strong>Data di Nascita:</strong> {formData.dateOfBirth}</p>
-                <p><strong>Nazionalità:</strong> {formData.nationality}</p>
-                <p><strong>Telefono:</strong> {formData.phoneNumber}</p>
-                <p><strong>Indirizzo:</strong> {formData.address}, {formData.city} {formData.postalCode}, {formData.country}</p>
-                <p><strong>Documento:</strong> {formData.documentType} - {formData.documentNumber}</p>
-                <p><strong>Documenti Caricati:</strong> {formData.documentFront ? '✅' : '❌'} Fronte, {formData.documentBack ? '✅' : '❌'} Retro, {formData.addressDocument ? '✅' : '❌'} Indirizzo</p>
-              </div>
-            </div>
-            
-            <div style={{ 
-              backgroundColor: '#fef3c7', 
-              padding: '1rem', 
-              borderRadius: '0.5rem',
-              border: '1px solid #f59e0b'
-            }}>
-              <p style={{ fontSize: '0.875rem', color: '#92400e' }}>
-                ⚠️ <strong>Importante:</strong> I tuoi documenti saranno verificati entro 24-48 ore. 
-                Riceverai una notifica via email con l'esito della verifica.
-              </p>
-            </div>
-          </div>
-        );
-        
-      default:
-        return null;
-    }
+        <p style={{ marginBottom: '1.5rem', color: '#6b7280' }}>
+          Carica i tuoi documenti di identità per completare la verifica KYC.
+        </p>
+
+        <DocumentUpload
+          type="ID_CARD"
+          title="Carta d'Identità o Passaporto"
+          description="Carica una foto chiara del fronte e retro della tua carta d'identità o passaporto."
+          required
+        />
+
+        <DocumentUpload
+          type="UTILITY_BILL"
+          title="Prova di Residenza"
+          description="Bolletta, estratto conto o documento ufficiale con il tuo indirizzo (non più vecchio di 3 mesi)."
+        />
+
+        <DocumentUpload
+          type="SELFIE"
+          title="Selfie con Documento"
+          description="Scatta un selfie tenendo in mano il tuo documento di identità accanto al viso."
+        />
+
+        <div style={{
+          padding: '1rem',
+          backgroundColor: '#ecfdf5',
+          borderRadius: '0.5rem',
+          border: '1px solid #10b981',
+          marginTop: '1rem'
+        }}>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: '#065f46' }}>
+            🔒 <strong>Sicurezza:</strong> I tuoi documenti sono crittografati e conservati in modo sicuro. 
+            Vengono utilizzati solo per la verifica dell'identità secondo le normative KYC/AML.
+          </p>
+        </div>
+      </div>
+    );
   };
+
+  const renderStep4 = () => (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎉</div>
+      
+      <h3 style={{ marginBottom: '1rem', fontSize: '1.5rem', fontWeight: '600', color: '#10b981' }}>
+        Verifica KYC Completata!
+      </h3>
+      
+      <p style={{ marginBottom: '1.5rem', color: '#6b7280', fontSize: '1.1rem' }}>
+        Il tuo account è stato verificato con successo. Ora puoi accedere a tutte le funzionalità della piattaforma.
+      </p>
+
+      {renderKYCLevel()}
+
+      <div style={{
+        padding: '1rem',
+        backgroundColor: '#f0f9ff',
+        borderRadius: '0.5rem',
+        border: '1px solid #3b82f6',
+        marginBottom: '1.5rem'
+      }}>
+        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1e40af' }}>Cosa puoi fare ora:</h4>
+        <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#1e40af' }}>
+          <li>Tokenizzare asset fino al tuo limite</li>
+          <li>Partecipare al marketplace</li>
+          <li>Ricevere dividendi e rendimenti</li>
+          <li>Accedere a investimenti esclusivi</li>
+        </ul>
+      </div>
+
+      <button
+        onClick={onClose}
+        style={{
+          padding: '0.75rem 2rem',
+          backgroundColor: '#10b981',
+          color: 'white',
+          border: 'none',
+          borderRadius: '0.5rem',
+          fontSize: '1rem',
+          fontWeight: '600',
+          cursor: 'pointer'
+        }}
+      >
+        Inizia a Investire
+      </button>
+    </div>
+  );
+
+  if (!isOpen) return null;
 
   return (
     <div style={{
@@ -581,136 +702,19 @@ const KYCModal = ({ isOpen, onClose, user, onKYCComplete }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 1000
+      zIndex: 1000,
+      padding: '1rem'
     }}>
       <div style={{
         backgroundColor: 'white',
         borderRadius: '1rem',
         padding: '2rem',
         maxWidth: '600px',
-        width: '90%',
+        width: '100%',
         maxHeight: '90vh',
         overflowY: 'auto',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
         position: 'relative'
       }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-            🔐 Verifica Identità KYC
-          </h2>
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-            Completa la verifica per accedere a tutte le funzionalità
-          </p>
-          
-          {/* Progress Bar */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            marginTop: '1rem'
-          }}>
-            {[1, 2, 3, 4, 5].map((step) => (
-              <div key={step} style={{
-                width: '2rem',
-                height: '2rem',
-                borderRadius: '50%',
-                backgroundColor: step <= currentStep ? '#10b981' : '#e5e7eb',
-                color: step <= currentStep ? 'white' : '#6b7280',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.875rem',
-                fontWeight: 'bold'
-              }}>
-                {step}
-              </div>
-            ))}
-          </div>
-          
-          <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.5rem' }}>
-            Step {currentStep} di 5
-          </p>
-        </div>
-
-        {error && (
-          <div style={{
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '0.5rem',
-            padding: '0.75rem',
-            marginBottom: '1rem'
-          }}>
-            <p style={{ color: '#dc2626', fontSize: '0.875rem' }}>
-              ⚠️ {error}
-            </p>
-          </div>
-        )}
-
-        {/* Step Content */}
-        {renderStep()}
-
-        {/* Navigation Buttons */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          marginTop: '2rem',
-          paddingTop: '1rem',
-          borderTop: '1px solid #e5e7eb'
-        }}>
-          <button
-            onClick={prevStep}
-            disabled={currentStep === 1}
-            style={{
-              padding: '0.75rem 1.5rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.5rem',
-              backgroundColor: currentStep === 1 ? '#f3f4f6' : 'white',
-              color: currentStep === 1 ? '#9ca3af' : '#374151',
-              cursor: currentStep === 1 ? 'not-allowed' : 'pointer',
-              fontSize: '1rem'
-            }}
-          >
-            ← Indietro
-          </button>
-
-          {currentStep < 5 ? (
-            <button
-              onClick={nextStep}
-              style={{
-                padding: '0.75rem 1.5rem',
-                border: 'none',
-                borderRadius: '0.5rem',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '1rem',
-                fontWeight: 'bold'
-              }}
-            >
-              Avanti →
-            </button>
-          ) : (
-            <button
-              onClick={submitKYC}
-              disabled={loading}
-              style={{
-                padding: '0.75rem 1.5rem',
-                border: 'none',
-                borderRadius: '0.5rem',
-                backgroundColor: loading ? '#9ca3af' : '#10b981',
-                color: 'white',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                fontWeight: 'bold'
-              }}
-            >
-              {loading ? '🔄 Invio...' : '✅ Invia Verifica'}
-            </button>
-          )}
-        </div>
-
         <button
           onClick={onClose}
           style={{
@@ -726,6 +730,66 @@ const KYCModal = ({ isOpen, onClose, user, onKYCComplete }) => {
         >
           ×
         </button>
+
+        <h2 style={{ 
+          fontSize: '1.75rem', 
+          fontWeight: 'bold', 
+          textAlign: 'center', 
+          marginBottom: '1rem',
+          color: '#1f2937'
+        }}>
+          🆔 Verifica KYC
+        </h2>
+
+        {kycData && renderKYCLevel()}
+        {renderProgressBar()}
+
+        {error && (
+          <div style={{
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '0.5rem',
+            padding: '0.75rem',
+            marginBottom: '1rem'
+          }}>
+            <p style={{ color: '#dc2626', fontSize: '0.875rem', margin: 0 }}>
+              ⚠️ {error}
+            </p>
+          </div>
+        )}
+
+        {success && (
+          <div style={{
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            borderRadius: '0.5rem',
+            padding: '0.75rem',
+            marginBottom: '1rem'
+          }}>
+            <p style={{ color: '#10b981', fontSize: '0.875rem', margin: 0 }}>
+              ✅ {success}
+            </p>
+          </div>
+        )}
+
+        {loading && (
+          <div style={{
+            textAlign: 'center',
+            padding: '1rem',
+            backgroundColor: '#f3f4f6',
+            borderRadius: '0.5rem',
+            marginBottom: '1rem'
+          }}>
+            <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>
+              🔄 Elaborazione in corso...
+            </p>
+          </div>
+        )}
+
+        {currentStep === 1 && renderStep1()}
+        {currentStep === 2 && renderStep2()}
+        {currentStep === 3 && renderStep3()}
+        {currentStep === 4 && renderStep4()}
       </div>
     </div>
   );

@@ -13,26 +13,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
-    sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          xrpl: ['xrpl'],
-          supabase: ['@supabase/supabase-js']
-        }
-      }
-    }
+    sourcemap: false
   },
-  base: '/',
-  server: {
-    port: 3000,
-    host: true
-  },
-  preview: {
-    port: 3000,
-    host: true
-  }
+  base: '/'
 })
 

@@ -110,6 +110,9 @@ importers:
       '@web3auth/openlogin-adapter':
         specifier: ^8.12.4
         version: 8.12.4(@babel/runtime@7.27.1)(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      '@web3auth/xrpl-provider':
+        specifier: ^9.7.0
+        version: 9.7.0(@babel/runtime@7.27.1)(bufferutil@4.0.9)(utf-8-validate@5.0.10)(xrpl@2.14.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -171,8 +174,8 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.1.5(@types/react@19.1.4))(@types/react@19.1.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       xrpl:
-        specifier: ^4.3.0
-        version: 4.3.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+        specifier: ^2.14.3
+        version: 2.14.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       xumm-oauth2-pkce:
         specifier: ^2.8.7
         version: 2.8.7
@@ -2203,12 +2206,15 @@ packages:
     peerDependencies:
       '@babel/runtime': 7.x
 
+  '@web3auth/xrpl-provider@9.7.0':
+    resolution: {integrity: sha512-LTPWTKT5/BNUsoYXFK3Y3dBfOv8Z97AJTP43g/0+yZsD5Z2hcLMmvWcmNzvEbqBxczQ47L9ip5ur9yycmFBoMA==}
+    peerDependencies:
+      '@babel/runtime': 7.x
+      xrpl: ^2.x.x
+
   '@xrplf/isomorphic@1.0.1':
     resolution: {integrity: sha512-0bIpgx8PDjYdrLFeC3csF305QQ1L7sxaWnL5y71mCvhenZzJgku9QsA+9QCXBC1eNYtxWO/xR91zrXJy2T/ixg==}
     engines: {node: '>=16.0.0'}
-
-  '@xrplf/secret-numbers@1.0.0':
-    resolution: {integrity: sha512-qsCLGyqe1zaq9j7PZJopK+iGTGRbk6akkg6iZXJJgxKwck0C5x5Gnwlb1HKYGOwPKyrXWpV6a2YmcpNpUFctGg==}
 
   abitype@1.0.8:
     resolution: {integrity: sha512-ZeiI6h3GnW06uYDLx0etQtX/p8E24UaHHBj57RSjK7YBFe7iuVn07EDpOeP451D06sF27VOz9JJPlIKJmXgkEg==}
@@ -3856,10 +3862,6 @@ packages:
     resolution: {integrity: sha512-g7+gs3T+NfoeW6vIq5dcN0CkIT4t/zwRzFxz8X2RzfbrWRnewPUKqQbmBgs05tXLX5NuWPaneiaAVpFpYBcdfw==}
     engines: {node: '>= 10'}
 
-  ripple-binary-codec@2.4.1:
-    resolution: {integrity: sha512-ABwQnWE1WBOvya9WIJ/KiogdsulOw5X8IrIZ3wW0Ec1hiWUNitNuI9LhN9XwHhNFuuvZyRAr+SzgFTBTCTfxFg==}
-    engines: {node: '>= 18'}
-
   ripple-keypairs@1.3.1:
     resolution: {integrity: sha512-dmPlraWKJciFJxHcoubDahGnoIalG5e/BtV6HNDUs7wLXmtnLMHt6w4ed9R8MTL2zNrVPiIdI/HCtMMo0Tm7JQ==}
     engines: {node: '>= 10'}
@@ -4407,10 +4409,6 @@ packages:
   xrpl@2.14.3:
     resolution: {integrity: sha512-XNiIVfHIXrhFeLKwVzDSw1Al9Ac2WZwFus42idzfjI/joooSqRfFyv59p7NOU6hrkjKjOisRIhHDkheQovZWaw==}
     engines: {node: '>=10.13.0'}
-
-  xrpl@4.3.0:
-    resolution: {integrity: sha512-MW/VyWyTGNmfmt5EaPexKb7ojcnobdzaqtm5UC9NErtlq7IgayqAZpMI26ptOzQolGndK7vOk8U0iOBpMSykJQ==}
-    engines: {node: '>=18.0.0'}
 
   xumm-js-pkce@1.0.2:
     resolution: {integrity: sha512-hcadf2mHYBd6vCaKtQhcLJJjoG+1XIIbh2mq+QthheoRHAf3k/gqQNDnVqJnANTK7NBKo7GJWnY2yCkYj/AQzQ==}
@@ -7138,19 +7136,26 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  '@web3auth/xrpl-provider@9.7.0(@babel/runtime@7.27.1)(bufferutil@4.0.9)(utf-8-validate@5.0.10)(xrpl@2.14.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))':
+    dependencies:
+      '@babel/runtime': 7.27.1
+      '@toruslabs/base-controllers': 7.4.0(@babel/runtime@7.27.1)(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      '@web3auth/auth': 9.6.4(@babel/runtime@7.27.1)(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      '@web3auth/base': 9.7.0(@babel/runtime@7.27.1)(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      '@web3auth/base-provider': 9.7.0(@babel/runtime@7.27.1)(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      ripple-keypairs: 1.3.1
+      xrpl: 2.14.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+    transitivePeerDependencies:
+      - '@sentry/types'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@xrplf/isomorphic@1.0.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
     dependencies:
       '@noble/hashes': 1.8.0
       eventemitter3: 5.0.1
       ws: 8.18.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
-  '@xrplf/secret-numbers@1.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
-    dependencies:
-      '@xrplf/isomorphic': 1.0.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      ripple-keypairs: 2.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -7926,7 +7931,7 @@ snapshots:
 
   extension-port-stream@3.0.0:
     dependencies:
-      readable-stream: 3.6.2
+      readable-stream: 4.7.0
       webextension-polyfill: 0.10.0
 
   eyes@0.1.8: {}
@@ -8825,15 +8830,6 @@ snapshots:
       decimal.js: 10.5.0
       ripple-address-codec: 4.3.1
 
-  ripple-binary-codec@2.4.1(bufferutil@4.0.9)(utf-8-validate@5.0.10):
-    dependencies:
-      '@xrplf/isomorphic': 1.0.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      bignumber.js: 9.3.0
-      ripple-address-codec: 5.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   ripple-keypairs@1.3.1:
     dependencies:
       bn.js: 5.2.2
@@ -9408,21 +9404,6 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - supports-color
-      - utf-8-validate
-
-  xrpl@4.3.0(bufferutil@4.0.9)(utf-8-validate@5.0.10):
-    dependencies:
-      '@scure/bip32': 1.7.0
-      '@scure/bip39': 1.6.0
-      '@xrplf/isomorphic': 1.0.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      '@xrplf/secret-numbers': 1.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      bignumber.js: 9.3.0
-      eventemitter3: 5.0.1
-      ripple-address-codec: 5.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      ripple-binary-codec: 2.4.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      ripple-keypairs: 2.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-    transitivePeerDependencies:
-      - bufferutil
       - utf-8-validate
 
   xumm-js-pkce@1.0.2:

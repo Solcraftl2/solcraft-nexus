@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { XRPLService, XRPLUtils } from '../services/xrplService';
+import { xrplService, XRPLUtils } from '../services/xrplService';
 import { CrossmarkService } from '../services/walletService';
 
 const TransactionModal = ({ isOpen, onClose, user, transactionType = 'payment' }) => {
@@ -35,13 +35,13 @@ const TransactionModal = ({ isOpen, onClose, user, transactionType = 'payment' }
       setLoading(true);
       
       // Carica info account
-      const accountResult = await XRPLService.getAccountInfo(user.wallet.address);
+      const accountResult = await xrplService.getAccountInfo(user.wallet.address);
       if (accountResult.success) {
         setAccountInfo(accountResult.data);
       }
       
       // Carica commissioni di rete
-      const feesResult = await XRPLService.getNetworkFees();
+      const feesResult = await xrplService.getNetworkFees();
       if (feesResult.success) {
         setNetworkFees(feesResult.data);
       }

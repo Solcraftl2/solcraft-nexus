@@ -510,7 +510,7 @@ class XRPLService {
 }
 
 // Istanza singleton del servizio
-export const XRPLService = new XRPLService();
+export const xrplService = new XRPLService();
 
 // Utility functions
 export const XRPLUtils = {
@@ -545,5 +545,5 @@ export const XRPLUtils = {
   }
 };
 
-export default XRPLService;
+export default xrplService;
 

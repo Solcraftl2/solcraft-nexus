@@ -1,441 +1,268 @@
-import React, { useState } from 'react';
-import { CrossmarkService, XummService, UserService } from '../services/walletService';
-import { AuthService } from '../services/authService';
+import React, { useState, useEffect } from 'react';
+import { walletService } from '../services/walletService';
+import { authService } from '../services/authService';
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedWallet, setSelectedWallet] = useState(null);
+  const [availableWallets, setAvailableWallets] = useState([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      checkAvailableWallets();
+    }
+  }, [isOpen]);
+
+  const checkAvailableWallets = async () => {
+    try {
+      const wallets = await walletService.getAvailableWallets();
+      setAvailableWallets(wallets);
+    } catch (err) {
+      console.error('Error checking wallets:', err);
+      setError('Errore nel rilevamento wallet');
+    }
+  };
+
+  const handleWalletConnect = async (walletType) => {
+    setIsLoading(true);
+    setError('');
+    setSelectedWallet(walletType);
+
+    try {
+      // Connessione wallet
+      const walletData = await walletService.connectWallet(walletType);
+      
+      if (walletData.success) {
+        // Autenticazione con il servizio
+        const authResult = await authService.authenticateWithWallet(walletData);
+        
+        if (authResult.success) {
+          onLoginSuccess(authResult.user);
+          onClose();
+        } else {
+          setError(authResult.error || 'Errore durante l\'autenticazione');
+        }
+      } else {
+        setError(walletData.error || 'Errore durante la connessione al wallet');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Errore durante il login. Riprova.');
+    } finally {
+      setIsLoading(false);
+      setSelectedWallet(null);
+    }
+  };
+
+  const handleSocialLogin = async (provider) => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const result = await authService.loginWithSocial(provider);
+      
+      if (result.success) {
+        onLoginSuccess(result.user);
+        onClose();
+      } else {
+        setError(result.error || 'Errore durante il login social');
+      }
+    } catch (err) {
+      console.error('Social login error:', err);
+      setError('Errore durante il login social. Riprova.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
-  // Login OAuth reali con provider sociali
-  const handleSocialLogin = async (provider, event) => {
-    event.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      let result;
-      
-      switch (provider) {
-        case 'Google':
-          result = await AuthService.signInWithGoogle();
-          break;
-        case 'GitHub':
-          result = await AuthService.signInWithGitHub();
-          break;
-        case 'Apple':
-          result = await AuthService.signInWithApple();
-          break;
-        case 'Discord':
-          result = await AuthService.signInWithDiscord();
-          break;
-        case 'Twitter':
-          result = await AuthService.signInWithTwitter();
-          break;
-        default:
-          throw new Error(`Provider ${provider} non supportato`);
-      }
-
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-
-      // Il redirect OAuth gestirà il login automaticamente
-      // Non chiudiamo il modal qui perché l'utente verrà reindirizzato
-      
-    } catch (error) {
-      console.error(`Errore login ${provider}:`, error);
-      setError(`Errore durante il login con ${provider}: ${error.message}`);
-      setLoading(false);
-    }
-  };
-
-  const handleCrossmarkConnect = async (event) => {
-    event.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      // Verifica se Crossmark è installato
-      const isInstalled = await CrossmarkService.isInstalled();
-      
-      if (!isInstalled) {
-        setError('Crossmark wallet non installato. Scarica da https://crossmark.io');
-        setLoading(false);
-        return;
-      }
-
-      // Connessione reale a Crossmark
-      const walletData = await CrossmarkService.connect();
-      
-      // Crea o aggiorna utente nel database
-      const user = await UserService.createOrUpdateUser(walletData);
-      
-      onLoginSuccess({
-        ...user,
-        wallet: walletData,
-        loginType: 'crossmark'
-      });
-      
-      onClose();
-    } catch (error) {
-      console.error('Errore connessione Crossmark:', error);
-      setError(`Errore Crossmark: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleXummConnect = async (event) => {
-    event.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      // Connessione reale a XUMM
-      const walletData = await XummService.connect();
-      
-      // Crea o aggiorna utente nel database
-      const user = await UserService.createOrUpdateUser(walletData);
-      
-      onLoginSuccess({
-        ...user,
-        wallet: walletData,
-        loginType: 'xumm'
-      });
-      
-      onClose();
-    } catch (error) {
-      console.error('Errore connessione XUMM:', error);
-      setError(`Errore XUMM: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTrustWalletConnect = async (event) => {
-    event.preventDefault();
-    setError('Trust Wallet non supporta XRPL via browser. Usa Crossmark o XUMM per connessioni XRPL.');
-  };
-
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '1rem',
-        padding: '2rem',
-        maxWidth: '400px',
-        width: '90%',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-        position: 'relative'
-      }}>
-        <h2 style={{ 
-          fontSize: '1.5rem', 
-          fontWeight: 'bold', 
-          textAlign: 'center', 
-          marginBottom: '0.5rem' 
-        }}>
-          Accedi a SolCraft Nexus
-        </h2>
-        
-        <p style={{ 
-          textAlign: 'center', 
-          color: '#6b7280', 
-          marginBottom: '1.5rem',
-          fontSize: '0.875rem'
-        }}>
-          Connetti il tuo wallet XRPL per iniziare
-        </p>
-
-        <div style={{ 
-          textAlign: 'center', 
-          marginBottom: '1.5rem',
-          padding: '0.75rem',
-          backgroundColor: '#ecfdf5',
-          borderRadius: '0.5rem',
-          border: '1px solid #10b981'
-        }}>
-          <p style={{ 
-            color: '#10b981', 
-            fontSize: '0.875rem',
-            fontWeight: '600'
-          }}>
-            🔗 Connessioni REALI attive - Nessuna simulazione
-          </p>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Accedi a SolCraft Nexus</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 text-xl"
+            disabled={isLoading}
+          >
+            ×
+          </button>
         </div>
 
+        {/* Error Message */}
         {error && (
-          <div style={{
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '0.5rem',
-            padding: '0.75rem',
-            marginBottom: '1rem'
-          }}>
-            <p style={{ color: '#dc2626', fontSize: '0.875rem' }}>
-              ⚠️ {error}
-            </p>
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
           </div>
         )}
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ 
-            fontSize: '1rem', 
-            fontWeight: '600', 
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
-            🚀 Wallet XRPL (Raccomandato)
-          </h3>
+        {/* Wallet Connection Section */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-4 text-gray-700">Connetti il tuo Wallet</h3>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <button
-              onClick={handleCrossmarkConnect}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              🚀 Crossmark (Connessione Reale)
-            </button>
+          <div className="space-y-3">
+            {/* Crossmark Wallet */}
+            {availableWallets.includes('crossmark') && (
+              <button
+                onClick={() => handleWalletConnect('crossmark')}
+                disabled={isLoading}
+                className={`w-full flex items-center justify-center p-3 border-2 rounded-lg transition-all ${
+                  selectedWallet === 'crossmark'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mr-3 flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">C</span>
+                  </div>
+                  <span className="font-medium">Crossmark Wallet</span>
+                  {selectedWallet === 'crossmark' && isLoading && (
+                    <div className="ml-2 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
+              </button>
+            )}
 
-            <button
-              onClick={handleXummConnect}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              💎 XUMM (Connessione Reale)
-            </button>
+            {/* XUMM Wallet */}
+            {availableWallets.includes('xumm') && (
+              <button
+                onClick={() => handleWalletConnect('xumm')}
+                disabled={isLoading}
+                className={`w-full flex items-center justify-center p-3 border-2 rounded-lg transition-all ${
+                  selectedWallet === 'xumm'
+                    ? 'border-orange-500 bg-orange-50'
+                    : 'border-gray-300 hover:border-orange-400 hover:bg-gray-50'
+                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-600 rounded-full mr-3 flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">X</span>
+                  </div>
+                  <span className="font-medium">XUMM Wallet</span>
+                  {selectedWallet === 'xumm' && isLoading && (
+                    <div className="ml-2 w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
+              </button>
+            )}
 
-            <button
-              onClick={handleTrustWalletConnect}
-              disabled={true}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#9ca3af',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: 'not-allowed',
-                opacity: 0.7,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              ⚠️ Trust Wallet (Non Supportato)
-            </button>
+            {/* Trust Wallet */}
+            {availableWallets.includes('trust') && (
+              <button
+                onClick={() => handleWalletConnect('trust')}
+                disabled={isLoading}
+                className={`w-full flex items-center justify-center p-3 border-2 rounded-lg transition-all ${
+                  selectedWallet === 'trust'
+                    ? 'border-blue-600 bg-blue-50'
+                    : 'border-gray-300 hover:border-blue-500 hover:bg-gray-50'
+                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full mr-3 flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">T</span>
+                  </div>
+                  <span className="font-medium">Trust Wallet</span>
+                  {selectedWallet === 'trust' && isLoading && (
+                    <div className="ml-2 w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
+              </button>
+            )}
           </div>
+
+          {/* No Wallets Available */}
+          {availableWallets.length === 0 && !isLoading && (
+            <div className="text-center py-4">
+              <p className="text-gray-600 mb-3">Nessun wallet compatibile rilevato</p>
+              <div className="text-sm text-gray-500">
+                <p>Installa uno dei seguenti wallet:</p>
+                <div className="mt-2 space-y-1">
+                  <a href="https://crossmark.io" target="_blank" rel="noopener noreferrer" 
+                     className="block text-blue-600 hover:underline">• Crossmark Wallet</a>
+                  <a href="https://xumm.app" target="_blank" rel="noopener noreferrer"
+                     className="block text-blue-600 hover:underline">• XUMM Wallet</a>
+                  <a href="https://trustwallet.com" target="_blank" rel="noopener noreferrer"
+                     className="block text-blue-600 hover:underline">• Trust Wallet</a>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div style={{ 
-          borderTop: '1px solid #e5e7eb', 
-          paddingTop: '1.5rem',
-          marginTop: '1.5rem'
-        }}>
-          <h3 style={{ 
-            fontSize: '1rem', 
-            fontWeight: '600', 
-            marginBottom: '1rem',
-            textAlign: 'center',
-            color: '#6b7280'
-          }}>
-            Oppure accedi con account social (OAuth Reale)
-          </h3>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <button
-              onClick={(e) => handleSocialLogin('Google', e)}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#dc2626',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              🔍 Google (OAuth Reale)
-            </button>
-
-            <button
-              onClick={(e) => handleSocialLogin('Apple', e)}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#000000',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              🍎 Apple (OAuth Reale)
-            </button>
-
-            <button
-              onClick={(e) => handleSocialLogin('GitHub', e)}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#1f2937',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              🐙 GitHub (OAuth Reale)
-            </button>
-
-            <button
-              onClick={(e) => handleSocialLogin('Twitter', e)}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#1da1f2',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              🐦 Twitter (OAuth Reale)
-            </button>
-
-            <button
-              onClick={(e) => handleSocialLogin('Discord', e)}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#5865f2',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              💬 Discord (OAuth Reale)
-            </button>
-          </div>
+        {/* Divider */}
+        <div className="flex items-center my-6">
+          <div className="flex-1 border-t border-gray-300"></div>
+          <span className="px-4 text-gray-500 text-sm">oppure</span>
+          <div className="flex-1 border-t border-gray-300"></div>
         </div>
 
-        {loading && (
-          <div style={{
-            textAlign: 'center',
-            marginTop: '1rem',
-            padding: '0.75rem',
-            backgroundColor: '#f3f4f6',
-            borderRadius: '0.5rem'
-          }}>
-            <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-              🔄 Connessione in corso...
-            </p>
-          </div>
-        )}
+        {/* Social Login Section */}
+        <div className="space-y-3">
+          <h3 className="text-lg font-semibold mb-4 text-gray-700">Login Social (Web3Auth)</h3>
+          
+          {/* Google Login */}
+          <button
+            onClick={() => handleSocialLogin('google')}
+            disabled={isLoading}
+            className={`w-full flex items-center justify-center p-3 border-2 border-gray-300 rounded-lg hover:border-red-400 hover:bg-gray-50 transition-all ${
+              isLoading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-gradient-to-r from-red-500 to-yellow-500 rounded-full mr-3 flex items-center justify-center">
+                <span className="text-white font-bold text-sm">G</span>
+              </div>
+              <span className="font-medium">Continua con Google</span>
+            </div>
+          </button>
 
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: '#6b7280'
-          }}
-        >
-          ×
-        </button>
+          {/* GitHub Login */}
+          <button
+            onClick={() => handleSocialLogin('github')}
+            disabled={isLoading}
+            className={`w-full flex items-center justify-center p-3 border-2 border-gray-300 rounded-lg hover:border-gray-600 hover:bg-gray-50 transition-all ${
+              isLoading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-gray-800 rounded-full mr-3 flex items-center justify-center">
+                <span className="text-white font-bold text-sm">G</span>
+              </div>
+              <span className="font-medium">Continua con GitHub</span>
+            </div>
+          </button>
+
+          {/* Discord Login */}
+          <button
+            onClick={() => handleSocialLogin('discord')}
+            disabled={isLoading}
+            className={`w-full flex items-center justify-center p-3 border-2 border-gray-300 rounded-lg hover:border-purple-400 hover:bg-gray-50 transition-all ${
+              isLoading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-purple-600 rounded-full mr-3 flex items-center justify-center">
+                <span className="text-white font-bold text-sm">D</span>
+              </div>
+              <span className="font-medium">Continua con Discord</span>
+            </div>
+          </button>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-6 text-center text-sm text-gray-500">
+          <p>Accedendo accetti i nostri</p>
+          <div className="mt-1">
+            <a href="#" className="text-blue-600 hover:underline">Termini di Servizio</a>
+            {' e '}
+            <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,421 +1,495 @@
-// Wallet Service - Gestione connessioni wallet XRPL
-import { supabase } from './supabaseService';
+import React from 'react';
 
 /**
- * Crossmark Wallet Service
- * Gestisce la connessione e le operazioni con Crossmark wallet
+ * Wallet Service - Gestione connessioni wallet Web3/XRPL
+ * Supporta: Crossmark, XUMM, Trust Wallet
  */
-export class CrossmarkService {
-  /**
-   * Verifica se Crossmark è installato
-   * @returns {Promise<boolean>}
-   */
-  static async isInstalled() {
-    return typeof window !== 'undefined' && !!window.crossmark;
+class WalletService {
+  constructor() {
+    this.connectedWallet = null;
+    this.walletData = null;
+    this.listeners = new Set();
   }
 
   /**
-   * Connette il wallet Crossmark
-   * @returns {Promise<Object>} Dati del wallet connesso
+   * Rileva wallet disponibili nel browser
+   * @returns {Promise<string[]>} Array di wallet disponibili
    */
-  static async connect() {
-    if (!await this.isInstalled()) {
-      throw new Error('Crossmark wallet non installato. Scarica da https://crossmark.io');
-    }
+  async getAvailableWallets() {
+    const available = [];
 
     try {
-      // Richiedi connessione con popup
-      const signInResponse = await window.crossmark.signInAndWait();
-      
-      if (!signInResponse?.response?.data?.address) {
-        throw new Error('Connessione Crossmark fallita o cancellata dall\'utente');
+      // Crossmark Wallet Detection
+      if (window.crossmark) {
+        available.push('crossmark');
       }
 
-      const { address } = signInResponse.response.data;
-      
-      // Verifica che l'address sia valido
-      if (!address.startsWith('r') || address.length < 25) {
-        throw new Error('Address XRPL non valido ricevuto da Crossmark');
+      // XUMM Wallet Detection (via browser extension o mobile)
+      if (window.xumm || this.isXUMMAvailable()) {
+        available.push('xumm');
       }
 
-      // Ottieni informazioni aggiuntive
-      const sessionInfo = await window.crossmark.getUserSession();
-      
-      return {
-        address,
-        provider: 'Crossmark',
-        network: sessionInfo?.network || 'mainnet',
-        session: sessionInfo,
-        isReal: true
-      };
+      // Trust Wallet Detection
+      if (window.trustwallet || (window.ethereum && window.ethereum.isTrust)) {
+        available.push('trust');
+      }
+
+      // MetaMask Detection (fallback per testing)
+      if (window.ethereum && window.ethereum.isMetaMask) {
+        available.push('metamask');
+      }
+
+      console.log('Available wallets:', available);
+      return available;
     } catch (error) {
-      console.error('Errore Crossmark:', error);
-      throw error;
+      console.error('Error detecting wallets:', error);
+      return [];
     }
   }
 
   /**
-   * Firma una transazione con Crossmark
-   * @param {Object} transaction - Transazione da firmare
-   * @returns {Promise<Object>} Transazione firmata
+   * Connette al wallet specificato
+   * @param {string} walletType - Tipo di wallet (crossmark, xumm, trust)
+   * @returns {Promise<Object>} Risultato connessione
    */
-  static async signTransaction(transaction) {
-    if (!await this.isInstalled()) {
-      throw new Error('Crossmark wallet non installato');
-    }
-
+  async connectWallet(walletType) {
     try {
-      const response = await window.crossmark.signAndSubmitAndWait(transaction);
-      
-      if (!response?.response?.data?.hash) {
-        throw new Error('Firma transazione fallita');
+      console.log(`Connecting to ${walletType} wallet...`);
+
+      switch (walletType) {
+        case 'crossmark':
+          return await this.connectCrossmark();
+        case 'xumm':
+          return await this.connectXUMM();
+        case 'trust':
+          return await this.connectTrustWallet();
+        case 'metamask':
+          return await this.connectMetaMask();
+        default:
+          throw new Error(`Wallet type ${walletType} not supported`);
       }
-
-      return {
-        success: true,
-        hash: response.response.data.hash,
-        data: response.response.data
-      };
     } catch (error) {
-      console.error('Errore firma transazione:', error);
-      throw error;
+      console.error(`Error connecting to ${walletType}:`, error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante la connessione al wallet'
+      };
     }
   }
 
   /**
-   * Ottiene il bilancio del wallet
-   * @param {string} address - Indirizzo del wallet
-   * @returns {Promise<number>} Bilancio in XRP
+   * Connessione Crossmark Wallet
    */
-  static async getBalance(address) {
+  async connectCrossmark() {
+    if (!window.crossmark) {
+      return {
+        success: false,
+        error: 'Crossmark wallet non installato'
+      };
+    }
+
     try {
-      const response = await fetch(`https://s1.ripple.com:51234/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          method: 'account_info',
-          params: [{
-            account: address,
-            ledger_index: 'validated'
-          }]
-        })
+      // Richiesta connessione
+      const response = await window.crossmark.request({
+        method: 'xrpl_requestAccounts'
       });
 
-      const data = await response.json();
-      
-      if (data.result?.account_data?.Balance) {
-        // Converti da drops a XRP
-        const balance = parseInt(data.result.account_data.Balance) / 1000000;
-        return { success: true, balance };
-      }
-
-      throw new Error('Impossibile ottenere il bilancio');
-    } catch (error) {
-      console.error('Errore recupero bilancio:', error);
-      return { success: false, error: error.message };
-    }
-  }
-}
-
-/**
- * XUMM Wallet Service
- * Gestisce la connessione e le operazioni con XUMM wallet
- */
-export class XummService {
-  /**
-   * Verifica se XUMM è disponibile
-   * @returns {boolean}
-   */
-  static isAvailable() {
-    return true; // XUMM funziona via OAuth, sempre disponibile
-  }
-
-  /**
-   * Connette il wallet XUMM via OAuth
-   * @returns {Promise<Object>} Dati del wallet connesso
-   */
-  static async connect() {
-    try {
-      // Genera URL di autorizzazione XUMM
-      const authUrl = this.generateAuthUrl();
-      
-      // Apri popup per autorizzazione
-      const popup = window.open(
-        authUrl,
-        'xumm-auth',
-        'width=400,height=600,scrollbars=yes,resizable=yes'
-      );
-
-      return new Promise((resolve, reject) => {
-        const checkClosed = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(checkClosed);
-            reject(new Error('Autorizzazione XUMM cancellata dall\'utente'));
-          }
-        }, 1000);
-
-        // Ascolta il messaggio dal popup
-        const messageHandler = async (event) => {
-          if (event.origin !== window.location.origin) return;
-          
-          if (event.data.type === 'XUMM_AUTH_SUCCESS') {
-            clearInterval(checkClosed);
-            popup.close();
-            window.removeEventListener('message', messageHandler);
-            
-            try {
-              const walletData = await this.exchangeCodeForToken(event.data.code);
-              resolve(walletData);
-            } catch (error) {
-              reject(error);
-            }
-          }
+      if (response && response.response && response.response.account) {
+        const account = response.response.account;
+        
+        this.connectedWallet = 'crossmark';
+        this.walletData = {
+          address: account.address,
+          publicKey: account.publicKey,
+          network: account.network || 'mainnet'
         };
 
-        window.addEventListener('message', messageHandler);
-      });
-    } catch (error) {
-      console.error('Errore XUMM:', error);
-      throw error;
-    }
-  }
+        this.notifyListeners('connected', this.walletData);
 
-  /**
-   * Genera URL di autorizzazione XUMM
-   * @returns {string} URL di autorizzazione
-   */
-  static generateAuthUrl() {
-    const clientId = 'your-xumm-client-id'; // Da configurare
-    const redirectUri = `${window.location.origin}/auth/callback`;
-    const state = Math.random().toString(36).substring(7);
-    
-    return `https://oauth2.xumm.app/auth?` +
-      `client_id=${clientId}&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `response_type=code&` +
-      `state=${state}&` +
-      `scope=openid`;
-  }
-
-  /**
-   * Scambia il codice di autorizzazione per un token
-   * @param {string} code - Codice di autorizzazione
-   * @returns {Promise<Object>} Dati del wallet
-   */
-  static async exchangeCodeForToken(code) {
-    // Implementazione OAuth2 PKCE per XUMM
-    // In produzione, questo dovrebbe essere gestito dal backend
-    return {
-      address: 'rXUMMDemoAddress123456789',
-      provider: 'XUMM',
-      network: 'mainnet',
-      isReal: true
-    };
-  }
-}
-
-/**
- * User Service
- * Gestisce la creazione e aggiornamento degli utenti
- */
-export class UserService {
-  /**
-   * Crea o aggiorna un utente nel database
-   * @param {Object} walletData - Dati del wallet
-   * @returns {Promise<Object>} Dati dell'utente
-   */
-  static async createOrUpdateUser(walletData) {
-    try {
-      const userData = {
-        wallet_address: walletData.address,
-        wallet_provider: walletData.provider,
-        wallet_network: walletData.network,
-        is_real_wallet: walletData.isReal || false,
-        last_login: new Date().toISOString(),
-        name: `User ${walletData.address.substring(0, 8)}`,
-        email: null,
-        avatar_url: null
-      };
-
-      // Cerca utente esistente
-      const { data: existingUser, error: searchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('wallet_address', walletData.address)
-        .single();
-
-      if (searchError && searchError.code !== 'PGRST116') {
-        throw searchError;
-      }
-
-      let user;
-      if (existingUser) {
-        // Aggiorna utente esistente
-        const { data, error } = await supabase
-          .from('users')
-          .update({
-            ...userData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingUser.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        user = data;
+        return {
+          success: true,
+          wallet: 'crossmark',
+          address: account.address,
+          publicKey: account.publicKey,
+          network: account.network || 'mainnet'
+        };
       } else {
-        // Crea nuovo utente
-        const { data, error } = await supabase
-          .from('users')
-          .insert(userData)
-          .select()
-          .single();
+        return {
+          success: false,
+          error: 'Connessione rifiutata dall\'utente'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || 'Errore durante la connessione a Crossmark'
+      };
+    }
+  }
 
-        if (error) throw error;
-        user = data;
+  /**
+   * Connessione XUMM Wallet
+   */
+  async connectXUMM() {
+    try {
+      // XUMM può essere disponibile come extension o via deep linking
+      if (window.xumm) {
+        // Extension XUMM
+        const response = await window.xumm.request({
+          method: 'xrpl_requestAccounts'
+        });
+
+        if (response && response.account) {
+          this.connectedWallet = 'xumm';
+          this.walletData = {
+            address: response.account.address,
+            publicKey: response.account.publicKey,
+            network: response.account.network || 'mainnet'
+          };
+
+          this.notifyListeners('connected', this.walletData);
+
+          return {
+            success: true,
+            wallet: 'xumm',
+            address: response.account.address,
+            publicKey: response.account.publicKey,
+            network: response.account.network || 'mainnet'
+          };
+        }
+      } else {
+        // Deep linking per mobile XUMM
+        return await this.connectXUMMDeepLink();
       }
 
       return {
-        userId: user.id,
-        name: user.name,
-        email: user.email,
-        wallet: {
-          address: user.wallet_address,
-          provider: user.wallet_provider,
-          network: user.wallet_network
-        },
-        provider: user.wallet_provider,
-        isSimulated: !user.is_real_wallet,
-        createdAt: user.created_at,
-        updatedAt: user.updated_at
+        success: false,
+        error: 'XUMM wallet non disponibile'
       };
     } catch (error) {
-      console.error('Errore creazione/aggiornamento utente:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante la connessione a XUMM'
+      };
+    }
+  }
+
+  /**
+   * Connessione XUMM via deep linking
+   */
+  async connectXUMMDeepLink() {
+    try {
+      // Implementazione semplificata per deep linking XUMM
+      // In produzione, utilizzare XUMM SDK per payload creation
+      
+      const payload = {
+        txjson: {
+          TransactionType: 'SignIn'
+        },
+        options: {
+          submit: false,
+          expire: 5 // 5 minuti
+        }
+      };
+
+      // Simulazione risposta XUMM (in produzione usare XUMM API)
+      console.log('XUMM deep link payload:', payload);
+      
+      // Per ora ritorniamo un mock per testing
+      return {
+        success: false,
+        error: 'XUMM deep linking non ancora implementato. Usa Crossmark per ora.'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || 'Errore XUMM deep linking'
+      };
+    }
+  }
+
+  /**
+   * Connessione Trust Wallet
+   */
+  async connectTrustWallet() {
+    if (!window.trustwallet && !(window.ethereum && window.ethereum.isTrust)) {
+      return {
+        success: false,
+        error: 'Trust Wallet non installato'
+      };
+    }
+
+    try {
+      const provider = window.trustwallet || window.ethereum;
+      
+      // Richiesta connessione
+      const accounts = await provider.request({
+        method: 'eth_requestAccounts'
+      });
+
+      if (accounts && accounts.length > 0) {
+        this.connectedWallet = 'trust';
+        this.walletData = {
+          address: accounts[0],
+          network: 'ethereum' // Trust Wallet principalmente per Ethereum
+        };
+
+        this.notifyListeners('connected', this.walletData);
+
+        return {
+          success: true,
+          wallet: 'trust',
+          address: accounts[0],
+          network: 'ethereum'
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Nessun account disponibile'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || 'Errore durante la connessione a Trust Wallet'
+      };
+    }
+  }
+
+  /**
+   * Connessione MetaMask (fallback per testing)
+   */
+  async connectMetaMask() {
+    if (!window.ethereum || !window.ethereum.isMetaMask) {
+      return {
+        success: false,
+        error: 'MetaMask non installato'
+      };
+    }
+
+    try {
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+
+      if (accounts && accounts.length > 0) {
+        this.connectedWallet = 'metamask';
+        this.walletData = {
+          address: accounts[0],
+          network: 'ethereum'
+        };
+
+        this.notifyListeners('connected', this.walletData);
+
+        return {
+          success: true,
+          wallet: 'metamask',
+          address: accounts[0],
+          network: 'ethereum'
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Nessun account disponibile'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || 'Errore durante la connessione a MetaMask'
+      };
+    }
+  }
+
+  /**
+   * Disconnette il wallet corrente
+   */
+  async disconnectWallet() {
+    try {
+      if (this.connectedWallet) {
+        this.notifyListeners('disconnected', null);
+        this.connectedWallet = null;
+        this.walletData = null;
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error disconnecting wallet:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante la disconnessione'
+      };
+    }
+  }
+
+  /**
+   * Ottiene informazioni wallet connesso
+   */
+  getConnectedWallet() {
+    return {
+      wallet: this.connectedWallet,
+      data: this.walletData,
+      isConnected: !!this.connectedWallet
+    };
+  }
+
+  /**
+   * Verifica se XUMM è disponibile
+   */
+  isXUMMAvailable() {
+    // Verifica se siamo su mobile e XUMM può essere disponibile
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return isMobile; // Su mobile XUMM può essere disponibile via deep linking
+  }
+
+  /**
+   * Aggiunge listener per eventi wallet
+   */
+  addListener(callback) {
+    this.listeners.add(callback);
+  }
+
+  /**
+   * Rimuove listener
+   */
+  removeListener(callback) {
+    this.listeners.delete(callback);
+  }
+
+  /**
+   * Notifica tutti i listener
+   */
+  notifyListeners(event, data) {
+    this.listeners.forEach(callback => {
+      try {
+        callback(event, data);
+      } catch (error) {
+        console.error('Error in wallet listener:', error);
+      }
+    });
+  }
+
+  /**
+   * Firma messaggio con wallet connesso
+   */
+  async signMessage(message) {
+    if (!this.connectedWallet || !this.walletData) {
+      throw new Error('Nessun wallet connesso');
+    }
+
+    try {
+      switch (this.connectedWallet) {
+        case 'crossmark':
+          return await this.signWithCrossmark(message);
+        case 'xumm':
+          return await this.signWithXUMM(message);
+        case 'trust':
+        case 'metamask':
+          return await this.signWithEthereum(message);
+        default:
+          throw new Error(`Firma non supportata per ${this.connectedWallet}`);
+      }
+    } catch (error) {
+      console.error('Error signing message:', error);
       throw error;
     }
   }
 
   /**
-   * Ottiene un utente dal database
-   * @param {string} walletAddress - Indirizzo del wallet
-   * @returns {Promise<Object|null>} Dati dell'utente o null
+   * Firma con Crossmark
    */
-  static async getUserByWallet(walletAddress) {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null; // Utente non trovato
-        }
-        throw error;
+  async signWithCrossmark(message) {
+    const response = await window.crossmark.request({
+      method: 'xrpl_signMessage',
+      params: {
+        message: message
       }
+    });
 
-      return {
-        userId: data.id,
-        name: data.name,
-        email: data.email,
-        wallet: {
-          address: data.wallet_address,
-          provider: data.wallet_provider,
-          network: data.wallet_network
-        },
-        provider: data.wallet_provider,
-        isSimulated: !data.is_real_wallet,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at
-      };
-    } catch (error) {
-      console.error('Errore recupero utente:', error);
-      throw error;
-    }
+    return response.response;
+  }
+
+  /**
+   * Firma con XUMM
+   */
+  async signWithXUMM(message) {
+    // Implementazione firma XUMM
+    throw new Error('Firma XUMM non ancora implementata');
+  }
+
+  /**
+   * Firma con provider Ethereum (Trust Wallet, MetaMask)
+   */
+  async signWithEthereum(message) {
+    const provider = window.trustwallet || window.ethereum;
+    
+    const signature = await provider.request({
+      method: 'personal_sign',
+      params: [message, this.walletData.address]
+    });
+
+    return signature;
   }
 }
 
-/**
- * Wallet Utils
- * Funzioni di utilità per i wallet
- */
-export const WalletUtils = {
-  /**
-   * Valida un indirizzo XRPL
-   * @param {string} address - Indirizzo da validare
-   * @returns {boolean} True se valido
-   */
-  isValidXRPLAddress(address) {
-    if (!address || typeof address !== 'string') {
-      return false;
-    }
+// Istanza singleton
+const walletService = new WalletService();
 
-    // Controllo formato base XRPL
-    if (!address.startsWith('r') || address.length < 25 || address.length > 34) {
-      return false;
-    }
+// Hook React per uso nei componenti
+export const useWallet = () => {
+  const [walletState, setWalletState] = React.useState({
+    isConnected: false,
+    wallet: null,
+    address: null,
+    data: null
+  });
 
-    // Controllo caratteri validi (base58)
-    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
-    return base58Regex.test(address);
-  },
-
-  /**
-   * Formatta un indirizzo per la visualizzazione
-   * @param {string} address - Indirizzo completo
-   * @param {number} startChars - Caratteri iniziali da mostrare
-   * @param {number} endChars - Caratteri finali da mostrare
-   * @returns {string} Indirizzo formattato
-   */
-  formatAddress(address, startChars = 6, endChars = 4) {
-    if (!address || address.length <= startChars + endChars) {
-      return address;
-    }
-
-    return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
-  },
-
-  /**
-   * Ottiene il nome del provider del wallet
-   * @param {string} provider - Codice del provider
-   * @returns {string} Nome leggibile del provider
-   */
-  getProviderName(provider) {
-    const providers = {
-      'Crossmark': 'Crossmark',
-      'XUMM': 'XUMM',
-      'TrustWallet': 'Trust Wallet',
-      'Demo': 'Demo'
+  React.useEffect(() => {
+    const handleWalletEvent = (event, data) => {
+      if (event === 'connected') {
+        setWalletState({
+          isConnected: true,
+          wallet: walletService.connectedWallet,
+          address: data.address,
+          data: data
+        });
+      } else if (event === 'disconnected') {
+        setWalletState({
+          isConnected: false,
+          wallet: null,
+          address: null,
+          data: null
+        });
+      }
     };
 
-    return providers[provider] || provider;
-  },
+    walletService.addListener(handleWalletEvent);
 
-  /**
-   * Ottiene l'icona del provider del wallet
-   * @param {string} provider - Codice del provider
-   * @returns {string} Emoji o icona del provider
-   */
-  getProviderIcon(provider) {
-    const icons = {
-      'Crossmark': '🔷',
-      'XUMM': '🟡',
-      'TrustWallet': '🔵',
-      'Demo': '🎭'
+    // Verifica stato iniziale
+    const currentWallet = walletService.getConnectedWallet();
+    if (currentWallet.isConnected) {
+      setWalletState({
+        isConnected: true,
+        wallet: currentWallet.wallet,
+        address: currentWallet.data?.address,
+        data: currentWallet.data
+      });
+    }
+
+    return () => {
+      walletService.removeListener(handleWalletEvent);
     };
+  }, []);
 
-    return icons[provider] || '💼';
-  }
+  return {
+    ...walletState,
+    connectWallet: walletService.connectWallet.bind(walletService),
+    disconnectWallet: walletService.disconnectWallet.bind(walletService),
+    getAvailableWallets: walletService.getAvailableWallets.bind(walletService),
+    signMessage: walletService.signMessage.bind(walletService)
+  };
 };
 
-// Export default per compatibilità
-export default {
-  CrossmarkService,
-  XummService,
-  UserService,
-  WalletUtils
-};
+export { walletService };
+export default walletService;
 

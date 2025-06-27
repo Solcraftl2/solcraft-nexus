@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
+  getUserPortfolio, 
+  getUserTransactions, 
+  getUserNotifications,
+  markNotificationAsRead as markNotificationRead
+} from '../services/supabaseService';
+import { CrossmarkService } from '../services/walletService';
+
+// Fallback ai dati simulati se non ci sono dati reali
+import { 
   sampleUserProfile, 
   samplePortfolio, 
   sampleTransactions, 
@@ -10,27 +19,106 @@ import {
 } from '../data/sampleData';
 
 const Dashboard = ({ user, onNavigate }) => {
-  const [notifications, setNotifications] = useState(sampleNotifications);
+  const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [portfolioData, setPortfolioData] = useState(samplePortfolio);
+  const [portfolioData, setPortfolioData] = useState([]);
+  const [transactionsData, setTransactionsData] = useState([]);
   const [performanceData] = useState(samplePerformanceData);
   const [assetAllocation] = useState(sampleAssetAllocation);
   const [marketTrends] = useState(sampleMarketTrends);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [walletBalance, setWalletBalance] = useState(null);
+
+  // Carica dati reali all'avvio
+  useEffect(() => {
+    if (user && !user.isSimulated) {
+      loadRealData();
+    } else {
+      // Usa dati simulati per utenti demo
+      setNotifications(sampleNotifications);
+      setPortfolioData(samplePortfolio);
+      setTransactionsData(sampleTransactions);
+      setLoading(false);
+    }
+  }, [user]);
+
+  const loadRealData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Carica dati dal database se l'utente ha un ID
+      if (user.userId) {
+        // Carica portfolio reale
+        const portfolio = await getUserPortfolio(user.userId);
+        setPortfolioData(portfolio || []);
+
+        // Carica transazioni reali
+        const transactions = await getUserTransactions(user.userId, 10);
+        setTransactionsData(transactions || []);
+
+        // Carica notifiche reali
+        const notifications = await getUserNotifications(user.userId);
+        setNotifications(notifications || []);
+      }
+
+      // Carica balance del wallet se connesso a Crossmark
+      if (user.wallet && user.provider === 'Crossmark') {
+        await loadWalletBalance();
+      }
+
+    } catch (error) {
+      console.error('Errore caricamento dati:', error);
+      setError('Errore nel caricamento dei dati. Usando dati di esempio.');
+      
+      // Fallback ai dati simulati in caso di errore
+      setNotifications(sampleNotifications);
+      setPortfolioData(samplePortfolio);
+      setTransactionsData(sampleTransactions);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadWalletBalance = async () => {
+    try {
+      if (user.provider === 'Crossmark' && user.wallet?.address) {
+        const accountInfo = await CrossmarkService.getAccountInfo(user.wallet.address);
+        if (accountInfo?.account_data?.Balance) {
+          // Converti da drops a XRP
+          const balanceXRP = parseInt(accountInfo.account_data.Balance) / 1000000;
+          setWalletBalance(balanceXRP);
+        }
+      }
+    } catch (error) {
+      console.error('Errore caricamento balance wallet:', error);
+      // Non bloccare l'interfaccia per errori di balance
+    }
+  };
 
   // Calculate portfolio metrics
-  const totalValue = portfolioData.reduce((sum, item) => sum + item.current_value, 0);
-  const totalInvested = portfolioData.reduce((sum, item) => sum + item.total_invested, 0);
+  const totalValue = portfolioData.reduce((sum, item) => sum + (item.current_value || 0), 0);
+  const totalInvested = portfolioData.reduce((sum, item) => sum + (item.total_invested || 0), 0);
   const totalGain = totalValue - totalInvested;
-  const totalGainPercentage = ((totalGain / totalInvested) * 100).toFixed(1);
+  const totalGainPercentage = totalInvested > 0 ? ((totalGain / totalInvested) * 100).toFixed(1) : '0.0';
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
-  const markNotificationAsRead = (id) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
+  const markNotificationAsRead = async (id) => {
+    try {
+      if (!user.isSimulated) {
+        await markNotificationRead(id);
+      }
+      
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === id ? { ...notif, read: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error('Errore marcatura notifica:', error);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -50,496 +138,373 @@ const Dashboard = ({ user, onNavigate }) => {
     });
   };
 
-  return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '2rem 1rem'
-    }}>
-      {/* Header */}
-      <div style={{
-        background: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: '20px',
-        padding: '1.5rem 2rem',
-        marginBottom: '2rem',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '400px',
+        flexDirection: 'column',
         gap: '1rem'
       }}>
-        <div>
-          <h1 style={{ 
-            margin: 0, 
-            color: '#1a202c',
-            fontSize: '2rem',
-            fontWeight: '700'
-          }}>
-            🚀 SolCraft Nexus Dashboard
-          </h1>
-          <p style={{ 
-            margin: '0.5rem 0 0 0', 
-            color: '#4a5568',
-            fontSize: '1.1rem'
-          }}>
-            Benvenuto, <strong>{user?.name || sampleUserProfile.full_name}</strong>
-          </p>
-          <p style={{ 
-            margin: '0.25rem 0 0 0', 
-            color: '#718096',
-            fontSize: '0.9rem'
-          }}>
-            Wallet: {user?.address || sampleUserProfile.wallet_address}
-          </p>
-        </div>
+        <div style={{ 
+          width: '40px', 
+          height: '40px', 
+          border: '4px solid #f3f4f6', 
+          borderTop: '4px solid #3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }}></div>
+        <p style={{ color: '#6b7280' }}>Caricamento dati reali...</p>
+      </div>
+    );
+  }
 
-        {/* Navigation Menu */}
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          {['wallet', 'assets', 'tokenize', 'marketplace', 'learn'].map(page => (
-            <button
-              key={page}
-              onClick={() => onNavigate(page)}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                textTransform: 'capitalize',
-                transition: 'all 0.3s ease',
-                fontSize: '0.9rem'
-              }}
-              onMouseOver={(e) => {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 10px 20px rgba(102, 126, 234, 0.3)';
-              }}
-              onMouseOut={(e) => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = 'none';
-              }}
-            >
-              {page === 'wallet' && '💼'} 
-              {page === 'assets' && '🏠'} 
-              {page === 'tokenize' && '🪙'} 
-              {page === 'marketplace' && '🛒'} 
-              {page === 'learn' && '📚'} 
-              {' ' + page}
-            </button>
-          ))}
+  return (
+    <div style={{ padding: '2rem', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+      {/* Header con informazioni utente e wallet */}
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '1rem', 
+        padding: '2rem', 
+        marginBottom: '2rem',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div>
+            <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1f2937', marginBottom: '0.5rem' }}>
+              🚀 SolCraft Nexus Dashboard
+            </h1>
+            <p style={{ color: '#6b7280', fontSize: '1.1rem' }}>
+              Benvenuto, <strong>{user?.name || 'Utente'}</strong>
+              {!user.isSimulated && <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>🔗 Connessione Reale</span>}
+              {user.isSimulated && <span style={{ color: '#f59e0b', marginLeft: '0.5rem' }}>🎭 Modalità Demo</span>}
+            </p>
+          </div>
           
-          {/* Notifications */}
+          {/* Notifiche */}
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
               style={{
+                position: 'relative',
                 padding: '0.75rem',
-                background: unreadNotifications > 0 ? '#EF4444' : '#6B7280',
+                backgroundColor: '#3b82f6',
                 color: 'white',
                 border: 'none',
-                borderRadius: '12px',
+                borderRadius: '0.5rem',
                 cursor: 'pointer',
-                position: 'relative',
-                transition: 'all 0.3s ease'
+                fontSize: '1.2rem'
               }}
             >
               🔔
               {unreadNotifications > 0 && (
                 <span style={{
                   position: 'absolute',
-                  top: '-5px',
-                  right: '-5px',
-                  background: '#DC2626',
+                  top: '-0.25rem',
+                  right: '-0.25rem',
+                  backgroundColor: '#ef4444',
                   color: 'white',
                   borderRadius: '50%',
-                  width: '20px',
-                  height: '20px',
-                  fontSize: '0.7rem',
+                  width: '1.5rem',
+                  height: '1.5rem',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold'
                 }}>
                   {unreadNotifications}
                 </span>
               )}
             </button>
-
-            {showNotifications && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                background: 'white',
-                borderRadius: '12px',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-                width: '350px',
-                maxHeight: '400px',
-                overflowY: 'auto',
-                zIndex: 1000,
-                marginTop: '0.5rem'
-              }}>
-                <div style={{ padding: '1rem', borderBottom: '1px solid #E5E7EB' }}>
-                  <h3 style={{ margin: 0, color: '#1F2937' }}>Notifiche</h3>
-                </div>
-                {notifications.length === 0 ? (
-                  <div style={{ padding: '2rem', textAlign: 'center', color: '#6B7280' }}>
-                    Nessuna notifica
-                  </div>
-                ) : (
-                  notifications.map(notification => (
-                    <div
-                      key={notification.id}
-                      onClick={() => markNotificationAsRead(notification.id)}
-                      style={{
-                        padding: '1rem',
-                        borderBottom: '1px solid #F3F4F6',
-                        cursor: 'pointer',
-                        background: notification.read ? 'white' : '#F0F9FF',
-                        transition: 'background 0.2s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '1.2rem' }}>
-                          {notification.type === 'success' && '✅'}
-                          {notification.type === 'info' && 'ℹ️'}
-                          {notification.type === 'warning' && '⚠️'}
-                          {notification.type === 'error' && '❌'}
-                        </span>
-                        <div style={{ flex: 1 }}>
-                          <h4 style={{ 
-                            margin: '0 0 0.25rem 0', 
-                            fontSize: '0.9rem',
-                            fontWeight: notification.read ? '500' : '600',
-                            color: '#1F2937'
-                          }}>
-                            {notification.title}
-                          </h4>
-                          <p style={{ 
-                            margin: '0 0 0.5rem 0', 
-                            fontSize: '0.8rem',
-                            color: '#6B7280',
-                            lineHeight: '1.4'
-                          }}>
-                            {notification.message}
-                          </p>
-                          <span style={{ 
-                            fontSize: '0.7rem', 
-                            color: '#9CA3AF' 
-                          }}>
-                            {formatDate(notification.created_at)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Informazioni Wallet */}
+        {user.wallet && (
+          <div style={{ 
+            backgroundColor: '#f0f9ff', 
+            padding: '1rem', 
+            borderRadius: '0.5rem',
+            border: '1px solid #0ea5e9'
+          }}>
+            <p style={{ color: '#0369a1', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+              <strong>Wallet {user.provider}:</strong> {user.wallet.address}
+            </p>
+            {walletBalance !== null && (
+              <p style={{ color: '#0369a1', fontSize: '0.875rem' }}>
+                <strong>Balance:</strong> {walletBalance.toFixed(6)} XRP
+              </p>
+            )}
+            <p style={{ color: '#0369a1', fontSize: '0.75rem' }}>
+              Network: {user.wallet.network} | Tipo: {user.wallet.type}
+            </p>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ 
+            backgroundColor: '#fef2f2', 
+            padding: '1rem', 
+            borderRadius: '0.5rem',
+            border: '1px solid #fecaca',
+            marginTop: '1rem'
+          }}>
+            <p style={{ color: '#dc2626', fontSize: '0.875rem' }}>
+              ⚠️ {error}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation Cards */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+        {[
+          { icon: '💼', label: 'Wallet', key: 'wallet' },
+          { icon: '🏠', label: 'Assets', key: 'assets' },
+          { icon: '🪙', label: 'Tokenize', key: 'tokenize' },
+          { icon: '🛒', label: 'Marketplace', key: 'marketplace' },
+          { icon: '📚', label: 'Learn', key: 'learn' }
+        ].map((item) => (
+          <button
+            key={item.key}
+            onClick={() => onNavigate(item.key)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: '1rem',
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.5rem',
+              cursor: 'pointer',
+              minWidth: '100px',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#f9fafb';
+              e.target.style.borderColor = '#3b82f6';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = 'white';
+              e.target.style.borderColor = '#e5e7eb';
+            }}
+          >
+            <span style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{item.icon}</span>
+            <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{item.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Portfolio Overview */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '1.5rem',
-        marginBottom: '2rem'
-      }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-          borderRadius: '20px',
-          padding: '2rem',
-          color: 'white',
-          boxShadow: '0 20px 40px rgba(16, 185, 129, 0.3)'
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+        {/* Valore Portfolio */}
+        <div style={{ 
+          backgroundColor: '#10b981', 
+          color: 'white', 
+          padding: '1.5rem', 
+          borderRadius: '1rem',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
-            💼 Valore Portafoglio
-          </h3>
-          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>💰</span>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600' }}>Valore Portafoglio</h3>
+          </div>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
             {formatCurrency(totalValue)}
           </p>
-          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
-            <span style={{ color: totalGain >= 0 ? '#D1FAE5' : '#FEE2E2' }}>
-              {totalGain >= 0 ? '↗️' : '↘️'} {formatCurrency(Math.abs(totalGain))} ({totalGainPercentage}%)
-            </span>
+          <p style={{ fontSize: '0.875rem', opacity: 0.9 }}>
+            📈 {totalGain >= 0 ? '+' : ''}{formatCurrency(totalGain)} ({totalGainPercentage >= 0 ? '+' : ''}{totalGainPercentage}%)
           </p>
         </div>
 
-        <div style={{
-          background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-          borderRadius: '20px',
-          padding: '2rem',
-          color: 'white',
-          boxShadow: '0 20px 40px rgba(59, 130, 246, 0.3)'
+        {/* Asset Tokenizzati */}
+        <div style={{ 
+          backgroundColor: '#3b82f6', 
+          color: 'white', 
+          padding: '1.5rem', 
+          borderRadius: '1rem',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
-            🏠 Asset Tokenizzati
-          </h3>
-          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>🏠</span>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600' }}>Asset Tokenizzati</h3>
+          </div>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
             {portfolioData.length}
           </p>
-          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+          <p style={{ fontSize: '0.875rem', opacity: 0.9 }}>
             Immobiliare, Startup, Arte
           </p>
         </div>
 
-        <div style={{
-          background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
-          borderRadius: '20px',
-          padding: '2rem',
-          color: 'white',
-          boxShadow: '0 20px 40px rgba(139, 92, 246, 0.3)'
+        {/* Performance */}
+        <div style={{ 
+          backgroundColor: '#8b5cf6', 
+          color: 'white', 
+          padding: '1.5rem', 
+          borderRadius: '1rem',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
-            📈 Performance
-          </h3>
-          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
-            +{totalGainPercentage}%
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>📊</span>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600' }}>Performance</h3>
+          </div>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+            +{Math.abs(parseFloat(totalGainPercentage)).toFixed(1)}%
           </p>
-          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+          <p style={{ fontSize: '0.875rem', opacity: 0.9 }}>
             Ultimi 6 mesi
           </p>
         </div>
 
-        <div style={{
-          background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-          borderRadius: '20px',
-          padding: '2rem',
-          color: 'white',
-          boxShadow: '0 20px 40px rgba(245, 158, 11, 0.3)'
+        {/* Investimento Totale */}
+        <div style={{ 
+          backgroundColor: '#f59e0b', 
+          color: 'white', 
+          padding: '1.5rem', 
+          borderRadius: '1rem',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
-            💰 Investimento Totale
-          </h3>
-          <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>💸</span>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600' }}>Investimento Totale</h3>
+          </div>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
             {formatCurrency(totalInvested)}
           </p>
-          <p style={{ margin: '0.5rem 0 0 0', fontSize: '1rem', opacity: 0.9 }}>
+          <p style={{ fontSize: '0.875rem', opacity: 0.9 }}>
             Capitale investito
           </p>
         </div>
       </div>
 
-      {/* Charts and Analytics */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: '2rem',
-        marginBottom: '2rem'
+      {/* Transazioni Recenti */}
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '1rem', 
+        padding: '1.5rem',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}>
-        {/* Performance Chart */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          borderRadius: '20px',
-          padding: '2rem',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
-            📊 Performance vs Benchmark
-          </h3>
-          <div style={{ height: '200px', display: 'flex', alignItems: 'end', gap: '1rem' }}>
-            {performanceData.map((data, index) => (
-              <div key={index} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'end', marginBottom: '0.5rem' }}>
-                  <div style={{
-                    width: '20px',
-                    height: `${(data.portfolio / 20000) * 150}px`,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    borderRadius: '4px 4px 0 0'
-                  }}></div>
-                  <div style={{
-                    width: '20px',
-                    height: `${(data.benchmark / 20000) * 150}px`,
-                    background: '#E5E7EB',
-                    borderRadius: '4px 4px 0 0'
-                  }}></div>
-                </div>
-                <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>{data.month}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', fontSize: '0.9rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '12px', height: '12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '2px' }}></div>
-              <span>Portfolio</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '12px', height: '12px', background: '#E5E7EB', borderRadius: '2px' }}></div>
-              <span>Benchmark</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Asset Allocation */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          borderRadius: '20px',
-          padding: '2rem',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
-            🥧 Allocazione Asset
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {assetAllocation.map((asset, index) => (
-              <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ 
-                  width: '12px', 
-                  height: '12px', 
-                  borderRadius: '50%',
-                  background: ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B'][index]
-                }}></div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <span style={{ fontSize: '0.9rem', color: '#374151' }}>{asset.name}</span>
-                    <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#1F2937' }}>
-                      {asset.percentage}%
-                    </span>
-                  </div>
-                  <div style={{ 
-                    width: '100%', 
-                    height: '6px', 
-                    background: '#F3F4F6', 
-                    borderRadius: '3px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      width: `${asset.percentage}%`,
-                      height: '100%',
-                      background: ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B'][index],
-                      transition: 'width 1s ease'
-                    }}></div>
-                  </div>
-                </div>
-                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#1F2937', minWidth: '80px', textAlign: 'right' }}>
-                  {formatCurrency(asset.value)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Market Trends & Recent Activity */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: '2rem'
-      }}>
-        {/* Market Trends */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          borderRadius: '20px',
-          padding: '2rem',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
-            📈 Trend di Mercato
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {marketTrends.map((trend, index) => (
-              <div key={index} style={{
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem', color: '#1f2937' }}>
+          📋 Transazioni Recenti
+        </h3>
+        
+        {transactionsData.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {transactionsData.slice(0, 5).map((transaction, index) => (
+              <div key={transaction.id || index} style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '1rem',
-                background: '#F9FAFB',
-                borderRadius: '12px',
-                border: '1px solid #F3F4F6'
+                backgroundColor: '#f9fafb',
+                borderRadius: '0.5rem',
+                border: '1px solid #e5e7eb'
               }}>
-                <span style={{ color: '#374151', fontWeight: '500' }}>{trend.category}</span>
-                <span style={{ 
-                  color: trend.color, 
-                  fontWeight: '700',
-                  fontSize: '1.1rem'
-                }}>
-                  {trend.trend}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Transactions */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          borderRadius: '20px',
-          padding: '2rem',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{ margin: '0 0 1.5rem 0', color: '#1F2937', fontSize: '1.3rem' }}>
-            🔄 Transazioni Recenti
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {sampleTransactions.slice(0, 3).map(transaction => (
-              <div key={transaction.id} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '1rem',
-                background: '#F9FAFB',
-                borderRadius: '12px',
-                border: '1px solid #F3F4F6'
-              }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                    <span style={{ fontSize: '1.2rem' }}>
-                      {transaction.transaction_type === 'buy' && '🛒'}
-                      {transaction.transaction_type === 'sell' && '💰'}
-                      {transaction.transaction_type === 'dividend' && '💎'}
-                    </span>
-                    <span style={{ fontWeight: '600', color: '#1F2937', textTransform: 'capitalize' }}>
-                      {transaction.transaction_type}
-                    </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>
+                    {transaction.type === 'buy' && '🛒'}
+                    {transaction.type === 'sell' && '💰'}
+                    {transaction.type === 'dividend' && '💎'}
+                  </span>
+                  <div>
+                    <p style={{ fontWeight: '600', color: '#1f2937' }}>
+                      {transaction.type} • {transaction.asset_name || transaction.description}
+                    </p>
+                    <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                      {formatDate(transaction.created_at || transaction.date)}
+                    </p>
                   </div>
-                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#6B7280' }}>
-                    {transaction.assets.symbol} • {transaction.tokens} token
-                  </p>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#9CA3AF' }}>
-                    {formatDate(transaction.created_at)}
-                  </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ 
-                    margin: 0, 
-                    fontWeight: '700', 
-                    color: transaction.transaction_type === 'dividend' ? '#10B981' : '#1F2937'
+                    fontWeight: 'bold', 
+                    color: transaction.amount > 0 ? '#10b981' : '#ef4444' 
                   }}>
-                    {transaction.transaction_type === 'dividend' ? '+' : ''}{formatCurrency(transaction.total_amount)}
+                    {transaction.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount))}
                   </p>
-                  <p style={{ 
-                    margin: 0, 
-                    fontSize: '0.8rem',
-                    color: transaction.status === 'completed' ? '#10B981' : '#F59E0B'
-                  }}>
-                    {transaction.status === 'completed' ? '✅ Completata' : '⏳ In corso'}
+                  <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                    ✅ {transaction.status || 'Completata'}
                   </p>
                 </div>
               </div>
             ))}
           </div>
-          <button
-            onClick={() => onNavigate('wallet')}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              marginTop: '1rem',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              fontWeight: '600',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            Vedi Tutte le Transazioni
-          </button>
-        </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+            <p>Nessuna transazione trovata</p>
+            <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+              Le tue transazioni appariranno qui
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Pannello Notifiche */}
+      {showNotifications && (
+        <div style={{
+          position: 'fixed',
+          top: '5rem',
+          right: '1rem',
+          width: '300px',
+          backgroundColor: 'white',
+          borderRadius: '0.5rem',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb',
+          zIndex: 1000,
+          maxHeight: '400px',
+          overflowY: 'auto'
+        }}>
+          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+            <h4 style={{ fontWeight: 'bold', color: '#1f2937' }}>Notifiche</h4>
+          </div>
+          <div style={{ padding: '0.5rem' }}>
+            {notifications.length > 0 ? notifications.map((notification) => (
+              <div
+                key={notification.id}
+                onClick={() => markNotificationAsRead(notification.id)}
+                style={{
+                  padding: '0.75rem',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  backgroundColor: notification.read ? 'transparent' : '#f0f9ff',
+                  borderLeft: notification.read ? 'none' : '3px solid #3b82f6',
+                  marginBottom: '0.25rem'
+                }}
+              >
+                <p style={{ 
+                  fontSize: '0.875rem', 
+                  fontWeight: notification.read ? 'normal' : 'bold',
+                  color: '#1f2937',
+                  marginBottom: '0.25rem'
+                }}>
+                  {notification.title}
+                </p>
+                <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                  {notification.message}
+                </p>
+                <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem' }}>
+                  {formatDate(notification.created_at)}
+                </p>
+              </div>
+            )) : (
+              <p style={{ padding: '1rem', textAlign: 'center', color: '#6b7280', fontSize: '0.875rem' }}>
+                Nessuna notifica
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

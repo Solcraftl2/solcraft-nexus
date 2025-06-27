@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
+import { CrossmarkService, XummService, UserService } from '../services/walletService';
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const handleSocialLogin = async (provider, event) => {
     event.preventDefault();
     setLoading(true);
+    setError('');
     
     // Simulazione login funzionante per provider sociali
     setTimeout(() => {
@@ -28,79 +31,43 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   const handleCrossmarkConnect = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setError('');
     
     try {
       // Verifica se Crossmark è installato
-      if (!window.crossmark) {
-        // Crossmark non installato - mostra messaggio e simula connessione
-        const userData = {
-          name: 'Crossmark User (Simulato)',
-          email: null,
-          provider: 'Crossmark',
-          wallet: {
-            address: 'rCrossmarkSimulated123...',
-            type: 'XRPL',
-            network: 'testnet'
-          },
-          isSimulated: true,
-          message: 'Crossmark non installato. Connessione simulata per demo.'
-        };
-        
-        setTimeout(() => {
-          onLoginSuccess(userData);
-          setLoading(false);
-          onClose();
-        }, 1500);
+      const isInstalled = await CrossmarkService.isInstalled();
+      
+      if (!isInstalled) {
+        setError('Crossmark wallet non installato. Scarica da https://crossmark.io');
+        setLoading(false);
         return;
       }
 
-      // Crossmark è installato - connessione reale
-      const signInResponse = await window.crossmark.signInAndWait();
+      // Connessione reale a Crossmark
+      const walletData = await CrossmarkService.connect();
       
-      if (signInResponse && signInResponse.response && signInResponse.response.data) {
-        const { address } = signInResponse.response.data;
-        
-        // Recupera informazioni sessione
-        const sessionResponse = await window.crossmark.getUserSession();
-
-        const userData = {
-          name: 'Crossmark User',
-          email: null,
-          provider: 'Crossmark',
-          wallet: {
-            address: address,
-            type: 'XRPL',
-            network: 'mainnet'
-          },
-          isSimulated: false,
-          session: sessionResponse
-        };
-        
-        onLoginSuccess(userData);
-        onClose();
-      } else {
-        throw new Error('Risposta Crossmark non valida');
-      }
-    } catch (error) {
-      // In caso di errore, simula connessione per demo
+      // Crea o aggiorna utente nel database
+      const user = await UserService.createOrUpdateUser(walletData);
+      
       const userData = {
-        name: 'Crossmark User (Errore)',
+        name: 'Crossmark User',
         email: null,
         provider: 'Crossmark',
         wallet: {
-          address: 'rCrossmarkError123...',
+          address: walletData.address,
           type: 'XRPL',
-          network: 'testnet'
+          network: walletData.network
         },
-        isSimulated: true,
-        error: error.message
+        isSimulated: false,
+        userId: user.id,
+        message: 'Connessione Crossmark completata con successo!'
       };
       
-      setTimeout(() => {
-        onLoginSuccess(userData);
-        setLoading(false);
-        onClose();
-      }, 1500);
+      onLoginSuccess(userData);
+      onClose();
+    } catch (error) {
+      console.error('Errore Crossmark:', error);
+      setError(error.message || 'Errore durante la connessione a Crossmark');
     } finally {
       setLoading(false);
     }
@@ -109,89 +76,35 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   const handleXummConnect = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setError('');
     
     try {
-      // Importa dinamicamente il SDK XUMM OAuth2 PKCE
-      const { XummPkce } = await import('xumm-oauth2-pkce');
+      // Connessione reale a XUMM
+      const walletData = await XummService.connect();
       
-      // Inizializza XUMM con API key (per demo usiamo una chiave di test)
-      // In produzione, questa dovrebbe essere configurata tramite variabili d'ambiente
-      const xumm = new XummPkce('your-api-key-here', {
-        redirectUrl: window.location.origin,
-        rememberJwt: true
-      });
-
-      // Verifica se l'utente è già autenticato
-      const existingJwt = await xumm.state();
+      // Crea o aggiorna utente nel database
+      const user = await UserService.createOrUpdateUser(walletData);
       
-      if (existingJwt && existingJwt.me && existingJwt.me.account) {
-        // Utente già autenticato
-        const userData = {
-          name: 'XUMM User',
-          email: null,
-          provider: 'XUMM',
-          wallet: {
-            address: existingJwt.me.account,
-            type: 'XRPL',
-            network: existingJwt.me.networkType || 'mainnet'
-          },
-          isSimulated: false,
-          jwt: existingJwt.jwt,
-          message: 'Connessione XUMM esistente recuperata.'
-        };
-        
-        onLoginSuccess(userData);
-        onClose();
-        setLoading(false);
-        return;
-      }
-
-      // Avvia il processo di autorizzazione
-      const authResult = await xumm.authorize();
-      
-      if (authResult && authResult.me && authResult.me.account) {
-        const userData = {
-          name: 'XUMM User',
-          email: null,
-          provider: 'XUMM',
-          wallet: {
-            address: authResult.me.account,
-            type: 'XRPL',
-            network: authResult.me.networkType || 'mainnet'
-          },
-          isSimulated: false,
-          jwt: authResult.jwt,
-          message: 'Connessione XUMM completata con successo.'
-        };
-        
-        onLoginSuccess(userData);
-        onClose();
-      } else {
-        throw new Error('Autorizzazione XUMM fallita o cancellata');
-      }
-    } catch (error) {
-      console.error('Errore XUMM:', error);
-      
-      // In caso di errore, simula connessione per demo
       const userData = {
-        name: 'XUMM User (Simulato)',
+        name: 'XUMM User',
         email: null,
         provider: 'XUMM',
         wallet: {
-          address: 'rXUMMSimulated123...',
+          address: walletData.address,
           type: 'XRPL',
-          network: 'testnet'
+          network: walletData.network
         },
-        isSimulated: true,
-        error: error.message,
-        message: 'XUMM non disponibile. Connessione simulata per demo.'
+        isSimulated: false,
+        userId: user.id,
+        jwt: walletData.jwt,
+        message: 'Connessione XUMM completata con successo!'
       };
       
-      setTimeout(() => {
-        onLoginSuccess(userData);
-        setLoading(false);
-        onClose();
-      }, 1500);
+      onLoginSuccess(userData);
+      onClose();
+    } catch (error) {
+      console.error('Errore XUMM:', error);
+      setError(error.message || 'Errore durante la connessione a XUMM');
     } finally {
       setLoading(false);
     }
@@ -200,100 +113,14 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
   const handleTrustWalletConnect = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setError('');
     
     try {
-      // Verifica se Trust Wallet è installato (browser extension)
-      const isTrustWalletInstalled = window.ethereum && window.ethereum.isTrust;
-      
-      if (isTrustWalletInstalled) {
-        // Trust Wallet è installato ma non supporta XRPL
-        const userData = {
-          name: 'Trust Wallet User (Limitato)',
-          email: null,
-          provider: 'Trust Wallet',
-          wallet: null,
-          isSimulated: true,
-          message: 'Trust Wallet rilevato ma non supporta XRPL via web. Usa l\'app mobile per XRPL.',
-          limitation: 'XRPL non supportato via browser extension'
-        };
-        
-        setTimeout(() => {
-          onLoginSuccess(userData);
-          setLoading(false);
-          onClose();
-        }, 2000);
-        return;
-      }
-
-      // Verifica se è disponibile WalletConnect (per mobile)
-      if (window.WalletConnect) {
-        // Potenziale connessione via WalletConnect
-        const userData = {
-          name: 'Trust Wallet User (WalletConnect)',
-          email: null,
-          provider: 'Trust Wallet',
-          wallet: {
-            address: 'rTrustWalletConnect123...',
-            type: 'XRPL',
-            network: 'testnet'
-          },
-          isSimulated: true,
-          message: 'Connessione Trust Wallet via WalletConnect simulata. XRPL non supportato nativamente.',
-          method: 'WalletConnect (simulato)'
-        };
-        
-        setTimeout(() => {
-          onLoginSuccess(userData);
-          setLoading(false);
-          onClose();
-        }, 2000);
-        return;
-      }
-
-      // Nessuna integrazione Trust Wallet disponibile - simulazione completa
-      const userData = {
-        name: 'Trust Wallet User (Demo)',
-        email: null,
-        provider: 'Trust Wallet',
-        wallet: {
-          address: 'rTrustWalletDemo123...',
-          type: 'XRPL',
-          network: 'testnet'
-        },
-        isSimulated: true,
-        message: 'Trust Wallet non rilevato. Connessione completamente simulata per demo.',
-        recommendation: 'Per XRPL reale, usa Crossmark o XUMM'
-      };
-      
-      setTimeout(() => {
-        onLoginSuccess(userData);
-        setLoading(false);
-        onClose();
-      }, 2000);
-      
+      // Trust Wallet ha supporto limitato per XRPL via web
+      setError('Trust Wallet non supporta XRPL via browser. Usa Crossmark o XUMM per XRPL.');
     } catch (error) {
       console.error('Errore Trust Wallet:', error);
-      
-      // Fallback a simulazione completa
-      const userData = {
-        name: 'Trust Wallet User (Errore)',
-        email: null,
-        provider: 'Trust Wallet',
-        wallet: {
-          address: 'rTrustWalletError123...',
-          type: 'XRPL',
-          network: 'testnet'
-        },
-        isSimulated: true,
-        error: error.message,
-        message: 'Errore nella connessione Trust Wallet. Simulazione attivata.'
-      };
-      
-      setTimeout(() => {
-        onLoginSuccess(userData);
-        setLoading(false);
-        onClose();
-      }, 1500);
+      setError('Trust Wallet non disponibile per XRPL');
     } finally {
       setLoading(false);
     }
@@ -316,28 +143,6 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
       await handleTrustWalletConnect(event);
       return;
     }
-
-    // Fallback per wallet non implementati
-    setLoading(true);
-    
-    setTimeout(() => {
-      const userData = {
-        name: `${wallet} User (Non Implementato)`,
-        email: null,
-        provider: wallet,
-        wallet: {
-          address: `r${wallet}NotImplemented123...`,
-          type: 'XRPL',
-          network: 'testnet'
-        },
-        isSimulated: true,
-        message: `${wallet} non ancora implementato. Connessione simulata per demo.`
-      };
-      
-      onLoginSuccess(userData);
-      setLoading(false);
-      onClose();
-    }, 1500);
   };
 
   return (
@@ -367,104 +172,155 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
             Accedi a SolCraft Nexus
           </h2>
           <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-            Scegli il tuo metodo di accesso preferito
+            Connetti il tuo wallet XRPL per iniziare
           </p>
-          <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-            ⚠️ Social: Demo | Crossmark & XUMM: Reale/Simulato | Trust: Limitato
+          <p style={{ color: '#10b981', fontSize: '0.75rem', marginTop: '0.5rem', fontWeight: 'bold' }}>
+            🔗 Connessioni REALI attive - Nessuna simulazione
           </p>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {['Google', 'GitHub', 'Twitter', 'Discord'].map((provider) => (
+        {error && (
+          <div style={{
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '0.5rem',
+            padding: '0.75rem',
+            marginBottom: '1rem'
+          }}>
+            <p style={{ color: '#dc2626', fontSize: '0.875rem' }}>
+              ⚠️ {error}
+            </p>
+          </div>
+        )}
+
+        {/* Wallet XRPL - Priorità principale */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '1rem', fontWeight: 'bold' }}>
+            🚀 Wallet XRPL (Raccomandato)
+          </p>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <button
-              key={provider}
-              onClick={(event) => handleSocialLogin(provider, event)}
+              onClick={(event) => handleWalletConnect('Crossmark', event)}
               disabled={loading}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.75rem',
-                padding: '0.75rem 1rem',
-                border: '1px solid #d1d5db',
+                padding: '0.875rem 1rem',
+                border: '2px solid #10b981',
                 borderRadius: '0.5rem',
-                backgroundColor: loading ? '#f3f4f6' : 'white',
+                backgroundColor: loading ? '#f3f4f6' : '#10b981',
+                color: 'white',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                transition: 'all 0.2s'
+              }}
+            >
+              🚀 Crossmark (Connessione Reale)
+            </button>
+
+            <button
+              onClick={(event) => handleWalletConnect('XUMM', event)}
+              disabled={loading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.75rem',
+                padding: '0.875rem 1rem',
+                border: '2px solid #3b82f6',
+                borderRadius: '0.5rem',
+                backgroundColor: loading ? '#f3f4f6' : '#3b82f6',
+                color: 'white',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                transition: 'all 0.2s'
+              }}
+            >
+              💎 XUMM (Connessione Reale)
+            </button>
+
+            <button
+              onClick={(event) => handleWalletConnect('Trust', event)}
+              disabled={loading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.75rem',
+                padding: '0.875rem 1rem',
+                border: '2px solid #9ca3af',
+                borderRadius: '0.5rem',
+                backgroundColor: loading ? '#f3f4f6' : '#9ca3af',
+                color: 'white',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 fontSize: '1rem',
                 transition: 'all 0.2s'
               }}
-              onMouseOver={(e) => {
-                if (!loading) {
-                  e.target.style.backgroundColor = '#f9fafb';
-                  e.target.style.borderColor = '#9ca3af';
-                }
-              }}
-              onMouseOut={(e) => {
-                if (!loading) {
-                  e.target.style.backgroundColor = 'white';
-                  e.target.style.borderColor = '#d1d5db';
-                }
-              }}
             >
-              <span style={{ fontSize: '1.2rem' }}>
-                {provider === 'Google' && '🔍'}
-                {provider === 'GitHub' && '🐙'}
-                {provider === 'Twitter' && '🐦'}
-                {provider === 'Discord' && '💬'}
-              </span>
-              {loading ? 'Connessione...' : `Continua con ${provider}`}
+              ⚠️ Trust Wallet (Non Supportato)
             </button>
-          ))}
+          </div>
         </div>
 
+        {/* Login Social - Secondario */}
         <div style={{ 
-          marginTop: '1.5rem', 
           paddingTop: '1.5rem', 
-          borderTop: '1px solid #e5e7eb',
-          textAlign: 'center'
+          borderTop: '1px solid #e5e7eb'
         }}>
-          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>
-            Oppure connetti il tuo wallet XRPL
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem', textAlign: 'center' }}>
+            Oppure accedi con account social (Demo)
           </p>
           
-          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-            {[
-              { name: 'Crossmark', status: 'Ready', color: '#10b981', icon: '🚀' },
-              { name: 'XUMM', status: 'Ready', color: '#3b82f6', icon: '💎' },
-              { name: 'Trust', status: 'Limited', color: '#f59e0b', icon: '⚠️' }
-            ].map((wallet) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {['Google', 'GitHub', 'Twitter', 'Discord'].map((provider) => (
               <button
-                key={wallet.name}
-                onClick={(event) => handleWalletConnect(wallet.name, event)}
+                key={provider}
+                onClick={(event) => handleSocialLogin(provider, event)}
                 disabled={loading}
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
                   padding: '0.5rem 1rem',
-                  border: `2px solid ${wallet.color}`,
+                  border: '1px solid #d1d5db',
                   borderRadius: '0.375rem',
-                  backgroundColor: loading ? '#f3f4f6' : wallet.color,
-                  color: loading ? '#9ca3af' : 'white',
-                  fontSize: '0.875rem',
+                  backgroundColor: loading ? '#f3f4f6' : 'white',
                   cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: wallet.status === 'Ready' ? 'bold' : 'normal'
+                  fontSize: '0.875rem',
+                  transition: 'all 0.2s'
                 }}
               >
-                {wallet.icon} {wallet.name}
-                {wallet.status === 'Ready' && ' (Ready)'}
-                {wallet.status === 'Limited' && ' (Limited)'}
+                <span style={{ fontSize: '1rem' }}>
+                  {provider === 'Google' && '🔍'}
+                  {provider === 'GitHub' && '🐙'}
+                  {provider === 'Twitter' && '🐦'}
+                  {provider === 'Discord' && '💬'}
+                </span>
+                {provider} (Demo)
               </button>
             ))}
           </div>
-          
-          {/* Nota informativa per Trust Wallet */}
-          <p style={{ 
-            fontSize: '0.75rem', 
-            color: '#6b7280', 
-            marginTop: '0.75rem',
-            fontStyle: 'italic'
-          }}>
-            💡 Trust Wallet: XRPL supportato solo su mobile app
-          </p>
         </div>
+
+        {loading && (
+          <div style={{ 
+            textAlign: 'center', 
+            marginTop: '1rem',
+            padding: '0.75rem',
+            backgroundColor: '#f0f9ff',
+            borderRadius: '0.5rem'
+          }}>
+            <p style={{ color: '#0369a1', fontSize: '0.875rem' }}>
+              🔄 Connessione in corso... Controlla il tuo wallet per autorizzare
+            </p>
+          </div>
+        )}
 
         <button
           onClick={onClose}

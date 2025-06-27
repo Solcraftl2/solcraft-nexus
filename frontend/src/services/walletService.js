@@ -49,11 +49,51 @@ export class CrossmarkService {
     }
 
     try {
-      const response = await window.crossmark.signAndSubmitAndWait(transaction);
-      return response;
+      const signResponse = await window.crossmark.signAndWait(transaction);
+      
+      if (!signResponse?.response?.data?.signedTransaction) {
+        throw new Error('Firma transazione fallita o cancellata dall\'utente');
+      }
+
+      return {
+        success: true,
+        signedTransaction: signResponse.response.data.signedTransaction,
+        hash: signResponse.response.data.hash
+      };
     } catch (error) {
-      console.error('Errore firma transazione Crossmark:', error);
-      throw error;
+      console.error('Errore firma Crossmark:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante la firma della transazione'
+      };
+    }
+  }
+
+  static async signAndSubmit(transaction) {
+    if (!await this.isInstalled()) {
+      throw new Error('Crossmark wallet non installato');
+    }
+
+    try {
+      // Usa signAndSubmitAndWait per firmare e inviare in un'unica operazione
+      const submitResponse = await window.crossmark.signAndSubmitAndWait(transaction);
+      
+      if (!submitResponse?.response?.data?.hash) {
+        throw new Error('Invio transazione fallito o cancellato dall\'utente');
+      }
+
+      return {
+        success: true,
+        hash: submitResponse.response.data.hash,
+        ledgerIndex: submitResponse.response.data.ledgerIndex,
+        result: submitResponse.response.data.result
+      };
+    } catch (error) {
+      console.error('Errore invio Crossmark:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante l\'invio della transazione'
+      };
     }
   }
 
@@ -63,256 +103,311 @@ export class CrossmarkService {
     }
 
     try {
-      // Usa l'API XRPL tramite Crossmark per ottenere info account
-      const accountInfo = await window.crossmark.request({
-        method: 'account_info',
-        params: [{
-          account: address,
-          ledger_index: 'current'
-        }]
-      });
+      const accountInfo = await window.crossmark.getAccountInfo(address);
       
-      return accountInfo;
+      if (accountInfo?.response?.data) {
+        return {
+          success: true,
+          data: accountInfo.response.data
+        };
+      } else {
+        throw new Error('Impossibile recuperare informazioni account');
+      }
     } catch (error) {
-      console.error('Errore recupero info account:', error);
-      throw error;
+      console.error('Errore info account Crossmark:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante il recupero delle informazioni account'
+      };
+    }
+  }
+
+  static async getBalance(address) {
+    try {
+      const accountResult = await this.getAccountInfo(address);
+      
+      if (accountResult.success && accountResult.data?.account_data?.Balance) {
+        // Converti da drops a XRP
+        const balanceXRP = parseInt(accountResult.data.account_data.Balance) / 1000000;
+        return {
+          success: true,
+          balance: balanceXRP
+        };
+      } else {
+        throw new Error('Impossibile recuperare il saldo');
+      }
+    } catch (error) {
+      console.error('Errore saldo Crossmark:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante il recupero del saldo'
+      };
+    }
+  }
+
+  static async disconnect() {
+    try {
+      if (await this.isInstalled() && window.crossmark.signOut) {
+        await window.crossmark.signOut();
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Errore disconnessione Crossmark:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante la disconnessione'
+      };
     }
   }
 }
 
 // XUMM Wallet Service
-export class XummService {
-  static apiKey = import.meta.env.VITE_XUMM_API_KEY || 'demo-key';
-  static xummInstance = null;
-
-  static async initialize() {
-    if (this.xummInstance) return this.xummInstance;
-
+export class XUMMService {
+  static async connect() {
     try {
-      const { XummPkce } = await import('xumm-oauth2-pkce');
+      // Implementazione XUMM OAuth2 PKCE
+      const { XummOauth2Pkce } = await import('xumm-oauth2-pkce');
       
-      this.xummInstance = new XummPkce(this.apiKey, {
-        redirectUrl: window.location.origin,
-        rememberJwt: true
+      const oauth = new XummOauth2Pkce({
+        clientId: import.meta.env.VITE_XUMM_CLIENT_ID || 'demo-client-id',
+        redirectUrl: `${window.location.origin}/auth/callback`,
+        scope: ['openid', 'profile', 'email']
       });
 
-      return this.xummInstance;
-    } catch (error) {
-      console.error('Errore inizializzazione XUMM:', error);
-      throw error;
-    }
-  }
-
-  static async connect() {
-    const xumm = await this.initialize();
-
-    try {
-      // Verifica se c'è già una sessione attiva
-      const existingState = await xumm.state();
+      // Avvia il flusso OAuth
+      const authUrl = oauth.getAuthorizeUrl();
       
-      if (existingState?.me?.account) {
-        return {
-          address: existingState.me.account,
-          provider: 'XUMM',
-          network: existingState.me.networkType || 'mainnet',
-          jwt: existingState.jwt,
-          isReal: true
+      // Apri popup per autorizzazione
+      const popup = window.open(
+        authUrl,
+        'xumm-auth',
+        'width=400,height=600,scrollbars=yes,resizable=yes'
+      );
+
+      return new Promise((resolve, reject) => {
+        const checkClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkClosed);
+            reject(new Error('Autorizzazione XUMM cancellata dall\'utente'));
+          }
+        }, 1000);
+
+        // Ascolta il messaggio dal popup
+        const messageHandler = async (event) => {
+          if (event.origin !== window.location.origin) return;
+          
+          if (event.data.type === 'XUMM_AUTH_SUCCESS') {
+            clearInterval(checkClosed);
+            popup.close();
+            window.removeEventListener('message', messageHandler);
+            
+            try {
+              const tokens = await oauth.exchangeCodeForTokens(event.data.code);
+              const userInfo = await oauth.getUserInfo(tokens.access_token);
+              
+              resolve({
+                address: userInfo.account,
+                provider: 'XUMM',
+                network: userInfo.network || 'mainnet',
+                tokens: tokens,
+                userInfo: userInfo,
+                isReal: true
+              });
+            } catch (error) {
+              reject(error);
+            }
+          } else if (event.data.type === 'XUMM_AUTH_ERROR') {
+            clearInterval(checkClosed);
+            popup.close();
+            window.removeEventListener('message', messageHandler);
+            reject(new Error(event.data.error || 'Errore autorizzazione XUMM'));
+          }
         };
-      }
 
-      // Avvia nuovo processo di autorizzazione
-      const authResult = await xumm.authorize();
+        window.addEventListener('message', messageHandler);
+      });
+
+    } catch (error) {
+      console.error('Errore XUMM:', error);
+      throw new Error('Errore durante la connessione a XUMM');
+    }
+  }
+
+  static async signTransaction(transaction, accessToken) {
+    try {
+      // Implementazione firma XUMM
+      const response = await fetch('https://xumm.app/api/v1/platform/payload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          txjson: transaction,
+          options: {
+            submit: false // Solo firma, non invia
+          }
+        })
+      });
+
+      const result = await response.json();
       
-      if (!authResult?.me?.account) {
-        throw new Error('Autorizzazione XUMM fallita o cancellata');
-      }
-
-      return {
-        address: authResult.me.account,
-        provider: 'XUMM',
-        network: authResult.me.networkType || 'mainnet',
-        jwt: authResult.jwt,
-        isReal: true
-      };
-    } catch (error) {
-      console.error('Errore connessione XUMM:', error);
-      throw error;
-    }
-  }
-
-  static async createPayload(transaction) {
-    const xumm = await this.initialize();
-    
-    try {
-      const payload = await xumm.payload.create(transaction);
-      return payload;
-    } catch (error) {
-      console.error('Errore creazione payload XUMM:', error);
-      throw error;
-    }
-  }
-}
-
-// User Service per gestire utenti nel database
-export class UserService {
-  static async createOrUpdateUser(walletData) {
-    try {
-      const userData = {
-        wallet_address: walletData.address,
-        wallet_provider: walletData.provider,
-        wallet_network: walletData.network,
-        is_verified: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      // Verifica se l'utente esiste già
-      const { data: existingUser } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('wallet_address', walletData.address)
-        .single();
-
-      if (existingUser) {
-        // Aggiorna utente esistente
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .update({
-            wallet_provider: walletData.provider,
-            wallet_network: walletData.network,
-            updated_at: new Date().toISOString()
-          })
-          .eq('wallet_address', walletData.address)
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
+      if (result.uuid) {
+        return {
+          success: true,
+          payloadId: result.uuid,
+          qrUrl: result.refs.qr_png,
+          websocketUrl: result.refs.websocket_status
+        };
       } else {
-        // Crea nuovo utente
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .insert(userData)
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
+        throw new Error('Errore creazione payload XUMM');
       }
     } catch (error) {
-      console.error('Errore gestione utente:', error);
-      throw error;
-    }
-  }
-
-  static async getUserByWallet(address) {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('wallet_address', address)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        throw error;
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Errore recupero utente:', error);
-      throw error;
+      console.error('Errore firma XUMM:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante la firma XUMM'
+      };
     }
   }
 }
 
-// Transaction Service per gestire transazioni XRPL
-export class TransactionService {
-  static async createPayment(fromAddress, toAddress, amount, currency = 'XRP') {
-    const transaction = {
-      TransactionType: 'Payment',
-      Account: fromAddress,
-      Destination: toAddress,
-      Amount: currency === 'XRP' ? 
-        (parseFloat(amount) * 1000000).toString() : // XRP in drops
-        {
-          currency: currency,
-          value: amount.toString(),
-          issuer: toAddress // Per token personalizzati
-        }
-    };
-
-    return transaction;
+// Trust Wallet Service (Non supportato per XRPL via browser)
+export class TrustWalletService {
+  static async connect() {
+    throw new Error('Trust Wallet non supporta XRPL via browser. Usa Crossmark o XUMM per XRPL.');
   }
+}
 
-  static async createTokenOffer(account, tokenAmount, tokenCurrency, tokenIssuer, xrpAmount) {
-    const transaction = {
-      TransactionType: 'OfferCreate',
-      Account: account,
-      TakerGets: (parseFloat(xrpAmount) * 1000000).toString(), // XRP in drops
-      TakerPays: {
-        currency: tokenCurrency,
-        value: tokenAmount.toString(),
-        issuer: tokenIssuer
-      }
-    };
-
-    return transaction;
-  }
-
-  static async submitTransaction(transaction, walletProvider) {
+// Wallet Manager - Gestisce tutti i provider
+export class WalletManager {
+  static async connectWallet(provider) {
     try {
       let result;
-
-      switch (walletProvider) {
+      
+      switch (provider) {
         case 'Crossmark':
-          result = await CrossmarkService.signTransaction(transaction);
+          result = await CrossmarkService.connect();
           break;
         case 'XUMM':
-          result = await XummService.createPayload(transaction);
+          result = await XUMMService.connect();
+          break;
+        case 'TrustWallet':
+          result = await TrustWalletService.connect();
           break;
         default:
-          throw new Error(`Wallet provider ${walletProvider} non supportato`);
+          throw new Error(`Provider wallet non supportato: ${provider}`);
       }
 
-      // Salva la transazione nel database
-      await this.saveTransactionToDatabase(transaction, result);
-      
+      // Salva la connessione nel database se è reale
+      if (result.isReal && result.address) {
+        await this.saveWalletConnection(result);
+      }
+
       return result;
     } catch (error) {
-      console.error('Errore invio transazione:', error);
+      console.error(`Errore connessione ${provider}:`, error);
       throw error;
     }
   }
 
-  static async saveTransactionToDatabase(transaction, result) {
+  static async saveWalletConnection(walletData) {
     try {
-      const transactionData = {
-        transaction_hash: result.hash || result.txid,
-        from_address: transaction.Account,
-        to_address: transaction.Destination,
-        amount: transaction.Amount,
-        transaction_type: transaction.TransactionType,
-        status: result.validated ? 'completed' : 'pending',
-        network: 'mainnet',
-        created_at: new Date().toISOString()
-      };
+      const { data, error } = await supabase
+        .from('wallet_connections')
+        .upsert({
+          address: walletData.address,
+          provider: walletData.provider,
+          network: walletData.network,
+          connected_at: new Date().toISOString(),
+          is_active: true
+        }, {
+          onConflict: 'address'
+        });
 
-      const { error } = await supabase
-        .from('transactions')
-        .insert(transactionData);
-
-      if (error) throw error;
+      if (error) {
+        console.error('Errore salvataggio connessione wallet:', error);
+      } else {
+        console.log('✅ Connessione wallet salvata nel database');
+      }
     } catch (error) {
-      console.error('Errore salvataggio transazione:', error);
-      // Non bloccare il flusso principale per errori di database
+      console.error('Errore salvataggio wallet:', error);
+    }
+  }
+
+  static async disconnectWallet(provider) {
+    try {
+      switch (provider) {
+        case 'Crossmark':
+          return await CrossmarkService.disconnect();
+        case 'XUMM':
+          // XUMM non ha disconnessione esplicita
+          return { success: true };
+        default:
+          return { success: true };
+      }
+    } catch (error) {
+      console.error(`Errore disconnessione ${provider}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  static async getWalletBalance(address, provider) {
+    try {
+      switch (provider) {
+        case 'Crossmark':
+          return await CrossmarkService.getBalance(address);
+        default:
+          throw new Error(`Recupero saldo non supportato per ${provider}`);
+      }
+    } catch (error) {
+      console.error(`Errore recupero saldo ${provider}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  static async signTransaction(transaction, provider, accessToken = null) {
+    try {
+      switch (provider) {
+        case 'Crossmark':
+          return await CrossmarkService.signTransaction(transaction);
+        case 'XUMM':
+          return await XUMMService.signTransaction(transaction, accessToken);
+        default:
+          throw new Error(`Firma transazione non supportata per ${provider}`);
+      }
+    } catch (error) {
+      console.error(`Errore firma transazione ${provider}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  static async signAndSubmitTransaction(transaction, provider) {
+    try {
+      switch (provider) {
+        case 'Crossmark':
+          return await CrossmarkService.signAndSubmit(transaction);
+        default:
+          throw new Error(`Invio transazione non supportato per ${provider}`);
+      }
+    } catch (error) {
+      console.error(`Errore invio transazione ${provider}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 }
 
-export default {
-  CrossmarkService,
-  XummService,
-  UserService,
-  TransactionService
-};
+export default WalletManager;
 

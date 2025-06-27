@@ -8,6 +8,7 @@ import {
 import { CrossmarkService } from '../services/walletService';
 import { KYCService } from '../services/kycService';
 import KYCModal from './KYCModal';
+import TransactionModal from './TransactionModal';
 
 // Fallback ai dati simulati se non ci sono dati reali
 import { 
@@ -36,6 +37,10 @@ const Dashboard = ({ user, onNavigate }) => {
   const [kycData, setKycData] = useState(null);
   const [showKYCModal, setShowKYCModal] = useState(false);
   const [kycLoading, setKycLoading] = useState(false);
+
+  // Stati Transazioni XRPL
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [transactionType, setTransactionType] = useState('payment');
 
   // Carica dati reali all'avvio
   useEffect(() => {
@@ -108,11 +113,9 @@ const Dashboard = ({ user, onNavigate }) => {
   const loadWalletBalance = async () => {
     try {
       if (user.provider === 'Crossmark' && user.wallet?.address) {
-        const accountInfo = await CrossmarkService.getAccountInfo(user.wallet.address);
-        if (accountInfo?.account_data?.Balance) {
-          // Converti da drops a XRP
-          const balanceXRP = parseInt(accountInfo.account_data.Balance) / 1000000;
-          setWalletBalance(balanceXRP);
+        const balanceResult = await CrossmarkService.getBalance(user.wallet.address);
+        if (balanceResult.success) {
+          setWalletBalance(balanceResult.balance);
         }
       }
     } catch (error) {
@@ -156,86 +159,51 @@ const Dashboard = ({ user, onNavigate }) => {
     return new Date(dateString).toLocaleDateString('it-IT', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: 'numeric'
     });
   };
 
-  const handleKYCUpdate = () => {
-    loadKYCData(); // Ricarica i dati KYC dopo un aggiornamento
+  const getKYCStatusColor = (level) => {
+    switch (level) {
+      case 0: return '#ef4444'; // Rosso
+      case 1: return '#f59e0b'; // Arancione
+      case 2: return '#eab308'; // Giallo
+      case 3: return '#22c55e'; // Verde
+      case 4: return '#10b981'; // Verde scuro
+      default: return '#6b7280'; // Grigio
+    }
   };
 
-  const renderKYCStatus = () => {
-    if (kycLoading) {
-      return (
-        <div style={{
-          padding: '1rem',
-          backgroundColor: '#f3f4f6',
-          borderRadius: '0.5rem',
-          marginBottom: '1.5rem'
-        }}>
-          <p style={{ margin: 0, color: '#6b7280' }}>🔄 Caricamento stato KYC...</p>
-        </div>
-      );
+  const getKYCStatusText = (level) => {
+    switch (level) {
+      case 0: return 'Non Verificato';
+      case 1: return 'Email Verificata';
+      case 2: return 'Documento Verificato';
+      case 3: return 'Indirizzo Verificato';
+      case 4: return 'Completamente Verificato';
+      default: return 'Sconosciuto';
     }
+  };
 
-    if (!kycData) return null;
+  const getKYCLimitText = (level) => {
+    switch (level) {
+      case 0: return '€500';
+      case 1: return '€2.500';
+      case 2: return '€10.000';
+      case 3: return '€50.000';
+      case 4: return 'Illimitato';
+      default: return '€0';
+    }
+  };
 
-    const level = kycData.levelInfo;
-    const needsKYC = kycData.kycLevel < 2;
+  const openTransactionModal = (type) => {
+    setTransactionType(type);
+    setShowTransactionModal(true);
+  };
 
-    return (
-      <div style={{
-        padding: '1rem',
-        backgroundColor: needsKYC ? '#fef3c7' : '#ecfdf5',
-        borderRadius: '0.5rem',
-        border: `2px solid ${needsKYC ? '#f59e0b' : level.color}`,
-        marginBottom: '1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <div>
-          <h4 style={{ 
-            margin: '0 0 0.25rem 0', 
-            color: needsKYC ? '#92400e' : level.color,
-            fontWeight: '600'
-          }}>
-            {needsKYC ? '⚠️ Verifica Identità Richiesta' : `🆔 Livello KYC: ${level.name}`}
-          </h4>
-          <p style={{ 
-            margin: 0, 
-            fontSize: '0.875rem', 
-            color: needsKYC ? '#92400e' : '#6b7280'
-          }}>
-            {needsKYC 
-              ? `Limite attuale: €${level.limit.toLocaleString()}. Completa la verifica per aumentare i limiti.`
-              : `Limite transazioni: ${level.limit === Infinity ? 'Illimitato' : `€${level.limit.toLocaleString()}`}`
-            }
-          </p>
-        </div>
-        
-        {needsKYC && (
-          <button
-            onClick={() => setShowKYCModal(true)}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#f59e0b',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            Verifica Ora
-          </button>
-        )}
-      </div>
-    );
+  const handleKYCComplete = () => {
+    setShowKYCModal(false);
+    loadKYCData(); // Ricarica i dati KYC
   };
 
   if (loading) {
@@ -245,31 +213,17 @@ const Dashboard = ({ user, onNavigate }) => {
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '400px',
-        flexDirection: 'column',
-        gap: '1rem'
+        fontSize: '1.125rem',
+        color: '#6b7280'
       }}>
-        <div style={{
-          width: '3rem',
-          height: '3rem',
-          border: '3px solid #e5e7eb',
-          borderTop: '3px solid #3b82f6',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
-        <p style={{ color: '#6b7280', fontSize: '1rem' }}>
-          Caricamento dashboard...
-        </p>
+        Caricamento dashboard...
       </div>
     );
   }
 
   return (
-    <div style={{ 
-      padding: '1.5rem',
-      backgroundColor: '#f8fafc',
-      minHeight: '100vh'
-    }}>
-      {/* Header */}
+    <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Header con saluto e notifiche */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -283,590 +237,429 @@ const Dashboard = ({ user, onNavigate }) => {
             margin: '0 0 0.5rem 0',
             color: '#1f2937'
           }}>
-            🚀 SolCraft Nexus Dashboard
+            Ciao, {user.name || 'Utente'}! 👋
           </h1>
           <p style={{ 
-            fontSize: '1.1rem', 
             color: '#6b7280', 
-            margin: 0 
+            margin: 0,
+            fontSize: '1rem'
           }}>
-            Benvenuto, <strong>{user?.name || user?.email || 'Utente'}</strong>
+            Benvenuto nella tua dashboard di investimenti
           </p>
-          {user?.wallet?.address && (
-            <p style={{ 
-              fontSize: '0.875rem', 
-              color: '#9ca3af', 
-              margin: '0.25rem 0 0 0',
-              fontFamily: 'monospace'
-            }}>
-              Wallet: {user.wallet.address}
-              {walletBalance !== null && (
-                <span style={{ marginLeft: '1rem', color: '#10b981', fontWeight: '600' }}>
-                  Balance: {walletBalance.toFixed(2)} XRP
-                </span>
-              )}
-            </p>
-          )}
         </div>
 
-        {/* Quick Actions */}
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        {/* Pulsante notifiche */}
+        <div style={{ position: 'relative' }}>
           <button
-            onClick={() => onNavigate('wallet')}
+            onClick={() => setShowNotifications(!showNotifications)}
             style={{
-              padding: '0.5rem',
-              backgroundColor: '#3b82f6',
-              color: 'white',
+              position: 'relative',
+              padding: '0.75rem',
+              backgroundColor: '#f3f4f6',
               border: 'none',
               borderRadius: '0.5rem',
               cursor: 'pointer',
               fontSize: '1.25rem'
             }}
-            title="Portafoglio"
           >
-            💼
-          </button>
-          
-          <button
-            onClick={() => onNavigate('assets')}
-            style={{
-              padding: '0.5rem',
-              backgroundColor: '#10b981',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.5rem',
-              cursor: 'pointer',
-              fontSize: '1.25rem'
-            }}
-            title="I Miei Asset"
-          >
-            🏠
-          </button>
-          
-          <button
-            onClick={() => onNavigate('tokenize')}
-            style={{
-              padding: '0.5rem',
-              backgroundColor: '#f59e0b',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.5rem',
-              cursor: 'pointer',
-              fontSize: '1.25rem'
-            }}
-            title="Tokenizza"
-          >
-            🪙
-          </button>
-          
-          <button
-            onClick={() => onNavigate('marketplace')}
-            style={{
-              padding: '0.5rem',
-              backgroundColor: '#8b5cf6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.5rem',
-              cursor: 'pointer',
-              fontSize: '1.25rem'
-            }}
-            title="Marketplace"
-          >
-            🛒
-          </button>
-          
-          <button
-            onClick={() => onNavigate('learn')}
-            style={{
-              padding: '0.5rem',
-              backgroundColor: '#06b6d4',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.5rem',
-              cursor: 'pointer',
-              fontSize: '1.25rem'
-            }}
-            title="Impara"
-          >
-            📚
-          </button>
-
-          {/* Notifications */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowNotifications(!showNotifications)}
-              style={{
-                padding: '0.5rem',
+            🔔
+            {unreadNotifications > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: '0.25rem',
+                right: '0.25rem',
                 backgroundColor: '#ef4444',
                 color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                cursor: 'pointer',
-                fontSize: '1.25rem',
-                position: 'relative'
-              }}
-            >
-              🔔
-              {unreadNotifications > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: '-0.25rem',
-                  right: '-0.25rem',
-                  backgroundColor: '#dc2626',
-                  color: 'white',
-                  borderRadius: '50%',
-                  width: '1.25rem',
-                  height: '1.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.75rem',
-                  fontWeight: 'bold'
-                }}>
-                  {unreadNotifications}
-                </span>
-              )}
-            </button>
-
-            {showNotifications && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                backgroundColor: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: '0.5rem',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                width: '300px',
-                maxHeight: '400px',
-                overflowY: 'auto',
-                zIndex: 10,
-                marginTop: '0.5rem'
+                borderRadius: '50%',
+                width: '1.25rem',
+                height: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 'bold'
               }}>
-                <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>
-                    Notifiche
-                  </h3>
-                </div>
-                
-                {notifications.length === 0 ? (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: '#6b7280' }}>
-                    Nessuna notifica
-                  </div>
-                ) : (
-                  notifications.slice(0, 5).map((notification) => (
-                    <div
-                      key={notification.id}
-                      onClick={() => markNotificationAsRead(notification.id)}
-                      style={{
-                        padding: '0.75rem',
-                        borderBottom: '1px solid #f3f4f6',
-                        cursor: 'pointer',
-                        backgroundColor: notification.read ? 'white' : '#f0f9ff'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ 
-                            margin: '0 0 0.25rem 0', 
-                            fontSize: '0.875rem',
-                            fontWeight: notification.read ? '400' : '600'
-                          }}>
-                            {notification.title}
-                          </p>
-                          <p style={{ 
-                            margin: 0, 
-                            fontSize: '0.75rem', 
-                            color: '#6b7280' 
-                          }}>
-                            {notification.message}
-                          </p>
-                          <p style={{ 
-                            margin: '0.25rem 0 0 0', 
-                            fontSize: '0.625rem', 
-                            color: '#9ca3af' 
-                          }}>
-                            {formatDate(notification.created_at)}
-                          </p>
-                        </div>
-                        {!notification.read && (
-                          <div style={{
-                            width: '0.5rem',
-                            height: '0.5rem',
-                            backgroundColor: '#3b82f6',
-                            borderRadius: '50%',
-                            marginLeft: '0.5rem',
-                            marginTop: '0.25rem'
-                          }} />
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                {unreadNotifications}
+              </span>
             )}
-          </div>
+          </button>
+
+          {/* Dropdown notifiche */}
+          {showNotifications && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.5rem',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              width: '300px',
+              maxHeight: '400px',
+              overflowY: 'auto',
+              zIndex: 10,
+              marginTop: '0.5rem'
+            }}>
+              <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>
+                  Notifiche
+                </h3>
+              </div>
+              {notifications.length === 0 ? (
+                <div style={{ padding: '1rem', textAlign: 'center', color: '#6b7280' }}>
+                  Nessuna notifica
+                </div>
+              ) : (
+                notifications.slice(0, 5).map((notification) => (
+                  <div
+                    key={notification.id}
+                    onClick={() => markNotificationAsRead(notification.id)}
+                    style={{
+                      padding: '1rem',
+                      borderBottom: '1px solid #f3f4f6',
+                      cursor: 'pointer',
+                      backgroundColor: notification.read ? 'white' : '#f0f9ff'
+                    }}
+                  >
+                    <div style={{ 
+                      fontSize: '0.875rem', 
+                      fontWeight: notification.read ? 'normal' : '600',
+                      marginBottom: '0.25rem'
+                    }}>
+                      {notification.title}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      {notification.message}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem' }}>
+                      {formatDate(notification.created_at)}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* KYC Status */}
-      {renderKYCStatus()}
-
-      {/* Error Message */}
+      {/* Errore se presente */}
       {error && (
         <div style={{
           backgroundColor: '#fef2f2',
           border: '1px solid #fecaca',
           borderRadius: '0.5rem',
-          padding: '0.75rem',
+          padding: '1rem',
           marginBottom: '1.5rem'
         }}>
-          <p style={{ color: '#dc2626', fontSize: '0.875rem', margin: 0 }}>
+          <p style={{ color: '#dc2626', margin: 0, fontSize: '0.875rem' }}>
             ⚠️ {error}
           </p>
         </div>
       )}
 
-      {/* Main Stats Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+      {/* Cards principali */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
         gap: '1.5rem',
         marginBottom: '2rem'
       }}>
         {/* Portfolio Value */}
         <div style={{
-          backgroundColor: '#10b981',
-          color: 'white',
+          backgroundColor: 'white',
           padding: '1.5rem',
           borderRadius: '1rem',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>💰</span>
-            <h3 style={{ margin: 0, fontSize: '1rem', opacity: 0.9 }}>Valore Portafoglio</h3>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>💼</span>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#374151' }}>
+              Valore Portfolio
+            </h3>
           </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0 0 0.5rem 0' }}>
-            {formatCurrency(totalValue || 11500)}
-          </p>
-          <p style={{ fontSize: '0.875rem', margin: 0, opacity: 0.8 }}>
-            📈 {formatCurrency(totalGain || 850)} ({totalGainPercentage || '8.0'}%)
-          </p>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1f2937', marginBottom: '0.5rem' }}>
+            {formatCurrency(totalValue)}
+          </div>
+          <div style={{ 
+            fontSize: '0.875rem', 
+            color: totalGain >= 0 ? '#10b981' : '#ef4444',
+            fontWeight: '600'
+          }}>
+            {totalGain >= 0 ? '+' : ''}{formatCurrency(totalGain)} ({totalGainPercentage}%)
+          </div>
         </div>
 
-        {/* Asset Count */}
-        <div style={{
-          backgroundColor: '#3b82f6',
-          color: 'white',
-          padding: '1.5rem',
-          borderRadius: '1rem',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>🏠</span>
-            <h3 style={{ margin: 0, fontSize: '1rem', opacity: 0.9 }}>Asset Tokenizzati</h3>
-          </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0 0 0.5rem 0' }}>
-            {portfolioData.length || 3}
-          </p>
-          <p style={{ fontSize: '0.875rem', margin: 0, opacity: 0.8 }}>
-            Immobiliare, Startup, Arte
-          </p>
-        </div>
-
-        {/* Performance */}
-        <div style={{
-          backgroundColor: '#8b5cf6',
-          color: 'white',
-          padding: '1.5rem',
-          borderRadius: '1rem',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>📊</span>
-            <h3 style={{ margin: 0, fontSize: '1rem', opacity: 0.9 }}>Performance</h3>
-          </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0 0 0.5rem 0' }}>
-            +{totalGainPercentage || '8.0'}%
-          </p>
-          <p style={{ fontSize: '0.875rem', margin: 0, opacity: 0.8 }}>
-            Ultimi 6 mesi
-          </p>
-        </div>
-
-        {/* Total Investment */}
-        <div style={{
-          backgroundColor: '#f59e0b',
-          color: 'white',
-          padding: '1.5rem',
-          borderRadius: '1rem',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>💎</span>
-            <h3 style={{ margin: 0, fontSize: '1rem', opacity: 0.9 }}>Investimento Totale</h3>
-          </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0 0 0.5rem 0' }}>
-            {formatCurrency(totalInvested || 10650)}
-          </p>
-          <p style={{ fontSize: '0.875rem', margin: 0, opacity: 0.8 }}>
-            Capitale investito
-          </p>
-        </div>
-      </div>
-
-      {/* Charts and Details Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '2fr 1fr',
-        gap: '1.5rem',
-        marginBottom: '2rem'
-      }}>
-        {/* Portfolio Chart */}
+        {/* Wallet Balance */}
         <div style={{
           backgroundColor: 'white',
           padding: '1.5rem',
           borderRadius: '1rem',
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
-            📈 Andamento Portfolio
-          </h3>
-          
-          {/* Simple chart representation */}
-          <div style={{ height: '200px', position: 'relative', backgroundColor: '#f8fafc', borderRadius: '0.5rem', padding: '1rem' }}>
-            <svg width="100%" height="100%" viewBox="0 0 400 150">
-              <polyline
-                points="0,120 50,100 100,80 150,70 200,60 250,50 300,45 350,40 400,35"
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="3"
-              />
-              <polyline
-                points="0,130 50,125 100,115 150,110 200,105 250,100 300,95 350,90 400,85"
-                fill="none"
-                stroke="#6b7280"
-                strokeWidth="2"
-                strokeDasharray="5,5"
-              />
-            </svg>
-            <div style={{ position: 'absolute', bottom: '0.5rem', left: '1rem', fontSize: '0.75rem', color: '#6b7280' }}>
-              <span style={{ color: '#10b981' }}>■</span> Portfolio
-              <span style={{ marginLeft: '1rem', color: '#6b7280' }}>■</span> Benchmark
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>🪙</span>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#374151' }}>
+              Saldo Wallet XRP
+            </h3>
           </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '0.875rem' }}>
-            <span>Gen</span>
-            <span>Feb</span>
-            <span>Mar</span>
-            <span>Apr</span>
-            <span>Mag</span>
-            <span>Giu</span>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1f2937', marginBottom: '0.5rem' }}>
+            {walletBalance !== null ? `${walletBalance.toFixed(6)} XRP` : 'Caricamento...'}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+            {user.wallet?.address ? `${user.wallet.address.substring(0, 10)}...` : 'Wallet non connesso'}
           </div>
         </div>
 
-        {/* Asset Allocation */}
+        {/* KYC Status */}
         <div style={{
           backgroundColor: 'white',
           padding: '1.5rem',
           borderRadius: '1rem',
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
-            🥧 Allocazione Asset
-          </h3>
-          
-          {assetAllocation.map((asset, index) => (
-            <div key={index} style={{ marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{asset.name}</span>
-                <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>{asset.percentage}%</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>{formatCurrency(asset.value)}</span>
-                <span style={{ fontSize: '0.75rem', color: asset.change >= 0 ? '#10b981' : '#ef4444' }}>
-                  {asset.change >= 0 ? '+' : ''}{asset.change}%
-                </span>
-              </div>
-              <div style={{
-                width: '100%',
-                height: '0.5rem',
-                backgroundColor: '#e5e7eb',
-                borderRadius: '0.25rem',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  width: `${asset.percentage}%`,
-                  height: '100%',
-                  backgroundColor: asset.color,
-                  transition: 'width 0.3s ease'
-                }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Market Trends */}
-      <div style={{
-        backgroundColor: 'white',
-        padding: '1.5rem',
-        borderRadius: '1rem',
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-        marginBottom: '2rem'
-      }}>
-        <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
-          📊 Tendenze di Mercato
-        </h3>
-        
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '1rem'
-        }}>
-          {marketTrends.map((trend, index) => (
-            <div key={index} style={{
-              padding: '1rem',
-              backgroundColor: '#f8fafc',
-              borderRadius: '0.5rem',
-              border: '1px solid #e5e7eb'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{trend.category}</span>
-                <span style={{
-                  fontSize: '0.75rem',
-                  color: trend.change >= 0 ? '#10b981' : '#ef4444',
-                  fontWeight: '600'
-                }}>
-                  {trend.change >= 0 ? '+' : ''}{trend.change}%
-                </span>
-              </div>
-              <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
-                {trend.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Recent Transactions */}
-      <div style={{
-        backgroundColor: 'white',
-        padding: '1.5rem',
-        borderRadius: '1rem',
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
-            💳 Transazioni Recenti
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>🆔</span>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#374151' }}>
+              Stato Verifica
+            </h3>
+          </div>
+          <div style={{ 
+            fontSize: '1.25rem', 
+            fontWeight: 'bold', 
+            color: getKYCStatusColor(kycData?.level || 0),
+            marginBottom: '0.5rem'
+          }}>
+            {getKYCStatusText(kycData?.level || 0)}
+          </div>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>
+            Limite: {getKYCLimitText(kycData?.level || 0)}
+          </div>
           <button
-            onClick={() => onNavigate('transactions')}
+            onClick={() => setShowKYCModal(true)}
+            disabled={kycLoading}
             style={{
-              padding: '0.5rem 1rem',
+              width: '100%',
+              padding: '0.5rem',
               backgroundColor: '#3b82f6',
               color: 'white',
               border: 'none',
-              borderRadius: '0.5rem',
+              borderRadius: '0.375rem',
               fontSize: '0.875rem',
-              cursor: 'pointer'
+              fontWeight: '600',
+              cursor: kycLoading ? 'not-allowed' : 'pointer',
+              opacity: kycLoading ? 0.5 : 1
             }}
           >
-            Vedi Tutte
+            {kycLoading ? 'Caricamento...' : 'Verifica Ora'}
           </button>
         </div>
-        
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                <th style={{ textAlign: 'left', padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
-                  Tipo
-                </th>
-                <th style={{ textAlign: 'left', padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
-                  Asset
-                </th>
-                <th style={{ textAlign: 'left', padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
-                  Data
-                </th>
-                <th style={{ textAlign: 'right', padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
-                  Importo
-                </th>
-                <th style={{ textAlign: 'center', padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
-                  Stato
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {(transactionsData.length > 0 ? transactionsData : sampleTransactions).slice(0, 5).map((transaction, index) => (
-                <tr key={transaction.id || index} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '0.75rem' }}>
-                    <span style={{ fontSize: '1.25rem', marginRight: '0.5rem' }}>
-                      {transaction.type === 'buy' ? '🛒' : 
-                       transaction.type === 'sell' ? '💰' : 
-                       transaction.type === 'dividend' ? '💎' : '🔄'}
-                    </span>
-                    <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>
-                      {transaction.type === 'buy' ? 'buy' : 
-                       transaction.type === 'sell' ? 'sell' : 
-                       transaction.type === 'dividend' ? 'dividend' : transaction.type}
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
-                    {transaction.asset_symbol || transaction.description}
-                  </td>
-                  <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                    {formatDate(transaction.created_at || transaction.date)}
-                  </td>
-                  <td style={{ 
-                    padding: '0.75rem', 
-                    fontSize: '0.875rem', 
-                    fontWeight: '600',
-                    textAlign: 'right',
-                    color: transaction.amount >= 0 ? '#10b981' : '#ef4444'
-                  }}>
-                    {transaction.amount >= 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount))}
-                  </td>
-                  <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                    <span style={{
-                      padding: '0.25rem 0.5rem',
-                      backgroundColor: transaction.status === 'completed' ? '#dcfce7' : 
-                                     transaction.status === 'pending' ? '#fef3c7' : '#fecaca',
-                      color: transaction.status === 'completed' ? '#166534' : 
-                             transaction.status === 'pending' ? '#92400e' : '#991b1b',
-                      borderRadius: '0.25rem',
-                      fontSize: '0.75rem',
-                      fontWeight: '600'
-                    }}>
-                      {transaction.status === 'completed' ? '✅ Completata' : 
-                       transaction.status === 'pending' ? '⏳ In Corso' : '❌ Fallita'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        {/* Azioni XRPL */}
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '1rem',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>⚡</span>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#374151' }}>
+              Transazioni XRPL
+            </h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <button
+              onClick={() => openTransactionModal('payment')}
+              disabled={!user.wallet || user.provider !== 'Crossmark'}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                backgroundColor: user.wallet && user.provider === 'Crossmark' ? '#10b981' : '#9ca3af',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                cursor: user.wallet && user.provider === 'Crossmark' ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              💸 Invia XRP
+            </button>
+            <button
+              onClick={() => openTransactionModal('tokenize')}
+              disabled={!user.wallet || user.provider !== 'Crossmark'}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                backgroundColor: user.wallet && user.provider === 'Crossmark' ? '#8b5cf6' : '#9ca3af',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                cursor: user.wallet && user.provider === 'Crossmark' ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              🪙 Tokenizza Asset
+            </button>
+          </div>
+          {(!user.wallet || user.provider !== 'Crossmark') && (
+            <div style={{ 
+              fontSize: '0.75rem', 
+              color: '#6b7280', 
+              textAlign: 'center',
+              marginTop: '0.5rem'
+            }}>
+              Connetti Crossmark per transazioni reali
+            </div>
+          )}
         </div>
       </div>
 
-      {/* KYC Modal */}
-      <KYCModal
-        isOpen={showKYCModal}
-        onClose={() => setShowKYCModal(false)}
-        user={user}
-        onKYCUpdate={handleKYCUpdate}
-      />
+      {/* Sezioni aggiuntive */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', 
+        gap: '1.5rem'
+      }}>
+        {/* Portfolio Assets */}
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '1rem',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
+          <h3 style={{ 
+            margin: '0 0 1rem 0', 
+            fontSize: '1.25rem', 
+            fontWeight: '600',
+            color: '#1f2937'
+          }}>
+            📊 I Tuoi Asset
+          </h3>
+          {portfolioData.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>
+              Nessun asset nel portfolio
+            </div>
+          ) : (
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {portfolioData.slice(0, 5).map((asset, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 0',
+                  borderBottom: index < portfolioData.length - 1 ? '1px solid #f3f4f6' : 'none'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: '600', fontSize: '0.875rem' }}>
+                      {asset.name || asset.asset_name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      {asset.type || asset.asset_type}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: '600', fontSize: '0.875rem' }}>
+                      {formatCurrency(asset.current_value || asset.value)}
+                    </div>
+                    <div style={{ 
+                      fontSize: '0.75rem', 
+                      color: (asset.change || 0) >= 0 ? '#10b981' : '#ef4444'
+                    }}>
+                      {(asset.change || 0) >= 0 ? '+' : ''}{(asset.change || 0).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-      {/* CSS for animations */}
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
+        {/* Recent Transactions */}
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '1rem',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
+          <h3 style={{ 
+            margin: '0 0 1rem 0', 
+            fontSize: '1.25rem', 
+            fontWeight: '600',
+            color: '#1f2937'
+          }}>
+            💳 Transazioni Recenti
+          </h3>
+          {transactionsData.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>
+              Nessuna transazione recente
+            </div>
+          ) : (
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {transactionsData.slice(0, 5).map((transaction, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 0',
+                  borderBottom: index < transactionsData.length - 1 ? '1px solid #f3f4f6' : 'none'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: '600', fontSize: '0.875rem' }}>
+                      {transaction.description || transaction.type}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      {formatDate(transaction.date || transaction.created_at)}
+                    </div>
+                  </div>
+                  <div style={{ 
+                    fontWeight: '600', 
+                    fontSize: '0.875rem',
+                    color: (transaction.amount || 0) >= 0 ? '#10b981' : '#ef4444'
+                  }}>
+                    {(transaction.amount || 0) >= 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount || 0))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {showKYCModal && (
+        <KYCModal
+          isOpen={showKYCModal}
+          onClose={() => setShowKYCModal(false)}
+          onComplete={handleKYCComplete}
+          user={user}
+          currentLevel={kycData?.level || 0}
+        />
+      )}
+
+      {showTransactionModal && (
+        <TransactionModal
+          isOpen={showTransactionModal}
+          onClose={() => setShowTransactionModal(false)}
+          user={user}
+          transactionType={transactionType}
+        />
+      )}
     </div>
   );
 };

@@ -1,6 +1,10 @@
-// Servizio per gestire transazioni XRPL reali
+// XRPL Service - Gestione transazioni e operazioni blockchain XRPL
 import { Client, Wallet, xrpToDrops, dropsToXrp } from 'xrpl';
 
+/**
+ * Servizio per gestire transazioni XRPL reali
+ * Fornisce metodi per connessione, pagamenti, tokenizzazione e trading
+ */
 class XRPLService {
   constructor() {
     this.client = null;
@@ -9,7 +13,10 @@ class XRPLService {
     // this.network = 'wss://s.altnet.rippletest.net:51233'; // Testnet per sviluppo
   }
 
-  // Connessione al network XRPL
+  /**
+   * Connessione al network XRPL
+   * @returns {Promise<Object>} Risultato della connessione
+   */
   async connect() {
     try {
       if (!this.client) {
@@ -32,7 +39,9 @@ class XRPLService {
     }
   }
 
-  // Disconnessione dal network
+  /**
+   * Disconnessione dal network
+   */
   async disconnect() {
     try {
       if (this.client && this.isConnected) {
@@ -45,7 +54,11 @@ class XRPLService {
     }
   }
 
-  // Ottieni informazioni account
+  /**
+   * Ottieni informazioni account
+   * @param {string} address - Indirizzo del wallet
+   * @returns {Promise<Object>} Informazioni dell'account
+   */
   async getAccountInfo(address) {
     try {
       await this.connect();
@@ -76,7 +89,11 @@ class XRPLService {
     }
   }
 
-  // Ottieni bilancio token
+  /**
+   * Ottieni bilancio token
+   * @param {string} address - Indirizzo del wallet
+   * @returns {Promise<Object>} Bilanci dei token
+   */
   async getTokenBalances(address) {
     try {
       await this.connect();
@@ -109,7 +126,14 @@ class XRPLService {
     }
   }
 
-  // Invia pagamento XRP
+  /**
+   * Invia pagamento XRP
+   * @param {Object} fromWallet - Wallet mittente
+   * @param {string} toAddress - Indirizzo destinatario
+   * @param {number} amount - Importo in XRP
+   * @param {string} memo - Memo opzionale
+   * @returns {Promise<Object>} Risultato della transazione
+   */
   async sendXRPPayment(fromWallet, toAddress, amount, memo = '') {
     try {
       await this.connect();
@@ -172,7 +196,14 @@ class XRPLService {
     }
   }
 
-  // Crea token personalizzato
+  /**
+   * Crea token personalizzato
+   * @param {Object} issuerWallet - Wallet emittente
+   * @param {string} currencyCode - Codice valuta (3 caratteri)
+   * @param {number} totalSupply - Fornitura totale
+   * @param {string} memo - Memo opzionale
+   * @returns {Promise<Object>} Risultato della creazione
+   */
   async createToken(issuerWallet, currencyCode, totalSupply, memo = '') {
     try {
       await this.connect();
@@ -237,7 +268,14 @@ class XRPLService {
     }
   }
 
-  // Crea Trust Line per token
+  /**
+   * Crea Trust Line per token
+   * @param {Object} wallet - Wallet che crea la trust line
+   * @param {string} currency - Codice valuta
+   * @param {string} issuer - Indirizzo emittente
+   * @param {string} limit - Limite di fiducia
+   * @returns {Promise<Object>} Risultato della creazione
+   */
   async createTrustLine(wallet, currency, issuer, limit = '1000000000') {
     try {
       await this.connect();
@@ -280,89 +318,12 @@ class XRPLService {
     }
   }
 
-  // Crea offerta di trading
-  async createOffer(wallet, takerPays, takerGets, expiration = null) {
-    try {
-      await this.connect();
-
-      const offer = {
-        TransactionType: 'OfferCreate',
-        Account: wallet.address,
-        TakerPays: takerPays,
-        TakerGets: takerGets,
-        Fee: '12'
-      };
-
-      // Aggiungi scadenza se specificata
-      if (expiration) {
-        offer.Expiration = expiration;
-      }
-
-      const prepared = await this.client.autofill(offer);
-      const signed = wallet.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob);
-
-      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-        return {
-          success: true,
-          data: {
-            hash: result.result.hash,
-            offerSequence: result.result.Sequence,
-            takerPays: takerPays,
-            takerGets: takerGets
-          }
-        };
-      } else {
-        throw new Error(`Offerta fallita: ${result.result.meta.TransactionResult}`);
-      }
-
-    } catch (error) {
-      console.error('❌ Errore creazione offerta:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Errore durante la creazione dell\'offerta' 
-      };
-    }
-  }
-
-  // Cancella offerta
-  async cancelOffer(wallet, offerSequence) {
-    try {
-      await this.connect();
-
-      const cancel = {
-        TransactionType: 'OfferCancel',
-        Account: wallet.address,
-        OfferSequence: offerSequence,
-        Fee: '12'
-      };
-
-      const prepared = await this.client.autofill(cancel);
-      const signed = wallet.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob);
-
-      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-        return {
-          success: true,
-          data: {
-            hash: result.result.hash,
-            cancelledSequence: offerSequence
-          }
-        };
-      } else {
-        throw new Error(`Cancellazione fallita: ${result.result.meta.TransactionResult}`);
-      }
-
-    } catch (error) {
-      console.error('❌ Errore cancellazione offerta:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Errore durante la cancellazione dell\'offerta' 
-      };
-    }
-  }
-
-  // Ottieni cronologia transazioni
+  /**
+   * Ottieni cronologia transazioni
+   * @param {string} address - Indirizzo del wallet
+   * @param {number} limit - Numero massimo di transazioni
+   * @returns {Promise<Object>} Cronologia transazioni
+   */
   async getTransactionHistory(address, limit = 20) {
     try {
       await this.connect();
@@ -402,7 +363,11 @@ class XRPLService {
     }
   }
 
-  // Valida indirizzo XRPL
+  /**
+   * Valida indirizzo XRPL
+   * @param {string} address - Indirizzo da validare
+   * @returns {boolean} True se valido
+   */
   isValidAddress(address) {
     try {
       // Controllo formato base
@@ -429,7 +394,10 @@ class XRPLService {
     }
   }
 
-  // Calcola commissioni di rete
+  /**
+   * Calcola commissioni di rete
+   * @returns {Promise<Object>} Commissioni di rete
+   */
   async getNetworkFees() {
     try {
       await this.connect();
@@ -461,7 +429,12 @@ class XRPLService {
     }
   }
 
-  // Monitora transazione
+  /**
+   * Monitora transazione
+   * @param {string} hash - Hash della transazione
+   * @param {number} timeout - Timeout in millisecondi
+   * @returns {Promise<Object>} Stato della transazione
+   */
   async waitForTransaction(hash, timeout = 30000) {
     try {
       await this.connect();
@@ -509,22 +482,34 @@ class XRPLService {
   }
 }
 
-// Istanza singleton del servizio
-export const xrplService = new XRPLService();
-
-// Utility functions
+/**
+ * Utility functions per XRPL
+ */
 export const XRPLUtils = {
-  // Converti XRP in drops
+  /**
+   * Converti XRP in drops
+   * @param {number|string} xrp - Importo in XRP
+   * @returns {string} Importo in drops
+   */
   xrpToDrops: (xrp) => {
     return (parseFloat(xrp) * 1000000).toString();
   },
 
-  // Converti drops in XRP
+  /**
+   * Converti drops in XRP
+   * @param {number|string} drops - Importo in drops
+   * @returns {string} Importo in XRP
+   */
   dropsToXrp: (drops) => {
     return (parseInt(drops) / 1000000).toString();
   },
 
-  // Formatta importo per display
+  /**
+   * Formatta importo per display
+   * @param {number|string} amount - Importo
+   * @param {string} currency - Valuta
+   * @returns {string} Importo formattato
+   */
   formatAmount: (amount, currency = 'XRP') => {
     if (currency === 'XRP') {
       return `${parseFloat(amount).toFixed(6)} XRP`;
@@ -533,17 +518,30 @@ export const XRPLUtils = {
     }
   },
 
-  // Genera codice valuta da nome asset
+  /**
+   * Genera codice valuta da nome asset
+   * @param {string} assetName - Nome dell'asset
+   * @returns {string} Codice valuta (3 caratteri)
+   */
   generateCurrencyCode: (assetName) => {
     // Prende le prime 3 lettere maiuscole
     return assetName.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
   },
 
-  // Calcola valore in USD (mock - in produzione usare API di prezzo)
+  /**
+   * Calcola valore in USD (mock - in produzione usare API di prezzo)
+   * @param {number|string} xrpAmount - Importo in XRP
+   * @param {number} xrpPrice - Prezzo XRP in USD
+   * @returns {string} Valore in USD
+   */
   calculateUSDValue: (xrpAmount, xrpPrice = 0.50) => {
     return (parseFloat(xrpAmount) * xrpPrice).toFixed(2);
   }
 };
 
+// Istanza singleton del servizio
+export const xrplService = new XRPLService();
+
+// Export default per compatibilità
 export default xrplService;
 

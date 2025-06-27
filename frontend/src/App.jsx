@@ -1,69 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import WelcomePage from './components/WelcomePage';
-import Dashboard from './components/Dashboard';
-import LoginModal from './components/LoginModal';
-import { useAuth } from './services/authService';
+import React from 'react';
 
+/**
+ * App semplificata per debug Web3Auth
+ */
 function App() {
-  const { isAuthenticated, user, loading } = useAuth();
-  const [showLoginModal, setShowLoginModal] = useState(false);
-
-  const handleLoginClick = () => {
-    setShowLoginModal(true);
-  };
-
-  const handleLoginSuccess = (userData) => {
-    console.log('Login successful:', userData);
-    setShowLoginModal(false);
-  };
-
-  const handleCloseModal = () => {
-    setShowLoginModal(false);
-  };
-
-  // Mostra loading durante il ripristino della sessione
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Caricamento...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <BrowserRouter>
-      <div className="App">
-        <Routes>
-          <Route 
-            path="/" 
-            element={
-              isAuthenticated ? 
-                <Navigate to="/dashboard" replace /> : 
-                <WelcomePage onLoginClick={handleLoginClick} />
-            } 
-          />
-          <Route 
-            path="/dashboard" 
-            element={
-              isAuthenticated ? 
-                <Dashboard user={user} /> : 
-                <Navigate to="/" replace />
-            } 
-          />
-        </Routes>
-
-        {/* Login Modal */}
-        <LoginModal
-          isOpen={showLoginModal}
-          onClose={handleCloseModal}
-          onLoginSuccess={handleLoginSuccess}
-        />
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          SolCraft Nexus
+        </h1>
+        <p className="text-gray-600 mb-8">
+          Piattaforma di tokenizzazione XRPL
+        </p>
+        <button 
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+          onClick={() => alert('Test funzionante!')}
+        >
+          Test React
+        </button>
       </div>
-    </BrowserRouter>
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 // Servizio per gestire l'autenticazione con provider OAuth reali
+import React from 'react';
 import { supabase } from './supabaseService';
 
 export class AuthService {

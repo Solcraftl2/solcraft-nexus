@@ -1,3 +1,6 @@
+import { getCache, setCache } from '../config/redisClient.js'
+import { httpRequestDuration, httpErrorCounter } from '../config/metrics.js'
+
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -9,7 +12,14 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
+    const end = httpRequestDuration.startTimer({ route: 'marketplace_list', method: req.method })
     try {
+      const cacheKey = `market:list:${JSON.stringify(req.query)}`
+      const cached = await getCache(cacheKey)
+      if (cached) {
+        end({ status: 200 })
+        return res.status(200).json(cached)
+      }
       // Authorization is optional for marketplace browsing
       const authHeader = req.headers.authorization
       let isAuthenticated = !!authHeader
@@ -411,7 +421,7 @@ export default async function handler(req, res) {
         marketStats.byRisk[risk].avgYield = (marketStats.byRisk[risk].avgYield + asset.performance.annualYield) / 2
       })
 
-      return res.status(200).json({
+      const response = {
         success: true,
         data: {
           assets: paginatedAssets,
@@ -431,10 +441,16 @@ export default async function handler(req, res) {
           }
         },
         timestamp: new Date().toISOString()
-      })
+      }
+
+      await setCache(cacheKey, response, 60)
+      end({ status: 200 })
+      return res.status(200).json(response)
 
     } catch (error) {
       console.error('Marketplace list error:', error)
+      httpErrorCounter.inc({ route: 'marketplace_list', method: req.method, status: 500 })
+      end({ status: 500 })
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server'

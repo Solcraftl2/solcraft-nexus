@@ -99,8 +99,40 @@ export const updateUserProfile = async (userId, updates) => {
     .eq('id', userId)
     .select()
     .single();
-  
+
   return validateSupabaseResponse(data, error, 'Update user profile');
+};
+
+// Order management helpers
+export const insertOrder = async (orderData) => {
+  const { data, error } = await supabase
+    .from('orders')
+    .insert(orderData)
+    .select()
+    .single();
+
+  return validateSupabaseResponse(data, error, 'Insert order');
+};
+
+export const updateOrder = async (orderId, updates) => {
+  const { data, error } = await supabase
+    .from('orders')
+    .update(updates)
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  return validateSupabaseResponse(data, error, 'Update order');
+};
+
+export const insertTradeHistory = async (tradeData) => {
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert(tradeData)
+    .select()
+    .single();
+
+  return validateSupabaseResponse(data, error, 'Insert trade history');
 };
 
 export default supabase;

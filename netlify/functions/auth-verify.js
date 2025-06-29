@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const supabase = require('./supabaseClient');
 
 exports.handler = async (event, context) => {
   // Gestione CORS
@@ -43,17 +44,23 @@ exports.handler = async (event, context) => {
     
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
-      
-      // Simula il recupero dei dati utente dal database
-      // In produzione, qui faresti una query al database Supabase
-      const userData = {
-        id: decoded.userId,
-        email: decoded.email,
-        firstName: decoded.firstName || 'Utente',
-        lastName: decoded.lastName || '',
-        isVerified: true,
-        createdAt: decoded.iat ? new Date(decoded.iat * 1000).toISOString() : new Date().toISOString()
-      };
+
+      // Recupero dei dati utente da Supabase
+      const { data: user } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', decoded.userId)
+        .single();
+
+      if (!user) {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({ error: 'Utente non trovato' }),
+        };
+      }
+
+      const { password_hash: _, ...userData } = user;
 
       return {
         statusCode: 200,

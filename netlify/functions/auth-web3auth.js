@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const supabase = require('./supabaseClient');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
 
@@ -32,7 +33,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { provider, loginType, mpcEnabled, network } = JSON.parse(event.body);
+    const { provider, loginType, mpcEnabled, network, email, name } = JSON.parse(event.body);
 
     // Validazione input
     if (!provider || !loginType) {
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Simulazione generazione wallet MPC
+    // Generazione wallet MPC semplificata
     const generateMPCWallet = (provider, network) => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 15);
@@ -74,55 +75,49 @@ exports.handler = async (event, context) => {
       }
     };
 
-    // Genera wallet MPC
     const walletAddress = generateMPCWallet(provider, network || 'xrpl');
-    
-    // Simulazione dati utente da provider social
-    const mockUserData = {
-      google: {
-        id: `google_${Date.now()}`,
-        email: 'user@gmail.com',
-        name: 'Google User',
-        picture: 'https://via.placeholder.com/150'
-      },
-      twitter: {
-        id: `twitter_${Date.now()}`,
-        username: 'twitter_user',
-        name: 'Twitter User',
-        picture: 'https://via.placeholder.com/150'
-      },
-      discord: {
-        id: `discord_${Date.now()}`,
-        username: 'discord_user',
-        name: 'Discord User',
-        picture: 'https://via.placeholder.com/150'
-      }
-    };
 
-    const userData = mockUserData[provider] || {
-      id: `${provider}_${Date.now()}`,
-      name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} User`
-    };
+    // Recupera o crea utente in Supabase
+    const generatedId = `${provider}_${Date.now()}`;
+    const userEmail = email || `${generatedId}@${provider}.com`;
+    const displayName = name || provider.charAt(0).toUpperCase() + provider.slice(1) + ' User';
 
-    // Crea utente Web3Auth
-    const user = {
-      id: userData.id,
-      email: userData.email || `${userData.username || userData.id}@${provider}.com`,
-      name: userData.name,
-      picture: userData.picture,
-      provider: provider,
-      authMethod: 'web3auth',
-      walletAddress: walletAddress,
-      mpcEnabled: mpcEnabled,
-      network: network || 'xrpl',
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString()
-    };
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', userEmail)
+      .single();
+
+    let user;
+
+    if (existingUser) {
+      await supabase
+        .from('users')
+        .update({ last_login: new Date().toISOString(), wallet_address: walletAddress })
+        .eq('id', existingUser.id);
+      user = { ...existingUser, wallet_address: walletAddress };
+    } else {
+      const { data: newUser } = await supabase
+        .from('users')
+        .insert({
+          email: userEmail,
+          full_name: displayName,
+          provider: provider,
+          auth_method: 'web3auth',
+          wallet_address: walletAddress,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          last_login: new Date().toISOString()
+        })
+        .select('*')
+        .single();
+      user = newUser;
+    }
 
     // Genera JWT token
     const token = jwt.sign(
-      { 
-        userId: user.id, 
+      {
+        userId: user.id,
         email: user.email,
         walletAddress: walletAddress,
         authMethod: 'web3auth',
@@ -131,6 +126,8 @@ exports.handler = async (event, context) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    const { password_hash: _, ...userSafe } = user;
 
     // Simulazione balance wallet (per demo)
     const mockBalance = {
@@ -156,7 +153,7 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({
         success: true,
         message: `Web3Auth con ${provider} completato con successo`,
-        user: user,
+        user: userSafe,
         token: token,
         walletAddress: walletAddress,
         balance: mockBalance,

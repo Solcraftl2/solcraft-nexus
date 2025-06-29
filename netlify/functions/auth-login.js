@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const supabase = require('./supabaseClient');
 
 exports.handler = async (event, context) => {
   // Gestione CORS
@@ -40,31 +41,14 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Simula la verifica dell'utente nel database
-    // In produzione, qui faresti una query a Supabase per verificare le credenziali
-    const mockUsers = [
-      {
-        id: 1,
-        email: 'admin@solcraft.com',
-        password: await bcrypt.hash('admin123', 10),
-        firstName: 'Admin',
-        lastName: 'SolCraft',
-        isVerified: true
-      },
-      {
-        id: 2,
-        email: 'demo@solcraft.com',
-        password: await bcrypt.hash('demo123', 10),
-        firstName: 'Demo',
-        lastName: 'User',
-        isVerified: true
-      }
-    ];
+    // Recupera l'utente dal database Supabase
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
 
-    // Trova l'utente
-    const user = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
-    if (!user) {
+    if (error || !user) {
       return {
         statusCode: 401,
         headers,
@@ -74,9 +58,8 @@ exports.handler = async (event, context) => {
         }),
       };
     }
-
     // Verifica la password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!isPasswordValid) {
       return {
@@ -95,15 +78,14 @@ exports.handler = async (event, context) => {
       {
         userId: user.id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName
+        fullName: user.full_name
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     // Rimuovi la password dalla risposta
-    const { password: _, ...userWithoutPassword } = user;
+    const { password_hash: _, ...userWithoutPassword } = user;
 
     return {
       statusCode: 200,

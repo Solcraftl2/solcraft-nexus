@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const supabase = require('./supabaseClient');
 
 exports.handler = async (event, context) => {
   // Gestione CORS
@@ -64,11 +65,14 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Simula la verifica se l'utente esiste già
-    // In produzione, qui faresti una query a Supabase per verificare se l'email esiste
-    const existingEmails = ['admin@solcraft.com', 'demo@solcraft.com'];
-    
-    if (existingEmails.includes(email.toLowerCase())) {
+    // Verifica se l'utente esiste già in Supabase
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (existingUser) {
       return {
         statusCode: 409,
         headers,
@@ -82,17 +86,28 @@ exports.handler = async (event, context) => {
     // Hash della password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Simula la creazione dell'utente nel database
-    // In produzione, qui faresti un INSERT in Supabase
-    const newUser = {
-      id: Date.now(), // In produzione sarebbe generato dal database
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      isVerified: false,
-      createdAt: new Date().toISOString()
-    };
+    // Crea l'utente nel database Supabase
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert({
+        first_name: firstName,
+        last_name: lastName,
+        email: email.toLowerCase(),
+        password_hash: hashedPassword,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        last_login: new Date().toISOString()
+      })
+      .select('*')
+      .single();
+
+    if (insertError) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ success: false, message: insertError.message }),
+      };
+    }
 
     // Genera JWT token
     const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
@@ -100,15 +115,14 @@ exports.handler = async (event, context) => {
       {
         userId: newUser.id,
         email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName
+        fullName: `${firstName} ${lastName}`
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     // Rimuovi la password dalla risposta
-    const { password: _, ...userWithoutPassword } = newUser;
+    const { password_hash: _, ...userWithoutPassword } = newUser;
 
     return {
       statusCode: 201,

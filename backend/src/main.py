@@ -1,7 +1,10 @@
 import os
 import sys
-# DON'T CHANGE THIS PATH
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Ensure the backend package root is on the Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_root = os.path.dirname(current_dir)
+if backend_root not in sys.path:
+    sys.path.append(backend_root)
 
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -55,8 +58,7 @@ def create_app():
                 last_name='User',
                 account_type='individual',
                 status='active',
-                kyc_status='approved',
-                email_verified=True
+                kyc_status='approved'
             )
             admin_user.set_password('admin123')
             db.session.add(admin_user)

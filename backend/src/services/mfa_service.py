@@ -82,7 +82,7 @@ class SecurityEvent(db.Model):
     # Context
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.String(500))
-    metadata = db.Column(db.JSON)
+    event_metadata = db.Column(db.JSON)
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -95,7 +95,7 @@ class SecurityEvent(db.Model):
             'description': self.description,
             'ip_address': self.ip_address,
             'user_agent': self.user_agent,
-            'metadata': self.metadata,
+            'metadata': self.event_metadata,
             'created_at': self.created_at.isoformat()
         }
 
@@ -411,7 +411,7 @@ class MFAService:
                 description=description,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                metadata=metadata
+                event_metadata=metadata
             )
             
             db.session.add(event)

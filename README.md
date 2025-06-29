@@ -100,6 +100,13 @@ npm install
 npm run dev
 ```
 
+### Production Environment
+
+Copy `.env.production.example` to `.env.production` and provide the required
+values. This file is ignored by Git, so your secrets remain safe. In deployed
+environments, configure these values using your hosting provider's environment
+variable settings.
+
 ## 🔌 API Endpoints
 
 ### Authentication

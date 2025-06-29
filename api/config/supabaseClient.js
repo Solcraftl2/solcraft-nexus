@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Configurazione Supabase per API Backend
-const supabaseUrl = process.env.SUPABASE_URL || 'https://dtzlkcqddjaoubrjnzjw.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0emxrY3FkZGphb3VicmpuempqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzUyMDQ5NjMsImV4cCI6MjA1MDc4MDk2M30.eYJhbGc1OjJIUzI1NiIsInR5cCI6IkpXVCJ9';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+}
 
 // Client Supabase per operazioni backend
 export const supabase = createClient(supabaseUrl, supabaseServiceKey);

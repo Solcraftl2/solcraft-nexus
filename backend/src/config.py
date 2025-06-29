@@ -3,20 +3,20 @@ from datetime import timedelta
 
 class Config:
     """Base configuration class"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'solcraft-nexus-secret-key-change-in-production'
+    SECRET_KEY = os.environ.get('SECRET_KEY')
     
     # Database Configuration
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f"sqlite:///{os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'database', 'app.db')}"
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # JWT Configuration
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt-secret-change-in-production'
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
     # XRP Ledger Configuration
-    XRPL_SERVER = os.environ.get('XRPL_SERVER') or 'wss://s.devnet.rippletest.net:51233'
-    XRPL_EXPLORER = os.environ.get('XRPL_EXPLORER') or 'https://devnet.xrpl.org'
+    XRPL_SERVER = os.environ.get('XRPL_SERVER')
+    XRPL_EXPLORER = os.environ.get('XRPL_EXPLORER')
     
     # OAuth Configuration
     # Google OAuth
@@ -39,7 +39,7 @@ class Config:
     MICROSOFT_CLIENT_SECRET = os.environ.get('MICROSOFT_CLIENT_SECRET')
     
     # Redis Configuration (for caching and sessions)
-    REDIS_URL = os.environ.get('REDIS_URL') or 'redis://localhost:6379/0'
+    REDIS_URL = os.environ.get('REDIS_URL')
     
     # Security Configuration
     BCRYPT_LOG_ROUNDS = 12

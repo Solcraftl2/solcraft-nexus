@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, getAccountInfo, walletFromSeed } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -141,18 +141,50 @@ export default async function handler(req, res) {
       });
     }
 
-    // Creazione token MPT su XRPL (simulato per ora)
+    // Creazione token MPT su XRPL
     let mptCreationResult;
     try {
-      // TODO: Implementare creazione MPT reale su XRPL
+      await initializeXRPL().catch(() => {});
+      const client = getXRPLClient();
+
+      const issuerSeed = process.env.ISSUER_SEED;
+      if (!issuerSeed) {
+        throw new Error('ISSUER_SEED non configurato');
+      }
+
+      const issuerWallet = walletFromSeed(issuerSeed);
+
+      const metadataString = typeof metadata === 'string' ? metadata : JSON.stringify(metadata || {});
+      const metadataHex = Buffer.from(metadataString).toString('hex').toUpperCase();
+
+      const mptCreate = {
+        TransactionType: 'MPTokenIssuanceCreate',
+        Account: issuerWallet.address,
+        MPTokenMetadata: metadataHex,
+        MaximumAmount: totalSupply.toString()
+      };
+
+      const prepared = await client.autofill(mptCreate);
+      const signed = issuerWallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
+
+      let createdId = null;
+      const nodes = result.result.meta?.CreatedNode ? (Array.isArray(result.result.meta.CreatedNode) ? result.result.meta.CreatedNode : [result.result.meta.CreatedNode]) : [];
+      for (const node of nodes) {
+        if (node.NewFields && node.NewFields.MPTokenID) {
+          createdId = node.NewFields.MPTokenID;
+          break;
+        }
+      }
+
       mptCreationResult = {
-        success: true,
-        transactionHash: `MPT_${mptId}_${Date.now().toString(16).toUpperCase()}`,
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000',
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true,
-        mptId: mptId
+        success: result.result.validated,
+        transactionHash: result.result.hash,
+        ledgerIndex: result.result.ledger_index,
+        fee: prepared.Fee,
+        sequence: prepared.Sequence,
+        validated: result.result.validated,
+        mptId: createdId || mptId
       };
 
     } catch (error) {

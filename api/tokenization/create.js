@@ -1,5 +1,10 @@
-import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
-import jwt from 'jsonwebtoken';
+import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js'
+import { createClient } from '@supabase/supabase-js'
+import jwt from 'jsonwebtoken'
+
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -166,9 +171,43 @@ export default async function handler(req, res) {
       }
     };
 
-    // Simulazione salvataggio in database
-    // In produzione salveresti in un database reale
-    console.log('Token created:', tokenData);
+    // Salvataggio token nel database Supabase
+    try {
+      const { error: dbError } = await supabase
+        .from('tokens')
+        .insert([
+          {
+            id: tokenId,
+            user_id: decoded.userId,
+            issuer: tokenCreationResult.issuerAddress,
+            tx_hash: tokenCreationResult.txHash,
+            symbol: tokenSymbol,
+            metadata: tokenData,
+            status: tokenCreationResult.success ? 'active' : 'failed',
+            created_at: createdAt
+          }
+        ])
+        .select()
+        .single()
+
+      if (dbError) {
+        console.error('Database insert error:', dbError)
+        return res.status(500).json({
+          success: false,
+          error: 'Errore durante il salvataggio del token',
+          message: dbError.message
+        })
+      }
+    } catch (dbErr) {
+      console.error('Database operation failed:', dbErr)
+      return res.status(500).json({
+        success: false,
+        error: 'Errore durante il salvataggio del token',
+        message: dbErr.message
+      })
+    }
+
+    console.log('Token created:', tokenData)
 
     if (tokenCreationResult.success) {
       return res.status(201).json({

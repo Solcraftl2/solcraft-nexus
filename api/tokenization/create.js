@@ -1,5 +1,8 @@
-import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
+import xrplTokenizationService from '../services/xrplTokenizationService.js';
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -84,37 +87,24 @@ export default async function handler(req, res) {
     const tokenId = `${tokenSymbol}_${Date.now()}`;
     const createdAt = new Date().toISOString();
 
-    // Simulazione creazione token su XRPL
-    let tokenCreationResult = {
-      success: false,
-      txHash: null,
-      issuerAddress: null,
-      error: null
-    };
-
+    // Creazione token reale su XRPL
+    let tokenCreationResult;
     try {
-      // Inizializza connessione XRPL
-      await initializeXRPL().catch(() => {}); // Ignora se già connesso
-
-      // In produzione, qui creeresti il token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
-
-      tokenCreationResult = {
-        success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
-        tokenSymbol: tokenSymbol,
-        totalSupply: supply.toString(),
-        created: true
-      };
-
+      tokenCreationResult = await xrplTokenizationService.createRealEstateToken({
+        name: assetName,
+        symbol: tokenSymbol,
+        location: assetLocation || 'Unknown',
+        faceValue: parseFloat(assetValue),
+        totalSupply: supply,
+        description: assetDescription
+      });
     } catch (error) {
       console.error('Token creation error:', error);
-      tokenCreationResult.error = error.message;
+      return res.status(500).json({
+        success: false,
+        error: 'Errore durante la creazione del token sulla blockchain',
+        message: error.message
+      });
     }
 
     // Creazione oggetto token completo
@@ -141,9 +131,9 @@ export default async function handler(req, res) {
       },
       blockchain: {
         network: 'XRPL',
-        txHash: tokenCreationResult.txHash,
-        status: tokenCreationResult.success ? 'confirmed' : 'failed',
-        confirmations: tokenCreationResult.success ? 1 : 0
+        txHash: tokenCreationResult.transactionHash,
+        status: 'confirmed',
+        confirmations: 1
       },
       compliance: {
         kyc: false,
@@ -157,7 +147,7 @@ export default async function handler(req, res) {
         createdAt: createdAt,
         lastUpdated: createdAt
       },
-      status: tokenCreationResult.success ? 'active' : 'failed',
+      status: 'active',
       pricing: {
         initialPrice: parseFloat(assetValue) / supply,
         currentPrice: parseFloat(assetValue) / supply,
@@ -166,21 +156,37 @@ export default async function handler(req, res) {
       }
     };
 
-    // Simulazione salvataggio in database
-    // In produzione salveresti in un database reale
+    // Persistenza in database
+    try {
+      await supabase.from('mpt_tokens').insert([{ 
+        mpt_id: tokenCreationResult.mptIssuanceId,
+        symbol: tokenSymbol,
+        name: assetName,
+        asset_type: assetType,
+        asset_value: assetValue,
+        issuer_address: tokenCreationResult.issuerAddress,
+        tx_hash: tokenCreationResult.transactionHash,
+        total_supply: supply,
+        metadata: metadata || {},
+        created_at: createdAt
+      }]);
+    } catch (e) {
+      console.error('Database save error:', e);
+    }
+
     console.log('Token created:', tokenData);
 
-    if (tokenCreationResult.success) {
+    if (tokenCreationResult) {
       return res.status(201).json({
         success: true,
         message: 'Asset tokenizzato con successo!',
         data: {
           token: tokenData,
           transaction: {
-            hash: tokenCreationResult.txHash,
+            hash: tokenCreationResult.transactionHash,
             status: 'confirmed',
             network: 'XRPL Testnet',
-            explorer: `https://testnet.xrpl.org/transactions/${tokenCreationResult.txHash}`
+            explorer: `https://testnet.xrpl.org/transactions/${tokenCreationResult.transactionHash}`
           },
           nextSteps: [
             'Il token è stato creato sulla blockchain XRPL',
@@ -188,16 +194,6 @@ export default async function handler(req, res) {
             'Configura le impostazioni di compliance se necessario',
             'Monitora le transazioni nel dashboard'
           ]
-        }
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        error: 'Errore durante la creazione del token sulla blockchain',
-        details: tokenCreationResult.error,
-        data: {
-          token: tokenData,
-          status: 'failed'
         }
       });
     }

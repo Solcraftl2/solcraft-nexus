@@ -1,5 +1,10 @@
 import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
+import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -166,8 +171,23 @@ export default async function handler(req, res) {
       }
     };
 
-    // Simulazione salvataggio in database
-    // In produzione salveresti in un database reale
+    // Salvataggio su Supabase
+    try {
+      await supabase.from('tokens').insert([
+        {
+          id: tokenId,
+          creator_id: decoded.userId,
+          token_symbol: tokenSymbol,
+          issuer_address: tokenCreationResult.issuerAddress,
+          tx_hash: tokenCreationResult.txHash,
+          metadata: tokenData,
+          created_at: createdAt
+        }
+      ]);
+    } catch (dbError) {
+      console.error('Supabase insert error:', dbError);
+    }
+
     console.log('Token created:', tokenData);
 
     if (tokenCreationResult.success) {

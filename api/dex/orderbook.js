@@ -1,4 +1,6 @@
 import { Client, Wallet } from 'xrpl'
+import { getCache, setCache } from '../config/redisClient.js'
+import { httpRequestDuration, httpErrorCounter } from '../config/metrics.js'
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -12,12 +14,14 @@ export default async function handler(req, res) {
 
   const client = new Client('wss://s1.ripple.com')
   
+  let end
   try {
     await client.connect()
-    
+
     if (req.method === 'GET') {
+      end = httpRequestDuration.startTimer({ route: 'dex_orderbook', method: req.method })
       // Get order book
-      const { 
+      const {
         takerGets, 
         takerPays, 
         limit = 20,
@@ -25,12 +29,21 @@ export default async function handler(req, res) {
       } = req.query
       
       if (!takerGets || !takerPays) {
+        httpErrorCounter.inc({ route: 'dex_orderbook', method: req.method, status: 400 })
+        end({ status: 400 })
         return res.status(400).json({
           success: false,
           error: 'takerGets and takerPays are required'
         })
       }
       
+      const cacheKey = `orderbook:${takerGets}:${takerPays}:${limit}`
+      const cached = await getCache(cacheKey)
+      if (cached) {
+        end({ status: 200 })
+        return res.status(200).json({ success: true, data: cached })
+      }
+
       const takerGetsObj = JSON.parse(takerGets)
       const takerPaysObj = JSON.parse(takerPays)
       
@@ -86,30 +99,35 @@ export default async function handler(req, res) {
         spread = askPrice - bidPrice
       }
       
+      const response = {
+        offers: offers,
+        market_stats: {
+          total_offers: offers.length,
+          total_volume: totalVolume,
+          average_price: avgPrice,
+          best_bid: bestBid,
+          best_ask: bestAsk,
+          spread: spread,
+          market_depth: {
+            bids: offers.length,
+            asks: reverseOrderBook.result.offers.length
+          }
+        },
+        taker_gets: takerGetsObj,
+        taker_pays: takerPaysObj,
+        ledger_index: orderBook.result.ledger_index,
+        validated: orderBook.result.validated
+      }
+
+      await setCache(cacheKey, response, 30)
+      end({ status: 200 })
       res.status(200).json({
         success: true,
-        data: {
-          offers: offers,
-          market_stats: {
-            total_offers: offers.length,
-            total_volume: totalVolume,
-            average_price: avgPrice,
-            best_bid: bestBid,
-            best_ask: bestAsk,
-            spread: spread,
-            market_depth: {
-              bids: offers.length,
-              asks: reverseOrderBook.result.offers.length
-            }
-          },
-          taker_gets: takerGetsObj,
-          taker_pays: takerPaysObj,
-          ledger_index: orderBook.result.ledger_index,
-          validated: orderBook.result.validated
-        }
+        data: response
       })
       
     } else if (req.method === 'POST') {
+      end = httpRequestDuration.startTimer({ route: 'dex_orderbook', method: req.method })
       // Create offer
       const {
         traderSeed,
@@ -121,6 +139,8 @@ export default async function handler(req, res) {
       } = req.body
       
       if (!traderSeed || !takerGets || !takerPays) {
+        httpErrorCounter.inc({ route: 'dex_orderbook', method: req.method, status: 400 })
+        end({ status: 400 })
         return res.status(400).json({
           success: false,
           error: 'Trader seed, takerGets, and takerPays are required'
@@ -174,6 +194,7 @@ export default async function handler(req, res) {
         }
       }
       
+      end({ status: 200 })
       res.status(200).json({
         success: true,
         data: {
@@ -193,6 +214,8 @@ export default async function handler(req, res) {
     
   } catch (error) {
     console.error('DEX operation error:', error)
+    httpErrorCounter.inc({ route: 'dex_orderbook', method: req.method, status: 500 })
+    if (end) end({ status: 500 })
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to execute DEX operation'

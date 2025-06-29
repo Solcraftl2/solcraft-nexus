@@ -19,14 +19,13 @@ export default async function handler(req, res) {
         })
       }
 
-      const { 
-        toAddress, 
-        amount, 
-        currency, 
-        memo, 
+      const {
+        toAddress,
+        amount,
+        currency,
+        memo,
         priority = 'normal',
-        fromAddress,
-        privateKey // In production, this would be handled securely
+        fromAddress
       } = req.body
 
       // Validate required fields

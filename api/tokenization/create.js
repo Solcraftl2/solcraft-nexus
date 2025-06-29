@@ -1,6 +1,7 @@
 import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -40,6 +41,10 @@ export default async function handler(req, res) {
         error: 'Token non valido'
       });
     }
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
     const {
       assetName,
@@ -304,6 +309,24 @@ export default async function handler(req, res) {
 
     // Risposta di successo
     if (tokenCreationResult.success) {
+      // Salva token su Supabase
+      const { error: insertError } = await supabase.from('tokens').insert({
+        id: tokenId,
+        metadata: tokenData,
+        issuer: tokenCreationResult.issuerAddress,
+        tx_hash: tokenCreationResult.txHash,
+        created_at: createdAt
+      });
+
+      if (insertError) {
+        console.error('Supabase insert error:', insertError);
+        return res.status(500).json({
+          success: false,
+          error: 'Errore salvataggio token',
+          details: insertError.message
+        });
+      }
+
       return res.status(201).json({
         success: true,
         message: 'Asset tokenizzato con successo e salvato nel database!',

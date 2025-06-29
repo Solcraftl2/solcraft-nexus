@@ -1,4 +1,10 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+/* eslint-env node */
+/* global process */
+import {
+  getXRPLClient,
+  initializeXRPL,
+  walletFromSeed,
+} from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -25,7 +31,7 @@ export default async function handler(req, res) {
     
     try {
       jwt.verify(token, jwtSecret);
-    } catch (error) {
+    } catch {
       return res.status(401).json({
         success: false,
         error: 'Token non valido'
@@ -34,6 +40,9 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Ensure XRPL connection
+    await initializeXRPL();
+
     // GET - Informazioni DEX e order book
     if (req.method === 'GET') {
       const {
@@ -176,45 +185,22 @@ async function getDEXOrderBook(baseCurrency, quoteCurrency, depth) {
   }
 }
 
-async function getDEXLiquidity() {
-  return {
-    totalLiquidity: 15750000,
-    liquidityPools: [
-      {
-        pair: 'XRP/USD',
-        liquidity: 8500000,
-        volume24h: 2100000,
-        apy: 12.5,
-        fees24h: 8400
-      },
-      {
-        pair: 'RLUSD/XRP',
-        liquidity: 4200000,
-        volume24h: 980000,
-        apy: 15.2,
-        fees24h: 3920
-      },
-      {
-        pair: 'SOLO/XRP',
-        liquidity: 1850000,
-        volume24h: 450000,
-        apy: 18.7,
-        fees24h: 1800
-      },
-      {
-        pair: 'CSC/XRP',
-        liquidity: 1200000,
-        volume24h: 320000,
-        apy: 22.1,
-        fees24h: 1280
-      }
-    ],
-    topProviders: [
-      { address: 'rLiquidityProvider1...', contribution: 2500000, rewards24h: 3125 },
-      { address: 'rLiquidityProvider2...', contribution: 1800000, rewards24h: 2250 },
-      { address: 'rLiquidityProvider3...', contribution: 1200000, rewards24h: 1500 }
-    ]
-  };
+async function getDEXLiquidity(baseCurrency = 'XRP', quoteCurrency = 'USD') {
+  try {
+    const client = await getXRPLClient();
+
+    const request = {
+      command: 'amm_info',
+      asset: baseCurrency === 'XRP' ? { currency: 'XRP' } : { currency: baseCurrency, issuer: 'rTokenIssuerAddress' },
+      asset2: quoteCurrency === 'XRP' ? { currency: 'XRP' } : { currency: quoteCurrency, issuer: 'rTokenIssuerAddress' },
+    };
+
+    const response = await client.request(request);
+    return response.result;
+  } catch (error) {
+    console.error('Errore liquidity XRPL:', error);
+    throw error;
+  }
 }
 
 async function getDEXStats() {
@@ -307,70 +293,95 @@ async function getTradingPairs() {
 }
 
 async function placeDEXOrder(orderData) {
-  const {
-    pair,
-    side, // 'buy' or 'sell'
-    type, // 'market', 'limit', 'stop'
-    amount,
-    price,
-    stopPrice,
-    timeInForce = 'GTC' // GTC, IOC, FOK
-  } = orderData;
+  try {
+    const { traderSeed, takerGets, takerPays, flags = 0, expiration, offerSequence } = orderData;
 
-  // Simulazione piazzamento ordine su XRPL DEX
-  const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  return {
-    orderId,
-    pair,
-    side,
-    type,
-    amount: parseFloat(amount),
-    price: price ? parseFloat(price) : null,
-    stopPrice: stopPrice ? parseFloat(stopPrice) : null,
-    status: 'pending',
-    timeInForce,
-    filled: 0,
-    remaining: parseFloat(amount),
-    fees: {
-      estimated: parseFloat(amount) * 0.0015,
-      currency: pair.split('/')[1]
-    },
-    timestamp: new Date().toISOString(),
-    estimatedSettlement: new Date(Date.now() + 4000).toISOString(),
-    txHash: `tx_${Math.random().toString(36).substr(2, 16)}`
-  };
+    if (!traderSeed || !takerGets || !takerPays) {
+      throw new Error('Missing required order fields');
+    }
+
+    const client = await getXRPLClient();
+    const wallet = walletFromSeed(traderSeed);
+
+    const tx = {
+      TransactionType: 'OfferCreate',
+      Account: wallet.address,
+      TakerGets: takerGets,
+      TakerPays: takerPays,
+      Flags: flags,
+    };
+    if (expiration) tx.Expiration = expiration;
+    if (offerSequence) tx.OfferSequence = offerSequence;
+
+    const prepared = await client.autofill(tx);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    if (result.result.engine_result !== 'tesSUCCESS') {
+      throw new Error(result.result.engine_result_message || 'Transaction failed');
+    }
+
+    return {
+      hash: result.result.hash,
+      ledger_index: result.result.ledger_index,
+      validated: result.result.validated,
+    };
+  } catch (error) {
+    console.error('Order placement failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 async function cancelDEXOrder(orderData) {
-  const { orderId } = orderData;
-  
-  return {
-    orderId,
-    status: 'cancelled',
-    cancelledAt: new Date().toISOString(),
-    refund: {
-      amount: 1000,
-      currency: 'XRP',
-      txHash: `refund_${Math.random().toString(36).substr(2, 16)}`
+  try {
+    const { traderSeed, offerSequence } = orderData;
+    if (!traderSeed || offerSequence === undefined) {
+      throw new Error('Missing cancel parameters');
     }
-  };
+
+    const client = await getXRPLClient();
+    const wallet = walletFromSeed(traderSeed);
+
+    const tx = {
+      TransactionType: 'OfferCancel',
+      Account: wallet.address,
+      OfferSequence: offerSequence,
+    };
+
+    const prepared = await client.autofill(tx);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    if (result.result.engine_result !== 'tesSUCCESS') {
+      throw new Error(result.result.engine_result_message || 'Cancel failed');
+    }
+
+    return {
+      hash: result.result.hash,
+      ledger_index: result.result.ledger_index,
+      validated: result.result.validated,
+    };
+  } catch (error) {
+    console.error('Order cancel failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 async function modifyDEXOrder(orderData) {
-  const { orderId, newPrice, newAmount } = orderData;
-  
-  return {
-    orderId,
-    status: 'modified',
-    newPrice: parseFloat(newPrice),
-    newAmount: parseFloat(newAmount),
-    modifiedAt: new Date().toISOString(),
-    fees: {
-      modification: 0.1,
-      currency: 'XRP'
+  try {
+    const { traderSeed, offerSequence, takerGets, takerPays } = orderData;
+    if (!traderSeed || offerSequence === undefined || !takerGets || !takerPays) {
+      throw new Error('Missing modify parameters');
     }
-  };
+
+    // cancel existing offer then place a new one
+    await cancelDEXOrder({ traderSeed, offerSequence });
+    const result = await placeDEXOrder({ traderSeed, takerGets, takerPays });
+    return result;
+  } catch (error) {
+    console.error('Order modify failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 function getMockDEXData(action) {

@@ -72,6 +72,8 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.7",
+    "ioredis": "^5.4.2",
+    "prom-client": "^15.1.0",
     "vaul": "^1.1.2",
     "viem": "^2.31.4",
     "wagmi": "^2.15.6",

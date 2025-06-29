@@ -778,6 +778,7 @@ CREATE TABLE transactions (
 ### Cache Layer (Redis)
 
 **Performance Optimization:** Redis fornisce caching distribuito per dati frequentemente accessati come prezzi di mercato, portfolio summaries e session data. Implementa anche pub/sub per real-time notifications e distributed locking per operazioni critiche.
+Le API memorizzano in Redis la lista degli asset e le snapshot dell'order book per 60 secondi riducendo le chiamate ripetitive verso database e blockchain.
 
 ## Deployment e Infrastruttura
 
@@ -794,6 +795,7 @@ L'infrastruttura di SolCraft Nexus è progettata per alta disponibilità, scalab
 ### Monitoring e Observability
 
 **Comprehensive Monitoring:** L'infrastruttura include monitoring completo con Prometheus per metriche, Grafana per visualizzazione, ELK stack per log aggregation e distributed tracing per performance analysis. Include anche alerting automatico per problemi critici.
+Le API espongono un endpoint `/metrics` e registrano latenza ed errori per consentire visualizzazioni dettagliate in Grafana.
 
 ---
 

@@ -165,6 +165,19 @@ npm run dev
 - **100% Sicurezza** enterprise-grade
 - **Responsive Design** completo
 
+## 📈 Caching e Monitoring
+
+La piattaforma utilizza un client **Redis** configurato tramite `REDIS_URL` per
+caching di richieste frequenti come la lista degli asset e gli snapshot
+dell'order book. I dati rimangono in cache per 60 secondi riducendo il carico su
+database e blockchain.
+
+Per il monitoraggio sono esposte metriche Prometheus. Il backend Flask fornisce
+l'endpoint `/metrics` grazie a *Prometheus Flask Exporter* mentre le API in
+JavaScript tracciano `api_request_duration_seconds` e
+`api_request_errors_total`. Configurando Grafana su queste metriche è possibile
+analizzare latenza ed errori delle API.
+
 ## 🎉 Risultato Finale
 
 SolCraft Nexus è ora una piattaforma completa, professionale e sicura per la tokenizzazione su Ripple XRP Ledger. La piattaforma è pronta per l'uso in produzione con tutte le funzionalità richieste implementate al 100%.

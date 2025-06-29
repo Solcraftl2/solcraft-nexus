@@ -1,12 +1,16 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
-import jwt from 'jsonwebtoken';
+import { getXRPLClient, initializeXRPL } from '../config/xrpl.js'
+import jwt from 'jsonwebtoken'
+import redis from '../config/redis.js'
+import { httpRequestDuration, httpRequestErrors } from '../utils/metrics.js'
 
 export default async function handler(req, res) {
+  const endTimer = httpRequestDuration.startTimer({ route: 'dex/integration', method: req.method })
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
   if (req.method === 'OPTIONS') {
+    endTimer({ status_code: 200 })
     return res.status(200).end()
   }
 
@@ -14,10 +18,12 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      httpRequestErrors.inc({ route: 'dex/integration', method: req.method, status_code: 401 })
+      endTimer({ status_code: 401 })
       return res.status(401).json({
         success: false,
         error: 'Token di autenticazione richiesto'
-      });
+      })
     }
 
     const token = authHeader.substring(7);
@@ -26,10 +32,12 @@ export default async function handler(req, res) {
     try {
       jwt.verify(token, jwtSecret);
     } catch (error) {
+      httpRequestErrors.inc({ route: 'dex/integration', method: req.method, status_code: 401 })
+      endTimer({ status_code: 401 })
       return res.status(401).json({
         success: false,
         error: 'Token non valido'
-      });
+      })
     }
   }
 
@@ -63,23 +71,27 @@ export default async function handler(req, res) {
             throw new Error('Azione non supportata');
         }
 
-        return res.status(200).json({
+        const status = 200
+        endTimer({ status_code: status })
+        return res.status(status).json({
           success: true,
           data: dexData,
           timestamp: new Date().toISOString()
-        });
+        })
 
       } catch (error) {
-        console.error('Errore DEX GET:', error);
+        console.error('Errore DEX GET:', error)
         
         // Fallback a dati mock per sviluppo
-        const mockData = getMockDEXData(req.query.action);
-        return res.status(200).json({
+        const mockData = getMockDEXData(req.query.action)
+        const status = 200
+        endTimer({ status_code: status })
+        return res.status(status).json({
           success: true,
           data: mockData,
           mock: true,
           timestamp: new Date().toISOString()
-        });
+        })
       }
     }
 
@@ -104,41 +116,55 @@ export default async function handler(req, res) {
             throw new Error('Azione non supportata');
         }
 
-        return res.status(200).json({
+        const status = 200
+        endTimer({ status_code: status })
+        return res.status(status).json({
           success: true,
           data: result,
           timestamp: new Date().toISOString()
-        });
+        })
 
       } catch (error) {
-        console.error('Errore DEX POST:', error);
+        console.error('Errore DEX POST:', error)
+        httpRequestErrors.inc({ route: 'dex/integration', method: req.method, status_code: 500 })
+        endTimer({ status_code: 500 })
         return res.status(500).json({
           success: false,
           error: error.message,
           timestamp: new Date().toISOString()
-        });
+        })
       }
     }
 
+    httpRequestErrors.inc({ route: 'dex/integration', method: req.method, status_code: 405 })
+    endTimer({ status_code: 405 })
     return res.status(405).json({
       success: false,
       error: 'Metodo non supportato'
-    });
+    })
 
   } catch (error) {
-    console.error('Errore generale DEX:', error);
+    console.error('Errore generale DEX:', error)
+    httpRequestErrors.inc({ route: 'dex/integration', method: req.method, status_code: 500 })
+    endTimer({ status_code: 500 })
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',
       timestamp: new Date().toISOString()
-    });
+    })
   }
 }
 
 // Funzioni helper per DEX XRPL
 async function getDEXOrderBook(baseCurrency, quoteCurrency, depth) {
   try {
-    const client = await getXRPLClient();
+    const cacheKey = `orderbook:${baseCurrency}:${quoteCurrency}:${depth}`
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      return JSON.parse(cached)
+    }
+
+    const client = await getXRPLClient()
     
     // Richiesta order book da XRPL DEX
     const orderBookRequest = {
@@ -154,9 +180,9 @@ async function getDEXOrderBook(baseCurrency, quoteCurrency, depth) {
       limit: depth
     };
 
-    const response = await client.request(orderBookRequest);
-    
-    return {
+    const response = await client.request(orderBookRequest)
+
+    const result = {
       pair: `${baseCurrency}/${quoteCurrency}`,
       bids: response.result.offers.map(offer => ({
         price: parseFloat(offer.quality),
@@ -168,7 +194,11 @@ async function getDEXOrderBook(baseCurrency, quoteCurrency, depth) {
       timestamp: new Date().toISOString(),
       spread: 0.001,
       volume24h: 125000
-    };
+    }
+
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', 30)
+
+    return result
 
   } catch (error) {
     console.error('Errore order book XRPL:', error);

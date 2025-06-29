@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from prometheus_flask_exporter import PrometheusMetrics
 from src.config import Config
 
 # Import models
@@ -26,6 +27,9 @@ from src.services.oauth_service import oauth_service
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # Prometheus metrics for latency and errors
+    metrics = PrometheusMetrics(app)
     
     # Initialize extensions
     db.init_app(app)

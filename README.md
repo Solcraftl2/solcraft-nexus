@@ -89,7 +89,7 @@ solcraft-nexus/
 cd backend
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt  # installs packages like schedule
 python src/main.py
 ```
 

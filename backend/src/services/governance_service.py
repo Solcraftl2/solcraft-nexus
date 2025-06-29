@@ -4,6 +4,8 @@ from enum import Enum
 from src.models.user import db, User
 from src.models.asset import Asset, Portfolio
 from src.models.transaction import Transaction
+from src.services.multi_user_service import multi_user_service
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -302,23 +304,98 @@ class GovernanceService:
     def execute_proposal(self, proposal):
         """Execute a passed proposal"""
         try:
-            # This would contain the actual execution logic based on proposal type
-            # For now, just log the execution
-            logger.info(f"Executing proposal {proposal.id} of type {proposal.proposal_type.value}")
-            
-            # Example execution logic based on proposal type
+            logger.info(
+                f"Executing proposal {proposal.id} of type {proposal.proposal_type.value}"
+            )
+
+            asset = Asset.query.get(proposal.asset_id)
+            if not asset:
+                logger.error(
+                    f"Asset {proposal.asset_id} not found for proposal {proposal.id}"
+                )
+                return
+
+            details = {}
+            try:
+                details = json.loads(proposal.description)
+            except Exception:
+                pass
+
             if proposal.proposal_type == ProposalType.DIVIDEND_POLICY:
-                # Update dividend policy for the asset
-                pass
+                freq = details.get("dividend_frequency")
+                next_date = details.get("next_dividend_date")
+                if freq:
+                    asset.dividend_frequency = freq
+                if next_date:
+                    try:
+                        asset.next_dividend_date = datetime.fromisoformat(next_date)
+                    except Exception:
+                        logger.warning("Invalid next_dividend_date format")
+
+                db.session.commit()
+                multi_user_service.log_action(
+                    user_id=proposal.creator_id,
+                    action="update_dividend_policy",
+                    resource_type="asset",
+                    resource_id=asset.id,
+                    asset_id=asset.id,
+                    details=details,
+                )
+
             elif proposal.proposal_type == ProposalType.ASSET_MANAGEMENT:
-                # Execute asset management decision
-                pass
+                status = details.get("status")
+                price = details.get("current_price")
+                if status:
+                    asset.status = status
+                if price is not None:
+                    try:
+                        asset.current_price = Decimal(str(price))
+                        asset.calculate_market_cap()
+                    except Exception:
+                        logger.warning("Invalid current_price value")
+
+                db.session.commit()
+                multi_user_service.log_action(
+                    user_id=proposal.creator_id,
+                    action="asset_management_update",
+                    resource_type="asset",
+                    resource_id=asset.id,
+                    asset_id=asset.id,
+                    details=details,
+                )
+
             elif proposal.proposal_type == ProposalType.STRATEGIC_DECISION:
-                # Execute strategic decision
-                pass
+                value = details.get("estimated_value")
+                revenue = details.get("revenue_model")
+                if value is not None:
+                    try:
+                        asset.estimated_value = Decimal(str(value))
+                    except Exception:
+                        logger.warning("Invalid estimated_value")
+                if revenue:
+                    asset.revenue_model = revenue
+
+                db.session.commit()
+                multi_user_service.log_action(
+                    user_id=proposal.creator_id,
+                    action="strategic_decision",
+                    resource_type="asset",
+                    resource_id=asset.id,
+                    asset_id=asset.id,
+                    details=details,
+                )
+
             elif proposal.proposal_type == ProposalType.EMERGENCY:
-                # Execute emergency action
-                pass
+                asset.status = "suspended"
+                db.session.commit()
+                multi_user_service.log_action(
+                    user_id=proposal.creator_id,
+                    action="emergency_action",
+                    resource_type="asset",
+                    resource_id=asset.id,
+                    asset_id=asset.id,
+                    details={"action": "suspend_asset"},
+                )
             
         except Exception as e:
             logger.error(f"Error executing proposal: {str(e)}")

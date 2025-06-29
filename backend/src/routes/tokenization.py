@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from src.redis_client import redis_client
 from src.models.user import db, User
 from src.models.asset import Asset, TokenHolding, Portfolio
 from src.models.transaction import Transaction
@@ -7,6 +8,7 @@ from src.services.tokenization_service import tokenization_service
 from decimal import Decimal
 from datetime import datetime
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 tokenization_bp = Blueprint('tokenization', __name__)
@@ -75,6 +77,11 @@ def list_assets():
         asset_type = request.args.get('asset_type')
         status = request.args.get('status')
         
+        cache_key = f"assets:{current_user_id}:{page}:{per_page}:{asset_type}:{status}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            return jsonify(json.loads(cached)), 200
+
         # Build query
         query = Asset.query.filter_by(issuer_id=current_user_id)
         
@@ -91,7 +98,7 @@ def list_assets():
             error_out=False
         )
         
-        return jsonify({
+        result = {
             'assets': [asset.to_dict() for asset in assets.items],
             'pagination': {
                 'page': assets.page,
@@ -101,7 +108,11 @@ def list_assets():
                 'has_next': assets.has_next,
                 'has_prev': assets.has_prev
             }
-        }), 200
+        }
+
+        redis_client.setex(cache_key, 60, json.dumps(result))
+
+        return jsonify(result), 200
         
     except Exception as e:
         logger.error(f"Error listing assets: {str(e)}")

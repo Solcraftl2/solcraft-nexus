@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -307,69 +307,93 @@ async function getTradingPairs() {
 }
 
 async function placeDEXOrder(orderData) {
-  const {
-    pair,
-    side, // 'buy' or 'sell'
-    type, // 'market', 'limit', 'stop'
-    amount,
-    price,
-    stopPrice,
-    timeInForce = 'GTC' // GTC, IOC, FOK
-  } = orderData;
+  const { traderSeed, takerGets, takerPays, expiration, offerSequence, flags = 0 } = orderData;
 
-  // Simulazione piazzamento ordine su XRPL DEX
-  const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+  await initializeXRPL();
+  const client = getXRPLClient();
+  const traderWallet = walletFromSeed(traderSeed);
+
+  const offer = {
+    TransactionType: 'OfferCreate',
+    Account: traderWallet.address,
+    TakerGets: takerGets,
+    TakerPays: takerPays,
+    Flags: flags
+  };
+
+  if (expiration) {
+    offer.Expiration = expiration;
+  }
+  if (offerSequence) {
+    offer.OfferSequence = offerSequence;
+  }
+
+  const prepared = await client.autofill(offer);
+  const signed = traderWallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${result.result.meta.TransactionResult}`);
+  }
+
+  let createdOfferSequence = null;
+  if (result.result.meta && result.result.meta.CreatedNode) {
+    const createdNodes = Array.isArray(result.result.meta.CreatedNode)
+      ? result.result.meta.CreatedNode
+      : [result.result.meta.CreatedNode];
+    for (const node of createdNodes) {
+      if (node.LedgerEntryType === 'Offer' && node.NewFields) {
+        createdOfferSequence = node.NewFields.Sequence;
+        break;
+      }
+    }
+  }
+
   return {
-    orderId,
-    pair,
-    side,
-    type,
-    amount: parseFloat(amount),
-    price: price ? parseFloat(price) : null,
-    stopPrice: stopPrice ? parseFloat(stopPrice) : null,
-    status: 'pending',
-    timeInForce,
-    filled: 0,
-    remaining: parseFloat(amount),
-    fees: {
-      estimated: parseFloat(amount) * 0.0015,
-      currency: pair.split('/')[1]
-    },
-    timestamp: new Date().toISOString(),
-    estimatedSettlement: new Date(Date.now() + 4000).toISOString(),
-    txHash: `tx_${Math.random().toString(36).substr(2, 16)}`
+    hash: result.result.hash,
+    offerSequence: createdOfferSequence,
+    transaction: result.result
   };
 }
 
 async function cancelDEXOrder(orderData) {
-  const { orderId } = orderData;
-  
+  const { traderSeed, offerSequence } = orderData;
+
+  await initializeXRPL();
+  const client = getXRPLClient();
+  const wallet = walletFromSeed(traderSeed);
+
+  const tx = {
+    TransactionType: 'OfferCancel',
+    Account: wallet.address,
+    OfferSequence: offerSequence
+  };
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${result.result.meta.TransactionResult}`);
+  }
+
   return {
-    orderId,
-    status: 'cancelled',
-    cancelledAt: new Date().toISOString(),
-    refund: {
-      amount: 1000,
-      currency: 'XRP',
-      txHash: `refund_${Math.random().toString(36).substr(2, 16)}`
-    }
+    hash: result.result.hash,
+    transaction: result.result
   };
 }
 
 async function modifyDEXOrder(orderData) {
-  const { orderId, newPrice, newAmount } = orderData;
-  
+  const { traderSeed, offerSequence, takerGets, takerPays } = orderData;
+
+  const cancelRes = await cancelDEXOrder({ traderSeed, offerSequence });
+
+  const createRes = await placeDEXOrder({ traderSeed, takerGets, takerPays });
+
   return {
-    orderId,
-    status: 'modified',
-    newPrice: parseFloat(newPrice),
-    newAmount: parseFloat(newAmount),
-    modifiedAt: new Date().toISOString(),
-    fees: {
-      modification: 0.1,
-      currency: 'XRP'
-    }
+    cancelHash: cancelRes.hash,
+    newOrderHash: createRes.hash,
+    newOfferSequence: createRes.offerSequence
   };
 }
 

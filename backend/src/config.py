@@ -45,7 +45,12 @@ class Config:
     BCRYPT_LOG_ROUNDS = 12
     
     # CORS Configuration
-    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
+    _cors_origins_env = os.environ.get('CORS_ORIGINS')
+    if _cors_origins_env:
+        CORS_ORIGINS = _cors_origins_env.split(',')
+    else:
+        # Default to local frontend during development
+        CORS_ORIGINS = ['http://localhost:3000']
     
     # File Upload Configuration
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size

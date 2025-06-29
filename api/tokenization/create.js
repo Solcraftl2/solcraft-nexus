@@ -94,23 +94,47 @@ export default async function handler(req, res) {
     };
 
     try {
-      // Inizializza connessione XRPL
-      await initializeXRPL().catch(() => {}); // Ignora se già connesso
+      // Inizializza XRPL client e wallet issuer
+      await initializeXRPL().catch(() => {});
+      const client = getXRPLClient();
 
-      // TODO: Implementare creazione token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
+      const issuerSecret = process.env.ISSUER_SECRET;
+      if (!issuerSecret) {
+        throw new Error('Issuer secret not configured');
+      }
+
+      const issuerWallet = walletFromSeed(issuerSecret);
+
+      const metadataObj = {
+        name: assetName,
+        symbol: tokenSymbol,
+        description: assetDescription,
+        location: assetLocation
+      };
+      const metadataHex = Buffer.from(
+        JSON.stringify(metadataObj),
+        'utf8'
+      ).toString('hex').toUpperCase();
+
+      const transaction = {
+        TransactionType: 'MPTokenIssuanceCreate',
+        Account: issuerWallet.address,
+        MPTokenMetadata: metadataHex,
+        MaximumAmount: supply.toString()
+      };
+
+      const prepared = await client.autofill(transaction);
+      const signed = issuerWallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
 
       tokenCreationResult = {
-        success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
+        txHash: result.result.hash,
+        issuerAddress: issuerWallet.address,
         tokenSymbol: tokenSymbol,
         totalSupply: supply.toString(),
-        created: true
+        created: true,
+        error: null
       };
 
     } catch (error) {

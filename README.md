@@ -100,6 +100,10 @@ npm install
 npm run dev
 ```
 
+### Environment Variables
+Add `ISSUER_SECRET` to your backend `.env` files. This seed signs XRPL transactions
+server-side and **must never be exposed in the frontend**.
+
 ## 🔌 API Endpoints
 
 ### Authentication

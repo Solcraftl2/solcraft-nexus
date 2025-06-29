@@ -1,4 +1,5 @@
 import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -49,209 +50,355 @@ export default async function handler(req, res) {
       metadata
     } = req.body;
 
-    // Validazione dati richiesti
+    // Validazione input
     if (!issuerAccount || !assetDetails || !tokenConfig) {
       return res.status(400).json({
         success: false,
-        error: 'issuerAccount, assetDetails e tokenConfig sono richiesti'
+        error: 'Parametri obbligatori mancanti: issuerAccount, assetDetails, tokenConfig'
       });
     }
 
-    // Validazione asset details
     const {
-      assetType, // real_estate, commodity, equity, bond, art, etc.
       assetName,
-      assetDescription,
+      assetType,
       assetValue,
-      assetCurrency = 'USD',
+      assetCurrency,
       assetLocation,
-      legalOwnership,
-      appraisalDate,
       appraisalValue,
+      appraisalDate,
+      legalOwnership,
       custodian
     } = assetDetails;
 
-    if (!assetType || !assetName || !assetValue) {
-      return res.status(400).json({
-        success: false,
-        error: 'assetType, assetName e assetValue sono richiesti'
-      });
-    }
-
-    // Validazione token config
     const {
       tokenSymbol,
       totalSupply,
-      decimals = 6,
-      transferable = true,
-      burnable = false,
-      mintable = false,
-      freezable = true
+      decimals,
+      transferable,
+      burnable,
+      mintable,
+      freezable
     } = tokenConfig;
 
-    if (!tokenSymbol || !totalSupply) {
+    // Validazione asset
+    if (!assetName || !assetType || !assetValue || !tokenSymbol || !totalSupply) {
       return res.status(400).json({
         success: false,
-        error: 'tokenSymbol e totalSupply sono richiesti'
+        error: 'Dettagli asset e token incompleti'
       });
     }
 
-    // Genera ID univoco per il token MPT
+    // Generazione ID unici
+    const tokenId = `MPT_${tokenSymbol}_${Date.now()}`;
     const mptId = crypto.randomBytes(16).toString('hex').toUpperCase();
-    const tokenId = `${tokenSymbol}_${mptId.substring(0, 8)}`;
+    const createdAt = new Date().toISOString();
 
-    // Costruisci la transazione MPTCreate
-    const mptCreateTx = {
-      TransactionType: 'MPTCreate',
-      Account: issuerAccount,
-      MPTokenIssuanceID: mptId,
-      MaximumAmount: (totalSupply * Math.pow(10, decimals)).toString(),
-      TransferFee: tokenConfig.transferFee || 0,
-      MPTFlags: calculateMPTFlags({
-        transferable,
-        burnable,
-        mintable,
-        freezable
-      })
+    // Calcola metriche del token
+    const tokenMetrics = {
+      tokenizationRatio: (totalSupply / assetValue).toFixed(6),
+      minimumInvestment: (assetValue / totalSupply).toFixed(2),
+      marketCap: assetValue,
+      backingRatio: '1:1',
+      liquidityScore: calculateLiquidityScore(assetType, assetValue),
+      riskScore: calculateRiskScore(assetType, complianceSettings)
     };
 
-    // Metadata del token (seguendo standard XRPL)
-    const tokenMetadata = {
-      name: assetName,
-      symbol: tokenSymbol,
-      description: assetDescription,
-      decimals: decimals,
-      totalSupply: totalSupply,
-      assetBacking: {
-        type: assetType,
-        value: assetValue,
-        currency: assetCurrency,
-        location: assetLocation,
-        appraisal: {
-          value: appraisalValue,
-          date: appraisalDate,
-          currency: assetCurrency
-        },
-        legalOwnership: legalOwnership,
-        custodian: custodian
-      },
-      compliance: {
-        jurisdiction: complianceSettings?.jurisdiction || 'International',
-        regulations: complianceSettings?.regulations || [],
-        kycRequired: complianceSettings?.kycRequired || true,
-        amlCompliant: complianceSettings?.amlCompliant || true,
-        accreditedInvestorsOnly: complianceSettings?.accreditedInvestorsOnly || false
-      },
-      issuer: {
-        account: issuerAccount,
-        name: metadata?.issuerName || 'SolCraft Nexus Platform',
-        website: metadata?.issuerWebsite,
-        contact: metadata?.issuerContact
-      },
-      created: new Date().toISOString(),
-      version: '1.0',
-      standard: 'XRPL-MPT-RWA'
-    };
-
-    // Simula la creazione del token MPT
+    // Salvataggio Asset nel database Supabase
+    let savedAsset;
     try {
-      const simulatedTxResult = {
+      const assetData = {
+        name: assetName,
+        type: assetType,
+        description: `Multi-Purpose Token backed by ${assetType}`,
+        location: assetLocation || '',
+        value: parseFloat(assetValue),
+        currency: assetCurrency || 'USD',
+        appraisal_value: appraisalValue ? parseFloat(appraisalValue) : parseFloat(assetValue),
+        appraisal_date: appraisalDate || createdAt,
+        legal_ownership: legalOwnership || '',
+        custodian: custodian || '',
+        documents: [],
+        metadata: {
+          ...metadata,
+          mptId: mptId,
+          tokenMetrics: tokenMetrics
+        },
+        owner_id: decoded.userId,
+        status: 'tokenized',
+        created_at: createdAt,
+        updated_at: createdAt
+      };
+
+      savedAsset = await insertAsset(assetData);
+      console.log('MPT Asset saved to database:', savedAsset.id);
+
+    } catch (error) {
+      console.error('Error saving MPT asset to database:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Errore durante il salvataggio dell\'asset MPT nel database',
+        details: error.message
+      });
+    }
+
+    // Creazione token MPT su XRPL (simulato per ora)
+    let mptCreationResult;
+    try {
+      // TODO: Implementare creazione MPT reale su XRPL
+      mptCreationResult = {
         success: true,
-        transactionHash: 'mpt_create_' + Date.now(),
+        transactionHash: `MPT_${mptId}_${Date.now().toString(16).toUpperCase()}`,
         ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000', // 2000 drops per MPT creation
+        fee: '2000',
         sequence: Math.floor(Math.random() * 1000),
         validated: true,
         mptId: mptId
       };
 
-      // Calcola metriche del token
-      const tokenMetrics = {
-        tokenizationRatio: (totalSupply / assetValue).toFixed(6),
-        minimumInvestment: (assetValue / totalSupply).toFixed(2),
-        marketCap: assetValue,
-        backingRatio: '1:1', // 1 token = 1/totalSupply dell'asset
-        liquidityScore: calculateLiquidityScore(assetType, assetValue),
-        riskScore: calculateRiskScore(assetType, complianceSettings)
-      };
-
-      // Genera documenti di compliance
-      const complianceDocuments = generateComplianceDocuments({
-        tokenId,
-        assetDetails,
-        tokenConfig,
-        complianceSettings,
-        issuerAccount
-      });
-
-      const response = {
-        success: true,
-        message: 'Multi-Purpose Token creato con successo!',
-        token: {
-          id: tokenId,
-          mptId: mptId,
-          symbol: tokenSymbol,
-          name: assetName,
-          totalSupply: totalSupply,
-          decimals: decimals,
-          issuer: issuerAccount,
-          status: 'created',
-          network: process.env.XRPL_NETWORK || 'testnet'
-        },
-        assetBacking: {
-          type: assetType,
-          value: assetValue,
-          currency: assetCurrency,
-          tokenizationDate: new Date().toISOString()
-        },
-        transaction: simulatedTxResult,
-        metadata: tokenMetadata,
-        metrics: tokenMetrics,
-        compliance: {
-          status: 'compliant',
-          documents: complianceDocuments,
-          nextReview: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 anno
-        },
-        nextSteps: [
-          'Configurare le trust lines per la distribuzione',
-          'Impostare le autorizzazioni di trasferimento',
-          'Completare la documentazione legale',
-          'Avviare il processo di distribuzione ai investitori',
-          'Configurare il monitoraggio dell\'asset sottostante'
-        ],
-        warnings: [
-          'Assicurarsi che l\'asset sia correttamente custodito',
-          'Verificare la conformità normativa nella giurisdizione applicabile',
-          'Mantenere aggiornate le valutazioni dell\'asset',
-          'Implementare procedure di audit regolari'
-        ]
-      };
-
-      // Log per audit
-      console.log('MPT Token created:', {
-        tokenId: tokenId,
-        mptId: mptId,
-        issuer: issuerAccount,
-        assetType: assetType,
-        assetValue: assetValue,
-        totalSupply: totalSupply,
-        createdBy: decoded.userId,
-        timestamp: new Date().toISOString()
-      });
-
-      return res.status(201).json(response);
-
     } catch (error) {
       console.error('MPT creation error:', error);
+      mptCreationResult = {
+        success: false,
+        error: error.message
+      };
+    }
+
+    // Salvataggio Token MPT nel database Supabase
+    let savedToken;
+    try {
+      const tokenData = {
+        id: tokenId,
+        symbol: tokenSymbol,
+        name: `${assetName} MPT`,
+        type: 'MPT',
+        total_supply: totalSupply,
+        circulating_supply: 0,
+        decimals: decimals || 6,
+        asset_id: savedAsset.id,
+        issuer_address: issuerAccount,
+        blockchain_network: 'XRPL',
+        tx_hash: mptCreationResult.transactionHash,
+        mpt_id: mptId,
+        status: mptCreationResult.success ? 'active' : 'failed',
+        transferable: transferable !== false,
+        burnable: burnable === true,
+        mintable: mintable === true,
+        freezable: freezable === true,
+        initial_price: parseFloat(assetValue) / totalSupply,
+        current_price: parseFloat(assetValue) / totalSupply,
+        price_currency: assetCurrency || 'USD',
+        creator_id: decoded.userId,
+        metadata: {
+          tokenMetrics: tokenMetrics,
+          complianceSettings: complianceSettings,
+          assetBacking: {
+            type: assetType,
+            value: assetValue,
+            currency: assetCurrency,
+            appraisalValue: appraisalValue,
+            appraisalDate: appraisalDate
+          }
+        },
+        created_at: createdAt,
+        updated_at: createdAt
+      };
+
+      savedToken = await insertToken(tokenData);
+      console.log('MPT Token saved to database:', savedToken.id);
+
+    } catch (error) {
+      console.error('Error saving MPT token to database:', error);
       return res.status(500).json({
         success: false,
-        error: 'Errore durante la creazione del token MPT',
-        message: error.message
+        error: 'Errore durante il salvataggio del token MPT nel database',
+        details: error.message
+      });
+    }
+
+    // Salvataggio Transazione nel database Supabase
+    if (mptCreationResult.success) {
+      try {
+        const transactionData = {
+          tx_hash: mptCreationResult.transactionHash,
+          type: 'mpt_creation',
+          from_address: null,
+          to_address: issuerAccount,
+          amount: totalSupply,
+          currency: tokenSymbol,
+          token_id: savedToken.id,
+          user_id: decoded.userId,
+          status: 'confirmed',
+          blockchain_network: 'XRPL',
+          block_height: mptCreationResult.ledgerIndex,
+          gas_fee: parseFloat(mptCreationResult.fee) / 1000000, // Convert drops to XRP
+          description: `MPT creation for ${assetName}`,
+          metadata: {
+            mptId: mptId,
+            assetName,
+            assetType,
+            assetValue,
+            tokenSymbol,
+            totalSupply,
+            tokenMetrics
+          },
+          created_at: createdAt
+        };
+
+        const savedTransaction = await insertTransaction(transactionData);
+        console.log('MPT Transaction saved to database:', savedTransaction.id);
+
+      } catch (error) {
+        console.error('Error saving MPT transaction to database:', error);
+        // Non bloccare la risposta per errori di transazione
+      }
+    }
+
+    // Aggiorna portfolio dell'utente
+    try {
+      // Trova o crea portfolio principale dell'utente
+      const { data: portfolios, error: portfolioError } = await supabase
+        .from('portfolios')
+        .select('*')
+        .eq('user_id', decoded.userId)
+        .limit(1);
+
+      let portfolioId;
+      if (portfolioError || !portfolios || portfolios.length === 0) {
+        const { data: newPortfolio, error: createError } = await supabase
+          .from('portfolios')
+          .insert({
+            user_id: decoded.userId,
+            name: 'Portfolio MPT',
+            description: 'Portfolio Multi-Purpose Token',
+            total_value: parseFloat(assetValue),
+            currency: assetCurrency || 'USD',
+            created_at: createdAt
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        portfolioId = newPortfolio.id;
+      } else {
+        portfolioId = portfolios[0].id;
+        
+        await supabase
+          .from('portfolios')
+          .update({
+            total_value: portfolios[0].total_value + parseFloat(assetValue),
+            updated_at: createdAt
+          })
+          .eq('id', portfolioId);
+      }
+
+      // Aggiungi MPT al portfolio
+      await supabase
+        .from('portfolio_assets')
+        .insert({
+          portfolio_id: portfolioId,
+          asset_id: savedAsset.id,
+          token_id: savedToken.id,
+          quantity: totalSupply,
+          purchase_price: parseFloat(assetValue) / totalSupply,
+          current_price: parseFloat(assetValue) / totalSupply,
+          total_value: parseFloat(assetValue),
+          currency: assetCurrency || 'USD',
+          created_at: createdAt
+        });
+
+    } catch (error) {
+      console.error('Error updating user portfolio with MPT:', error);
+    }
+
+    // Registra attività utente
+    try {
+      await supabase
+        .from('user_activities')
+        .insert({
+          user_id: decoded.userId,
+          activity_type: 'mpt_creation',
+          description: `Created MPT ${tokenSymbol} for asset ${assetName}`,
+          metadata: {
+            tokenId: savedToken.id,
+            assetId: savedAsset.id,
+            mptId: mptId,
+            txHash: mptCreationResult.transactionHash
+          },
+          created_at: createdAt
+        });
+    } catch (error) {
+      console.error('Error logging MPT creation activity:', error);
+    }
+
+    // Genera documenti di compliance
+    const complianceDocuments = generateComplianceDocuments({
+      tokenId,
+      assetDetails,
+      tokenConfig,
+      complianceSettings,
+      issuerAccount
+    });
+
+    // Risposta di successo
+    if (mptCreationResult.success) {
+      return res.status(201).json({
+        success: true,
+        message: 'Multi-Purpose Token creato con successo e salvato nel database!',
+        data: {
+          token: {
+            id: savedToken.id,
+            mptId: mptId,
+            symbol: tokenSymbol,
+            name: savedToken.name,
+            totalSupply: totalSupply,
+            decimals: decimals || 6,
+            issuer: issuerAccount,
+            status: 'active',
+            network: 'XRPL'
+          },
+          asset: {
+            id: savedAsset.id,
+            name: assetName,
+            type: assetType,
+            value: assetValue,
+            currency: assetCurrency
+          },
+          transaction: {
+            hash: mptCreationResult.transactionHash,
+            status: 'confirmed',
+            ledgerIndex: mptCreationResult.ledgerIndex,
+            fee: mptCreationResult.fee,
+            network: 'XRPL'
+          },
+          metrics: tokenMetrics,
+          compliance: {
+            status: 'compliant',
+            documents: complianceDocuments,
+            nextReview: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          nextSteps: [
+            'MPT salvato nel database con successo',
+            'Asset aggiunto al portfolio',
+            'Configurare le trust lines per la distribuzione',
+            'Completare la documentazione legale',
+            'Avviare il processo di distribuzione'
+          ]
+        }
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: 'Errore durante la creazione del token MPT sulla blockchain',
+        details: mptCreationResult.error,
+        data: {
+          asset: savedAsset ? { id: savedAsset.id } : null,
+          token: savedToken ? { id: savedToken.id, status: 'failed' } : null
+        }
       });
     }
 
   } catch (error) {
-    console.error('MPT create API error:', error);
+    console.error('MPT creation error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server durante la creazione MPT',
@@ -261,85 +408,57 @@ export default async function handler(req, res) {
 }
 
 // Funzioni helper
-function calculateMPTFlags({ transferable, burnable, mintable, freezable }) {
-  let flags = 0;
-  if (!transferable) flags |= 0x00000001; // lsfMPTLocked
-  if (burnable) flags |= 0x00000002; // lsfMPTCanEscrow
-  if (mintable) flags |= 0x00000004; // lsfMPTCanTrade
-  if (freezable) flags |= 0x00000008; // lsfMPTCanTransfer
-  return flags;
-}
-
 function calculateLiquidityScore(assetType, assetValue) {
-  const liquidityScores = {
-    'real_estate': 3, // Bassa liquidità
-    'commodity': 7, // Alta liquidità
-    'equity': 8, // Molto alta liquidità
-    'bond': 6, // Media-alta liquidità
-    'art': 2, // Molto bassa liquidità
-    'collectible': 2,
-    'infrastructure': 4,
-    'renewable_energy': 5
+  const baseScore = 50;
+  const typeMultiplier = {
+    'real_estate': 0.3,
+    'commodity': 0.7,
+    'equity': 0.9,
+    'bond': 0.8,
+    'art': 0.2,
+    'collectible': 0.1
   };
   
-  const baseScore = liquidityScores[assetType] || 5;
   const valueMultiplier = assetValue > 1000000 ? 1.2 : assetValue > 100000 ? 1.0 : 0.8;
   
-  return Math.min(10, Math.round(baseScore * valueMultiplier));
+  return Math.min(100, Math.round(baseScore * (typeMultiplier[assetType] || 0.5) * valueMultiplier));
 }
 
 function calculateRiskScore(assetType, complianceSettings) {
-  const riskScores = {
-    'real_estate': 4, // Rischio medio-basso
-    'commodity': 6, // Rischio medio-alto
-    'equity': 7, // Rischio alto
-    'bond': 3, // Rischio basso
-    'art': 8, // Rischio molto alto
-    'collectible': 8,
-    'infrastructure': 3,
-    'renewable_energy': 5
+  const baseRisk = 50;
+  const typeRisk = {
+    'real_estate': 30,
+    'commodity': 60,
+    'equity': 70,
+    'bond': 20,
+    'art': 80,
+    'collectible': 90
   };
   
-  let baseScore = riskScores[assetType] || 5;
+  const complianceBonus = complianceSettings?.jurisdiction ? -10 : 0;
   
-  // Aggiustamenti per compliance
-  if (complianceSettings?.kycRequired) baseScore -= 1;
-  if (complianceSettings?.amlCompliant) baseScore -= 1;
-  if (complianceSettings?.accreditedInvestorsOnly) baseScore -= 1;
-  
-  return Math.max(1, Math.min(10, baseScore));
+  return Math.max(0, Math.min(100, (typeRisk[assetType] || 50) + complianceBonus));
 }
 
-function generateComplianceDocuments({ tokenId, assetDetails, tokenConfig, complianceSettings, issuerAccount }) {
+function generateComplianceDocuments(params) {
   return [
     {
-      type: 'token_whitepaper',
-      name: `${tokenId}_Whitepaper.pdf`,
-      description: 'Documento tecnico del token e dell\'asset sottostante',
+      type: 'token_creation_certificate',
+      name: 'Certificato di Creazione Token',
       status: 'generated',
-      hash: crypto.createHash('sha256').update(tokenId + 'whitepaper').digest('hex')
+      date: new Date().toISOString()
     },
     {
-      type: 'legal_opinion',
-      name: `${tokenId}_Legal_Opinion.pdf`,
-      description: 'Parere legale sulla conformità normativa',
-      status: 'pending',
-      requiredBy: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      type: 'asset_backing_declaration',
+      name: 'Dichiarazione di Backing Asset',
+      status: 'generated',
+      date: new Date().toISOString()
     },
     {
-      type: 'asset_appraisal',
-      name: `${tokenId}_Asset_Appraisal.pdf`,
-      description: 'Valutazione professionale dell\'asset',
-      status: assetDetails.appraisalDate ? 'completed' : 'required',
-      validUntil: assetDetails.appraisalDate ? 
-        new Date(new Date(assetDetails.appraisalDate).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString() : 
-        null
-    },
-    {
-      type: 'custody_agreement',
-      name: `${tokenId}_Custody_Agreement.pdf`,
-      description: 'Accordo di custodia dell\'asset',
-      status: assetDetails.custodian ? 'completed' : 'required'
+      type: 'compliance_checklist',
+      name: 'Checklist di Compliance',
+      status: 'pending_review',
+      date: new Date().toISOString()
     }
   ];
 }

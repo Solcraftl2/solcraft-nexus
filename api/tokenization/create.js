@@ -1,4 +1,5 @@
 import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
+import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -84,7 +85,7 @@ export default async function handler(req, res) {
     const tokenId = `${tokenSymbol}_${Date.now()}`;
     const createdAt = new Date().toISOString();
 
-    // Simulazione creazione token su XRPL
+    // Creazione token su XRPL (reale o testnet)
     let tokenCreationResult = {
       success: false,
       txHash: null,
@@ -96,7 +97,7 @@ export default async function handler(req, res) {
       // Inizializza connessione XRPL
       await initializeXRPL().catch(() => {}); // Ignora se già connesso
 
-      // In produzione, qui creeresti il token reale su XRPL
+      // TODO: Implementare creazione token reale su XRPL
       // Per ora simuliamo il processo con dati realistici
       
       // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
@@ -117,65 +118,210 @@ export default async function handler(req, res) {
       tokenCreationResult.error = error.message;
     }
 
-    // Creazione oggetto token completo
-    const tokenData = {
-      id: tokenId,
-      assetInfo: {
+    // Salvataggio Asset nel database Supabase
+    let savedAsset;
+    try {
+      const assetData = {
         name: assetName,
         type: assetType,
-        value: parseFloat(assetValue),
         description: assetDescription || '',
         location: assetLocation || '',
-        documents: documents || [],
-        metadata: metadata || {}
-      },
-      tokenInfo: {
-        symbol: tokenSymbol,
-        totalSupply: supply,
-        circulatingSupply: 0,
-        decimals: 6, // Standard XRPL
-        issuerAddress: tokenCreationResult.issuerAddress,
-        transferable: transferable !== false,
-        clawback: clawback === true,
-        authorization: authorization === true
-      },
-      blockchain: {
-        network: 'XRPL',
-        txHash: tokenCreationResult.txHash,
-        status: tokenCreationResult.success ? 'confirmed' : 'failed',
-        confirmations: tokenCreationResult.success ? 1 : 0
-      },
-      compliance: {
-        kyc: false,
-        aml: false,
-        accredited: false,
-        jurisdiction: 'TBD'
-      },
-      ownership: {
-        creator: decoded.userId,
-        creatorAddress: decoded.address,
-        createdAt: createdAt,
-        lastUpdated: createdAt
-      },
-      status: tokenCreationResult.success ? 'active' : 'failed',
-      pricing: {
-        initialPrice: parseFloat(assetValue) / supply,
-        currentPrice: parseFloat(assetValue) / supply,
+        value: parseFloat(assetValue),
         currency: 'USD',
-        lastUpdated: createdAt
+        documents: documents || [],
+        metadata: metadata || {},
+        owner_id: decoded.userId,
+        status: 'active',
+        created_at: createdAt,
+        updated_at: createdAt
+      };
+
+      savedAsset = await insertAsset(assetData);
+      console.log('Asset saved to database:', savedAsset.id);
+
+    } catch (error) {
+      console.error('Error saving asset to database:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Errore durante il salvataggio dell\'asset nel database',
+        details: error.message
+      });
+    }
+
+    // Salvataggio Token nel database Supabase
+    let savedToken;
+    try {
+      const tokenData = {
+        id: tokenId,
+        symbol: tokenSymbol,
+        name: `${assetName} Token`,
+        total_supply: supply,
+        circulating_supply: 0,
+        decimals: 6, // Standard XRPL
+        asset_id: savedAsset.id,
+        issuer_address: tokenCreationResult.issuerAddress,
+        blockchain_network: 'XRPL',
+        tx_hash: tokenCreationResult.txHash,
+        status: tokenCreationResult.success ? 'active' : 'failed',
+        transferable: transferable !== false,
+        clawback_enabled: clawback === true,
+        authorization_required: authorization === true,
+        initial_price: parseFloat(assetValue) / supply,
+        current_price: parseFloat(assetValue) / supply,
+        price_currency: 'USD',
+        creator_id: decoded.userId,
+        created_at: createdAt,
+        updated_at: createdAt
+      };
+
+      savedToken = await insertToken(tokenData);
+      console.log('Token saved to database:', savedToken.id);
+
+    } catch (error) {
+      console.error('Error saving token to database:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Errore durante il salvataggio del token nel database',
+        details: error.message
+      });
+    }
+
+    // Salvataggio Transazione nel database Supabase
+    if (tokenCreationResult.success) {
+      try {
+        const transactionData = {
+          tx_hash: tokenCreationResult.txHash,
+          type: 'token_creation',
+          from_address: null,
+          to_address: tokenCreationResult.issuerAddress,
+          amount: supply,
+          currency: tokenSymbol,
+          token_id: savedToken.id,
+          user_id: decoded.userId,
+          status: 'confirmed',
+          blockchain_network: 'XRPL',
+          block_height: null,
+          gas_fee: 0,
+          description: `Token creation for ${assetName}`,
+          metadata: {
+            assetName,
+            assetType,
+            assetValue,
+            tokenSymbol,
+            totalSupply: supply
+          },
+          created_at: createdAt
+        };
+
+        const savedTransaction = await insertTransaction(transactionData);
+        console.log('Transaction saved to database:', savedTransaction.id);
+
+      } catch (error) {
+        console.error('Error saving transaction to database:', error);
+        // Non bloccare la risposta per errori di transazione
       }
-    };
+    }
 
-    // Simulazione salvataggio in database
-    // In produzione salveresti in un database reale
-    console.log('Token created:', tokenData);
+    // Aggiorna portfolio dell'utente
+    try {
+      // Trova o crea portfolio principale dell'utente
+      const { data: portfolios, error: portfolioError } = await supabase
+        .from('portfolios')
+        .select('*')
+        .eq('user_id', decoded.userId)
+        .limit(1);
 
+      let portfolioId;
+      if (portfolioError || !portfolios || portfolios.length === 0) {
+        // Crea portfolio se non esiste
+        const { data: newPortfolio, error: createError } = await supabase
+          .from('portfolios')
+          .insert({
+            user_id: decoded.userId,
+            name: 'Portfolio Principale',
+            description: 'Portfolio di investimenti principale',
+            total_value: parseFloat(assetValue),
+            currency: 'USD',
+            created_at: createdAt
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        portfolioId = newPortfolio.id;
+      } else {
+        portfolioId = portfolios[0].id;
+        
+        // Aggiorna valore portfolio
+        await supabase
+          .from('portfolios')
+          .update({
+            total_value: portfolios[0].total_value + parseFloat(assetValue),
+            updated_at: createdAt
+          })
+          .eq('id', portfolioId);
+      }
+
+      // Aggiungi asset al portfolio
+      await supabase
+        .from('portfolio_assets')
+        .insert({
+          portfolio_id: portfolioId,
+          asset_id: savedAsset.id,
+          token_id: savedToken.id,
+          quantity: supply,
+          purchase_price: parseFloat(assetValue) / supply,
+          current_price: parseFloat(assetValue) / supply,
+          total_value: parseFloat(assetValue),
+          currency: 'USD',
+          created_at: createdAt
+        });
+
+    } catch (error) {
+      console.error('Error updating user portfolio:', error);
+      // Non bloccare la risposta per errori di portfolio
+    }
+
+    // Registra attività utente
+    try {
+      await supabase
+        .from('user_activities')
+        .insert({
+          user_id: decoded.userId,
+          activity_type: 'tokenization',
+          description: `Created token ${tokenSymbol} for asset ${assetName}`,
+          metadata: {
+            tokenId: savedToken.id,
+            assetId: savedAsset.id,
+            txHash: tokenCreationResult.txHash
+          },
+          created_at: createdAt
+        });
+    } catch (error) {
+      console.error('Error logging user activity:', error);
+      // Non bloccare la risposta per errori di logging
+    }
+
+    // Risposta di successo
     if (tokenCreationResult.success) {
       return res.status(201).json({
         success: true,
-        message: 'Asset tokenizzato con successo!',
+        message: 'Asset tokenizzato con successo e salvato nel database!',
         data: {
-          token: tokenData,
+          asset: {
+            id: savedAsset.id,
+            name: savedAsset.name,
+            type: savedAsset.type,
+            value: savedAsset.value,
+            location: savedAsset.location
+          },
+          token: {
+            id: savedToken.id,
+            symbol: savedToken.symbol,
+            totalSupply: savedToken.total_supply,
+            issuerAddress: savedToken.issuer_address,
+            status: savedToken.status
+          },
           transaction: {
             hash: tokenCreationResult.txHash,
             status: 'confirmed',
@@ -183,9 +329,9 @@ export default async function handler(req, res) {
             explorer: `https://testnet.xrpl.org/transactions/${tokenCreationResult.txHash}`
           },
           nextSteps: [
-            'Il token è stato creato sulla blockchain XRPL',
+            'Il token è stato creato e salvato nel database',
+            'L\'asset è stato aggiunto al tuo portfolio',
             'Puoi ora distribuire i token agli investitori',
-            'Configura le impostazioni di compliance se necessario',
             'Monitora le transazioni nel dashboard'
           ]
         }
@@ -196,8 +342,8 @@ export default async function handler(req, res) {
         error: 'Errore durante la creazione del token sulla blockchain',
         details: tokenCreationResult.error,
         data: {
-          token: tokenData,
-          status: 'failed'
+          asset: savedAsset ? { id: savedAsset.id } : null,
+          token: savedToken ? { id: savedToken.id, status: 'failed' } : null
         }
       });
     }

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+import { supabase, getUserByEmail, handleSupabaseError } from '../config/supabaseClient.js';
 
 export default async function handler(req, res) {
   // Gestione CORS
@@ -26,29 +27,17 @@ export default async function handler(req, res) {
       });
     }
 
-    // Simula la verifica dell'utente nel database
-    // In produzione, qui faresti una query a Supabase per verificare le credenziali
-    const mockUsers = [
-      {
-        id: 1,
-        email: 'admin@solcraft.com',
-        password: await bcrypt.hash('admin123', 10),
-        firstName: 'Admin',
-        lastName: 'SolCraft',
-        isVerified: true
-      },
-      {
-        id: 2,
-        email: 'demo@solcraft.com',
-        password: await bcrypt.hash('demo123', 10),
-        firstName: 'Demo',
-        lastName: 'User',
-        isVerified: true
-      }
-    ];
-
-    // Trova l'utente
-    const user = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+    // Cerca l'utente nel database Supabase
+    let user;
+    try {
+      user = await getUserByEmail(email);
+    } catch (error) {
+      console.error('Database error during login:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Errore di connessione al database'
+      });
+    }
     
     if (!user) {
       return res.status(401).json({
@@ -58,7 +47,16 @@ export default async function handler(req, res) {
     }
 
     // Verifica la password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    } catch (error) {
+      console.error('Password verification error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Errore durante la verifica delle credenziali'
+      });
+    }
     
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -67,35 +65,87 @@ export default async function handler(req, res) {
       });
     }
 
+    // Verifica se l'account è attivo
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        message: 'Account non attivo. Contatta il supporto.'
+      });
+    }
+
+    // Aggiorna last_login
+    try {
+      await supabase
+        .from('users')
+        .update({ 
+          last_login: new Date().toISOString(),
+          login_count: (user.login_count || 0) + 1
+        })
+        .eq('id', user.id);
+    } catch (error) {
+      console.error('Error updating last login:', error);
+      // Non bloccare il login per questo errore
+    }
+
     // Genera JWT token
     const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
     const token = jwt.sign(
       {
         userId: user.id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role || 'user',
+        walletAddress: user.wallet_address
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     // Rimuovi la password dalla risposta
-    const { password: _, ...userWithoutPassword } = user;
+    const { password_hash, ...userWithoutPassword } = user;
+
+    // Registra il login per audit
+    try {
+      await supabase
+        .from('user_activities')
+        .insert({
+          user_id: user.id,
+          activity_type: 'login',
+          description: 'User logged in successfully',
+          ip_address: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+          user_agent: req.headers['user-agent'],
+          created_at: new Date().toISOString()
+        });
+    } catch (error) {
+      console.error('Error logging user activity:', error);
+      // Non bloccare il login per questo errore
+    }
 
     return res.status(200).json({
       success: true,
       message: 'Login completato con successo',
       token: token,
-      user: userWithoutPassword
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role || 'user',
+        walletAddress: user.wallet_address,
+        isVerified: user.is_verified,
+        createdAt: user.created_at,
+        lastLogin: new Date().toISOString()
+      }
     });
 
   } catch (error) {
-    console.error('Errore login:', error);
+    console.error('Login error:', error);
     
     return res.status(500).json({
       success: false,
-      message: 'Errore interno del server'
+      message: 'Errore interno del server',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }

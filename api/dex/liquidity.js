@@ -1,4 +1,6 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+/* eslint-env node */
+/* global process */
+import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -25,7 +27,7 @@ export default async function handler(req, res) {
     
     try {
       jwt.verify(token, jwtSecret);
-    } catch (error) {
+    } catch {
       return res.status(401).json({
         success: false,
         error: 'Token non valido'
@@ -34,6 +36,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    await initializeXRPL();
     // GET - Informazioni liquidity pools
     if (req.method === 'GET') {
       const {
@@ -398,58 +401,70 @@ async function getLiquidityAnalytics(poolId) {
 }
 
 async function addLiquidity(liquidityData) {
-  const {
-    poolId,
-    token0Amount,
-    token1Amount,
-    slippageTolerance = 0.5,
-    deadline = 20 // minuti
-  } = liquidityData;
+  try {
+    const { seed, asset, asset2, amount, amount2 } = liquidityData;
+    const client = await getXRPLClient();
+    const wallet = walletFromSeed(seed);
 
-  // Simulazione aggiunta liquidità
-  const lpTokensReceived = Math.sqrt(parseFloat(token0Amount) * parseFloat(token1Amount));
-  
-  return {
-    poolId,
-    token0Amount: parseFloat(token0Amount),
-    token1Amount: parseFloat(token1Amount),
-    lpTokensReceived,
-    shareOfPool: lpTokensReceived / 11747340, // Basato su supply totale
-    estimatedFees: {
-      daily: lpTokensReceived * 0.0034,
-      monthly: lpTokensReceived * 0.104,
-      yearly: lpTokensReceived * 1.25
-    },
-    priceImpact: 0.02,
-    slippageTolerance,
-    deadline: new Date(Date.now() + deadline * 60000).toISOString(),
-    txHash: `add_liquidity_${Math.random().toString(36).substr(2, 16)}`,
-    status: 'pending',
-    estimatedConfirmation: new Date(Date.now() + 4000).toISOString()
-  };
+    const tx = {
+      TransactionType: 'AMMDeposit',
+      Account: wallet.address,
+      Asset: asset,
+      Asset2: asset2,
+      Amount: amount,
+      Amount2: amount2,
+    };
+
+    const prepared = await client.autofill(tx);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    if (result.result.engine_result !== 'tesSUCCESS') {
+      throw new Error(result.result.engine_result_message || 'Deposit failed');
+    }
+
+    return {
+      hash: result.result.hash,
+      ledger_index: result.result.ledger_index,
+      validated: result.result.validated,
+    };
+  } catch (error) {
+    console.error('Add liquidity failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 async function removeLiquidity(liquidityData) {
-  const {
-    poolId,
-    lpTokenAmount,
-    minToken0Amount,
-    minToken1Amount
-  } = liquidityData;
+  try {
+    const { seed, asset, asset2, lpTokenAmount } = liquidityData;
+    const client = await getXRPLClient();
+    const wallet = walletFromSeed(seed);
 
-  return {
-    poolId,
-    lpTokensBurned: parseFloat(lpTokenAmount),
-    token0Received: parseFloat(lpTokenAmount) * 1.02, // Esempio calcolo
-    token1Received: parseFloat(lpTokenAmount) * 0.52,
-    fees: {
-      withdrawal: parseFloat(lpTokenAmount) * 0.001,
-      currency: 'XRP'
-    },
-    txHash: `remove_liquidity_${Math.random().toString(36).substr(2, 16)}`,
-    status: 'pending',
-    estimatedConfirmation: new Date(Date.now() + 4000).toISOString()
-  };
+    const tx = {
+      TransactionType: 'AMMWithdraw',
+      Account: wallet.address,
+      Asset: asset,
+      Asset2: asset2,
+      LPTokenIn: lpTokenAmount,
+    };
+
+    const prepared = await client.autofill(tx);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    if (result.result.engine_result !== 'tesSUCCESS') {
+      throw new Error(result.result.engine_result_message || 'Withdraw failed');
+    }
+
+    return {
+      hash: result.result.hash,
+      ledger_index: result.result.ledger_index,
+      validated: result.result.validated,
+    };
+  } catch (error) {
+    console.error('Remove liquidity failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 async function claimLiquidityRewards(liquidityData) {

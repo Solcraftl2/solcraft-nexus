@@ -97,20 +97,51 @@ export default async function handler(req, res) {
       // Inizializza connessione XRPL
       await initializeXRPL().catch(() => {}); // Ignora se già connesso
 
-      // TODO: Implementare creazione token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
+      const client = getXRPLClient();
+
+      // Recupera seed dell'issuer configurato
+      const issuerSeed = process.env.XRPL_ISSUER_SEED || process.env.ISSUER_SEED;
+      if (!issuerSeed) {
+        throw new Error('XRPL issuer seed non configurato');
+      }
+
+      // Wallet issuer
+      const issuerWallet = walletFromSeed(issuerSeed);
+
+      // Crea trust line (se non esiste) per l'issuer verso se stesso
+      const trustResult = await createTrustLine(
+        issuerWallet,
+        tokenSymbol,
+        issuerWallet.address,
+        supply.toString()
+      );
+      if (!trustResult.success) {
+        throw new Error(`Trust line failed: ${trustResult.error}`);
+      }
+
+      // Transazione di emissione (self payment)
+      const payment = {
+        TransactionType: 'Payment',
+        Account: issuerWallet.address,
+        Destination: issuerWallet.address,
+        Amount: {
+          currency: tokenSymbol,
+          issuer: issuerWallet.address,
+          value: supply.toString()
+        }
+      };
+
+      const prepared = await client.autofill(payment);
+      const signed = issuerWallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
 
       tokenCreationResult = {
-        success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
+        txHash: result.result.hash,
+        issuerAddress: issuerWallet.address,
         tokenSymbol: tokenSymbol,
         totalSupply: supply.toString(),
-        created: true
+        created: result.result.meta.TransactionResult === 'tesSUCCESS'
       };
 
     } catch (error) {

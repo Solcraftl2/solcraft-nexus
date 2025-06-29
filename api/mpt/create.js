@@ -141,19 +141,58 @@ export default async function handler(req, res) {
       });
     }
 
-    // Creazione token MPT su XRPL (simulato per ora)
+    // Creazione token MPT su XRPL
     let mptCreationResult;
     try {
-      // TODO: Implementare creazione MPT reale su XRPL
-      mptCreationResult = {
-        success: true,
-        transactionHash: `MPT_${mptId}_${Date.now().toString(16).toUpperCase()}`,
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000',
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true,
-        mptId: mptId
+      await initializeXRPL().catch(() => {});
+      const issuerSeed = process.env.XRPL_ISSUER_SEED;
+      if (!issuerSeed) {
+        throw new Error('XRPL_ISSUER_SEED not configured');
+      }
+
+      const issuerWallet = walletFromSeed(issuerSeed);
+      const client = getXRPLClient();
+
+      const metadataString = JSON.stringify({ assetName, assetType, ...metadata });
+      const metadataHex = Buffer.from(metadataString).toString('hex').toUpperCase();
+
+      const mptCreate = {
+        TransactionType: 'MPTokenIssuanceCreate',
+        Account: issuerWallet.address,
+        MPTokenMetadata: metadataHex,
+        MaximumAmount: totalSupply.toString()
       };
+
+      const prepared = await client.autofill(mptCreate);
+      const signed = issuerWallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
+
+      let issuedId = null;
+      if (result.result.meta && result.result.meta.CreatedNode) {
+        const nodes = Array.isArray(result.result.meta.CreatedNode)
+          ? result.result.meta.CreatedNode
+          : [result.result.meta.CreatedNode];
+        for (const node of nodes) {
+          if (node.NewFields && node.NewFields.MPTokenID) {
+            issuedId = node.NewFields.MPTokenID;
+            break;
+          }
+        }
+      }
+
+      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
+        mptCreationResult = {
+          success: true,
+          transactionHash: result.result.hash,
+          ledgerIndex: result.result.ledger_index,
+          fee: result.result.Fee,
+          sequence: result.result.Sequence,
+          validated: result.result.validated,
+          mptId: issuedId || mptId
+        };
+      } else {
+        throw new Error(result.result.meta.TransactionResult);
+      }
 
     } catch (error) {
       console.error('MPT creation error:', error);

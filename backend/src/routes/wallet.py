@@ -174,27 +174,30 @@ def send_crypto():
         if not xrpl_service.validate_address(destination):
             return jsonify({'error': 'Invalid destination address'}), 400
         
-        # For demo purposes, we'll simulate the transaction
-        # In production, you'd retrieve the user's wallet securely and send the transaction
-        
+        # Retrieve custodial wallet for signing
+        sender_wallet = secure_wallet_service.get_wallet_for_transaction(current_user_id)
+
         if currency == 'XRP':
-            # Simulate XRP transaction
-            transaction_result = {
-                'success': True,
-                'hash': f'demo_hash_{current_user_id}_{datetime.utcnow().timestamp()}',
-                'amount_sent': amount,
-                'destination': destination,
-                'fee': Decimal('0.00001')
-            }
+            transaction_result = xrpl_service.send_xrp(
+                sender_wallet,
+                destination,
+                amount,
+                destination_tag=destination_tag,
+                memo=memo
+            )
         else:
-            # Simulate token transaction
-            transaction_result = {
-                'success': True,
-                'hash': f'demo_hash_{current_user_id}_{datetime.utcnow().timestamp()}',
-                'currency': currency,
-                'amount_sent': amount,
-                'destination': destination
-            }
+            issuer = data.get('issuer')
+            if not issuer:
+                return jsonify({'error': 'issuer is required for token transfers'}), 400
+
+            transaction_result = xrpl_service.send_token(
+                sender_wallet,
+                destination,
+                currency,
+                issuer,
+                amount,
+                destination_tag=destination_tag
+            )
         
         # Record transaction in database
         transaction = Transaction(

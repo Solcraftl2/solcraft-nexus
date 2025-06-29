@@ -2,6 +2,10 @@
   "version": 2,
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
+  "env": {
+    "SUPABASE_URL": "@supabase-url",
+    "SUPABASE_SERVICE_ROLE_KEY": "@supabase-service-role-key"
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",

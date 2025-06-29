@@ -96,21 +96,41 @@ export default async function handler(req, res) {
     try {
       // Inizializza connessione XRPL
       await initializeXRPL().catch(() => {}); // Ignora se già connesso
+      const client = getXRPLClient();
 
-      // TODO: Implementare creazione token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
+      const issuerSeed = process.env.ISSUER_SEED;
+      if (!issuerSeed) {
+        throw new Error('ISSUER_SEED non configurato');
+      }
+
+      const issuerWallet = walletFromSeed(issuerSeed);
+
+      // Crea trust line (l'issuer si autorizza a ricevere il proprio token)
+      await createTrustLine(issuerWallet, tokenSymbol, issuerWallet.address, supply.toString());
+
+      // Creazione della transazione Payment per emettere i token
+      const paymentTx = {
+        TransactionType: 'Payment',
+        Account: issuerWallet.address,
+        Destination: issuerWallet.address,
+        Amount: {
+          currency: tokenSymbol,
+          issuer: issuerWallet.address,
+          value: supply.toString()
+        }
+      };
+
+      const prepared = await client.autofill(paymentTx);
+      const signed = issuerWallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
 
       tokenCreationResult = {
-        success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
+        success: result.result.validated,
+        txHash: result.result.hash,
+        issuerAddress: issuerWallet.address,
         tokenSymbol: tokenSymbol,
         totalSupply: supply.toString(),
-        created: true
+        created: result.result.validated
       };
 
     } catch (error) {

@@ -1,6 +1,7 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { supabase } from '../config/supabaseClient.js';
+import { Wallet } from 'xrpl';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -59,15 +60,10 @@ export default async function handler(req, res) {
 
       } catch (error) {
         console.error('MPT fetch error:', error);
-        
-        // Fallback con dati mock
-        const mockTokens = generateMockMPTTokens();
-        return res.status(200).json({
-          success: true,
-          tokens: mockTokens,
-          totalTokens: mockTokens.length,
-          summary: calculatePortfolioSummary(mockTokens),
-          note: 'Dati simulati - XRPL non disponibile'
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch tokens',
+          message: error.message
         });
       }
     }
@@ -231,93 +227,45 @@ export default async function handler(req, res) {
 
 // Funzioni helper
 async function getMPTTokenInfo(tokenId) {
-  // In produzione, recupererebbe da XRPL e database
-  return {
-    id: tokenId,
-    symbol: 'PROP001',
-    name: 'Manhattan Office Building Token',
-    totalSupply: 1000000,
-    circulatingSupply: 750000,
-    decimals: 6,
-    issuer: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
-    status: 'active',
-    assetBacking: {
-      type: 'real_estate',
-      value: 50000000,
-      currency: 'USD',
-      location: 'Manhattan, NY',
-      lastAppraisal: {
-        value: 52000000,
-        date: '2024-01-15',
-        appraiser: 'Manhattan Real Estate Valuations LLC'
-      }
-    },
-    metrics: {
-      tokenPrice: 52.00,
-      marketCap: 52000000,
-      backingRatio: '1:1',
-      liquidityScore: 4,
-      riskScore: 3,
-      yieldRate: 4.2
-    },
-    compliance: {
-      status: 'compliant',
-      jurisdiction: 'USA',
-      lastAudit: '2024-01-01',
-      nextAudit: '2024-07-01'
-    },
-    created: '2024-01-01T00:00:00Z',
-    lastUpdated: '2024-01-15T10:30:00Z'
-  };
+  const { data, error } = await supabase
+    .from('mpt_tokens')
+    .select('*')
+    .or(`id.eq.${tokenId},mpt_id.eq.${tokenId}`)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
 }
 
 async function getUserMPTTokens(userId) {
-  // In produzione, recupererebbe dal database dell'utente
-  return generateMockMPTTokens();
-}
+  const { data, error } = await supabase
+    .from('mpt_holdings')
+    .select(`*, mpt_tokens(*)`)
+    .eq('user_id', userId)
+    .gt('balance', 0);
 
-function generateMockMPTTokens() {
-  return [
-    {
-      id: 'PROP001_A1B2C3D4',
-      symbol: 'PROP001',
-      name: 'Manhattan Office Building',
-      assetType: 'real_estate',
-      assetValue: 50000000,
-      totalSupply: 1000000,
-      userBalance: 5000,
-      userValue: 260000,
-      status: 'active',
-      yieldRate: 4.2,
-      created: '2024-01-01T00:00:00Z'
-    },
-    {
-      id: 'GOLD001_E5F6G7H8',
-      symbol: 'GOLD001',
-      name: 'Physical Gold Reserve',
-      assetType: 'commodity',
-      assetValue: 10000000,
-      totalSupply: 500000,
-      userBalance: 1000,
-      userValue: 20000,
-      status: 'active',
-      yieldRate: 0.0,
-      created: '2024-01-15T00:00:00Z'
-    },
-    {
-      id: 'ART001_I9J0K1L2',
-      symbol: 'ART001',
-      name: 'Renaissance Art Collection',
-      assetType: 'art',
-      assetValue: 25000000,
-      totalSupply: 100000,
-      userBalance: 250,
-      userValue: 62500,
-      status: 'active',
-      yieldRate: 0.0,
-      created: '2024-02-01T00:00:00Z'
-    }
-  ];
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (
+    data?.map(h => ({
+      id: h.mpt_tokens.id,
+      symbol: h.mpt_tokens.symbol,
+      name: h.mpt_tokens.name,
+      assetType: h.mpt_tokens.asset_type,
+      assetValue: h.mpt_tokens.asset_valuation,
+      totalSupply: h.mpt_tokens.current_supply,
+      userBalance: h.balance,
+      userValue: h.balance * (h.mpt_tokens.current_price || 0),
+      status: h.mpt_tokens.status,
+      yieldRate: h.mpt_tokens.yield_rate,
+      created: h.mpt_tokens.created_at
+    })) || []
+  );
 }
 
 function calculatePortfolioSummary(tokens) {
@@ -356,44 +304,185 @@ function calculatePortfolioRisk(tokens) {
 }
 
 async function updateMPTToken(params) {
-  // Simula aggiornamento token
+  const { tokenId, metadataUpdate, assetValuation, complianceUpdate, operationalChanges, updatedBy } = params;
+
+  const { data: token, error } = await supabase
+    .from('mpt_tokens')
+    .select('*')
+    .eq('id', tokenId)
+    .single();
+
+  if (error || !token) {
+    throw new Error(error?.message || 'Token not found');
+  }
+
+  await initializeXRPL();
+  const client = getXRPLClient();
+
+  const { data: account } = await supabase
+    .from('xrpl_accounts')
+    .select('*')
+    .eq('user_id', updatedBy)
+    .eq('network', token.network)
+    .single();
+
+  if (!account) {
+    throw new Error('XRPL account not found');
+  }
+
+  const wallet = Wallet.fromSeed(account.private_key);
+
+  let txHash = null;
+  if (metadataUpdate) {
+    const metaHex = Buffer.from(JSON.stringify(metadataUpdate)).toString('hex');
+    const metaTx = {
+      TransactionType: 'MPTokenSet',
+      Account: wallet.address,
+      MPTokenID: token.mpt_id,
+      MPTokenMetadata: metaHex
+    };
+
+    const prepared = await client.autofill(metaTx);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+      throw new Error(result.result.meta.TransactionResult);
+    }
+
+    txHash = result.result.hash;
+  }
+
+  await supabase
+    .from('mpt_tokens')
+    .update({
+      asset_valuation: assetValuation ?? token.asset_valuation,
+      metadata: metadataUpdate ? metadataUpdate : token.metadata,
+      compliance: complianceUpdate ?? token.compliance,
+      operational_changes: operationalChanges ?? token.operational_changes,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', tokenId);
+
   return {
-    token: {
-      id: params.tokenId,
-      lastUpdated: new Date().toISOString()
-    },
-    changes: Object.keys(params).filter(key => params[key] && key !== 'tokenId' && key !== 'updatedBy'),
+    token: { id: tokenId, lastUpdated: new Date().toISOString() },
+    changes: Object.keys(params).filter(k => params[k] && k !== 'tokenId' && k !== 'updatedBy'),
     auditLog: {
       action: 'update',
       timestamp: new Date().toISOString(),
-      user: params.updatedBy,
-      changes: 'Token metadata and valuation updated'
+      user: updatedBy,
+      transaction: txHash
     }
   };
 }
 
 async function executeMPTOperation(params) {
-  // Simula operazione su token
+  const { tokenId, operation, amount, recipient, executedBy } = params;
+
+  const { data: token, error } = await supabase
+    .from('mpt_tokens')
+    .select('*')
+    .eq('id', tokenId)
+    .single();
+
+  if (error || !token) {
+    throw new Error(error?.message || 'Token not found');
+  }
+
+  await initializeXRPL();
+  const client = getXRPLClient();
+
+  const { data: account } = await supabase
+    .from('xrpl_accounts')
+    .select('*')
+    .eq('user_id', executedBy)
+    .eq('network', token.network)
+    .single();
+
+  if (!account) {
+    throw new Error('XRPL account not found');
+  }
+
+  const wallet = Wallet.fromSeed(account.private_key);
+
+  let tx;
+  const amountValue = amount ? (parseFloat(amount) * Math.pow(10, token.decimals)).toString() : undefined;
+
+  switch (operation) {
+    case 'mint':
+      tx = {
+        TransactionType: 'MPTokenMint',
+        Account: wallet.address,
+        MPTokenID: token.mpt_id,
+        Amount: amountValue,
+        Destination: recipient
+      };
+      break;
+    case 'burn':
+      tx = {
+        TransactionType: 'MPTokenBurn',
+        Account: wallet.address,
+        MPTokenID: token.mpt_id,
+        Amount: amountValue
+      };
+      break;
+    case 'transfer':
+      tx = {
+        TransactionType: 'Payment',
+        Account: wallet.address,
+        Destination: recipient,
+        Amount: {
+          currency: token.currency_code,
+          issuer: wallet.address,
+          value: amount
+        }
+      };
+      break;
+    case 'authorize':
+      tx = {
+        TransactionType: 'MPTokenAuthorize',
+        Account: wallet.address,
+        MPTokenID: token.mpt_id,
+        TokenHolder: recipient
+      };
+      break;
+    case 'unauthorize':
+    case 'revoke':
+      tx = {
+        TransactionType: 'MPTokenUnauthorize',
+        Account: wallet.address,
+        MPTokenID: token.mpt_id,
+        TokenHolder: recipient
+      };
+      break;
+    default:
+      throw new Error('Unsupported operation');
+  }
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(result.result.meta.TransactionResult);
+  }
+
   return {
     operation: {
-      type: params.operation,
-      amount: params.amount,
-      recipient: params.recipient,
+      type: operation,
+      amount,
+      recipient,
       timestamp: new Date().toISOString()
     },
     transaction: {
-      hash: 'mpt_op_' + Date.now(),
-      fee: '12',
-      validated: true
-    },
-    newState: {
-      totalSupply: params.operation === 'mint' ? 'increased' : params.operation === 'burn' ? 'decreased' : 'unchanged'
+      hash: result.result.hash,
+      fee: prepared.Fee,
+      validated: result.result.validated
     },
     auditLog: {
-      action: params.operation,
+      action: operation,
       timestamp: new Date().toISOString(),
-      user: params.executedBy,
-      reason: params.reason
+      user: executedBy
     }
   };
 }

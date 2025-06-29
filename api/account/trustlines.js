@@ -1,5 +1,6 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, getAccountInfo, walletFromSeed, createTrustLine } from '../config/xrpl.js';
 import { TrustSet, convertStringToHex } from 'xrpl';
+import { supabase, insertTransaction } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -147,15 +148,16 @@ export default async function handler(req, res) {
         currency,
         issuer,
         limit,
+        walletSeed,
         qualityIn = 0,
         qualityOut = 0,
         noRipple = false
       } = req.body;
 
-      if (!currency || !issuer || !limit) {
+      if (!currency || !issuer || !limit || !walletSeed) {
         return res.status(400).json({
           success: false,
-          error: 'Currency, issuer e limit sono richiesti'
+          error: 'Currency, issuer, limit e seed sono richiesti'
         });
       }
 
@@ -168,28 +170,66 @@ export default async function handler(req, res) {
       }
 
       try {
-        // In produzione, qui creeresti e invieresti la transazione TrustSet
-        const trustSetTx = {
-          TransactionType: 'TrustSet',
-          Account: walletAddress,
-          LimitAmount: {
-            currency: currency.length === 3 ? currency : convertStringToHex(currency),
-            issuer: issuer,
-            value: limit.toString()
-          },
-          QualityIn: qualityIn,
-          QualityOut: qualityOut,
-          Flags: noRipple ? 0x00020000 : 0 // tfSetNoRipple
-        };
+        await initializeXRPL().catch(() => {});
+        const client = getXRPLClient();
+        const wallet = walletFromSeed(walletSeed);
 
-        // Simula creazione trust line
-        const simulatedResult = {
-          success: true,
-          transactionHash: 'mock_' + Date.now(),
-          ledgerIndex: Math.floor(Math.random() * 1000000),
-          fee: '12', // 12 drops
-          sequence: Math.floor(Math.random() * 1000)
-        };
+        let result;
+        if (qualityIn === 0 && qualityOut === 0 && !noRipple) {
+          result = await createTrustLine(wallet, currency, issuer, limit.toString());
+          if (!result.success) throw new Error(result.error);
+        } else {
+          const trustSetTx = {
+            TransactionType: 'TrustSet',
+            Account: wallet.address,
+            LimitAmount: {
+              currency: currency.length === 3 ? currency : convertStringToHex(currency),
+              issuer: issuer,
+              value: limit.toString()
+            },
+            QualityIn: qualityIn,
+            QualityOut: qualityOut,
+            Flags: noRipple ? 0x00020000 : 0
+          };
+
+          const prepared = await client.autofill(trustSetTx);
+          const signed = wallet.sign(prepared);
+          const submit = await client.submitAndWait(signed.tx_blob);
+          if (submit.result.meta?.TransactionResult !== 'tesSUCCESS') {
+            throw new Error(submit.result.meta?.TransactionResult || 'TrustSet failed');
+          }
+          result = { success: true, hash: submit.result.hash, validated: submit.result.validated, ledgerIndex: submit.result.ledger_index, fee: prepared.Fee };
+        }
+
+        const createdAt = new Date().toISOString();
+        try {
+          await insertTransaction({
+            tx_hash: result.hash,
+            type: 'trust_set',
+            from_address: wallet.address,
+            to_address: issuer,
+            amount: 0,
+            currency: currency.length === 3 ? currency : 'HEX',
+            user_id: decoded.userId,
+            status: result.validated ? 'confirmed' : 'pending',
+            blockchain_network: process.env.XRPL_NETWORK || 'testnet',
+            block_height: result.ledgerIndex,
+            gas_fee: parseFloat(result.fee) / 1000000,
+            description: 'Create trust line',
+            metadata: { issuer, limit, qualityIn, qualityOut, noRipple },
+            created_at: createdAt
+          });
+
+          await supabase.from('user_activities').insert({
+            user_id: decoded.userId,
+            activity_type: 'trust_line_create',
+            description: `Created trust line for ${currency}`,
+            metadata: { txHash: result.hash, issuer },
+            created_at: createdAt
+          });
+        } catch (dbError) {
+          console.error('Supabase logging error:', dbError);
+        }
 
         return res.status(201).json({
           success: true,
@@ -203,10 +243,12 @@ export default async function handler(req, res) {
             noRipple: noRipple,
             status: 'created'
           },
-          transaction: simulatedResult,
-          note: process.env.XRPL_NETWORK === 'testnet' ? 
-            'Trust line creata su testnet' : 
-            'Transazione simulata - configurare wallet per mainnet'
+          transaction: {
+            hash: result.hash,
+            ledgerIndex: result.ledgerIndex,
+            validated: result.validated,
+            fee: result.fee
+          }
         });
 
       } catch (error) {
@@ -221,23 +263,66 @@ export default async function handler(req, res) {
 
     // DELETE - Rimuovi trust line (imposta limit a 0)
     if (req.method === 'DELETE') {
-      const { currency, issuer } = req.body;
+      const { currency, issuer, walletSeed } = req.body;
 
-      if (!currency || !issuer) {
+      if (!currency || !issuer || !walletSeed) {
         return res.status(400).json({
           success: false,
-          error: 'Currency e issuer sono richiesti per rimuovere trust line'
+          error: 'Currency, issuer e seed sono richiesti per rimuovere trust line'
         });
       }
 
       try {
-        // Simula rimozione trust line
-        const simulatedResult = {
-          success: true,
-          transactionHash: 'mock_delete_' + Date.now(),
-          ledgerIndex: Math.floor(Math.random() * 1000000),
-          fee: '12'
+        await initializeXRPL().catch(() => {});
+        const client = getXRPLClient();
+        const wallet = walletFromSeed(walletSeed);
+
+        const trustSetTx = {
+          TransactionType: 'TrustSet',
+          Account: wallet.address,
+          LimitAmount: {
+            currency: currency.length === 3 ? currency : convertStringToHex(currency),
+            issuer: issuer,
+            value: '0'
+          }
         };
+
+        const prepared = await client.autofill(trustSetTx);
+        const signed = wallet.sign(prepared);
+        const submit = await client.submitAndWait(signed.tx_blob);
+        if (submit.result.meta?.TransactionResult !== 'tesSUCCESS') {
+          throw new Error(submit.result.meta?.TransactionResult || 'TrustSet failed');
+        }
+
+        const createdAt = new Date().toISOString();
+        try {
+          await insertTransaction({
+            tx_hash: submit.result.hash,
+            type: 'trust_remove',
+            from_address: wallet.address,
+            to_address: issuer,
+            amount: 0,
+            currency: currency.length === 3 ? currency : 'HEX',
+            user_id: decoded.userId,
+            status: submit.result.validated ? 'confirmed' : 'pending',
+            blockchain_network: process.env.XRPL_NETWORK || 'testnet',
+            block_height: submit.result.ledger_index,
+            gas_fee: parseFloat(prepared.Fee) / 1000000,
+            description: 'Remove trust line',
+            metadata: { issuer, currency },
+            created_at: createdAt
+          });
+
+          await supabase.from('user_activities').insert({
+            user_id: decoded.userId,
+            activity_type: 'trust_line_remove',
+            description: `Removed trust line for ${currency}`,
+            metadata: { txHash: submit.result.hash, issuer },
+            created_at: createdAt
+          });
+        } catch (dbError) {
+          console.error('Supabase logging error:', dbError);
+        }
 
         return res.status(200).json({
           success: true,
@@ -247,7 +332,12 @@ export default async function handler(req, res) {
             issuer: issuer,
             status: 'removed'
           },
-          transaction: simulatedResult
+          transaction: {
+            hash: submit.result.hash,
+            ledgerIndex: submit.result.ledger_index,
+            validated: submit.result.validated,
+            fee: prepared.Fee
+          }
         });
 
       } catch (error) {

@@ -100,6 +100,9 @@ npm install
 npm run dev
 ```
 
+### Environment Variables
+Copy `.env.production.example` to `.env.production` and provide real values for your deployment. When deploying on Vercel, configure the same variables in the Vercel dashboard.
+
 ## 🔌 API Endpoints
 
 ### Authentication

@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
+import xrplTokenizationService from '../services/xrplTokenizationService.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -93,20 +93,24 @@ export default async function handler(req, res) {
     };
 
     try {
-      // Inizializza connessione XRPL
-      await initializeXRPL().catch(() => {}); // Ignora se già connesso
-
-      // In produzione, qui creeresti il token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
+      const creation = await xrplTokenizationService.createToken({
+        name: assetName,
+        symbol: tokenSymbol,
+        location: assetLocation,
+        description: assetDescription,
+        faceValue: parseFloat(assetValue),
+        totalSupply: supply,
+        assetType,
+        transferable,
+        burnable: clawback === true,
+        onlyXRP: authorization === true
+      });
 
       tokenCreationResult = {
         success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
+        txHash: creation.transactionHash,
+        issuerAddress: creation.issuerAddress,
+        ledgerIndex: creation.ledgerIndex,
         tokenSymbol: tokenSymbol,
         totalSupply: supply.toString(),
         created: true
@@ -142,6 +146,7 @@ export default async function handler(req, res) {
       blockchain: {
         network: 'XRPL',
         txHash: tokenCreationResult.txHash,
+        ledgerIndex: tokenCreationResult.ledgerIndex,
         status: tokenCreationResult.success ? 'confirmed' : 'failed',
         confirmations: tokenCreationResult.success ? 1 : 0
       },
@@ -178,6 +183,7 @@ export default async function handler(req, res) {
           token: tokenData,
           transaction: {
             hash: tokenCreationResult.txHash,
+            ledgerIndex: tokenCreationResult.ledgerIndex,
             status: 'confirmed',
             network: 'XRPL Testnet',
             explorer: `https://testnet.xrpl.org/transactions/${tokenCreationResult.txHash}`
@@ -197,7 +203,9 @@ export default async function handler(req, res) {
         details: tokenCreationResult.error,
         data: {
           token: tokenData,
-          status: 'failed'
+          status: 'failed',
+          txHash: tokenCreationResult.txHash,
+          ledgerIndex: tokenCreationResult.ledgerIndex
         }
       });
     }

@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import xrplTokenizationService from '../services/xrplTokenizationService.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -96,24 +96,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // Genera ID univoco per il token MPT
-    const mptId = crypto.randomBytes(16).toString('hex').toUpperCase();
-    const tokenId = `${tokenSymbol}_${mptId.substring(0, 8)}`;
-
-    // Costruisci la transazione MPTCreate
-    const mptCreateTx = {
-      TransactionType: 'MPTCreate',
-      Account: issuerAccount,
-      MPTokenIssuanceID: mptId,
-      MaximumAmount: (totalSupply * Math.pow(10, decimals)).toString(),
-      TransferFee: tokenConfig.transferFee || 0,
-      MPTFlags: calculateMPTFlags({
-        transferable,
-        burnable,
-        mintable,
-        freezable
-      })
-    };
+    // Variabili token
+    let mptId;
+    let tokenId;
 
     // Metadata del token (seguendo standard XRPL)
     const tokenMetadata = {
@@ -153,16 +138,32 @@ export default async function handler(req, res) {
       standard: 'XRPL-MPT-RWA'
     };
 
-    // Simula la creazione del token MPT
+    // Crea il token MPT su XRPL
     try {
+      const creation = await xrplTokenizationService.createToken({
+        name: assetName,
+        symbol: tokenSymbol,
+        location: assetLocation,
+        description: assetDescription,
+        faceValue: assetValue,
+        totalSupply,
+        assetType,
+        transferable,
+        burnable,
+        transferFeePercent: tokenConfig.transferFee || 0,
+        jurisdiction: complianceSettings?.jurisdiction,
+        currency: assetCurrency
+      });
+
+      mptId = creation.mptIssuanceId;
+      tokenId = `${tokenSymbol}_${mptId.substring(0, 8)}`;
+
       const simulatedTxResult = {
         success: true,
-        transactionHash: 'mpt_create_' + Date.now(),
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000', // 2000 drops per MPT creation
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true,
-        mptId: mptId
+        transactionHash: creation.transactionHash,
+        ledgerIndex: creation.ledgerIndex,
+        mptId: creation.mptIssuanceId,
+        issuer: creation.issuerAddress
       };
 
       // Calcola metriche del token

@@ -169,6 +169,28 @@ npm run dev
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## 🚀 Deployment on Vercel
+
+The project is configured for single page application (SPA) mode on Vercel. The
+`vercel.json` file specifies the build command and output directory and includes
+a catch‑all rewrite so that any route serves `index.html`.
+
+```
+{
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+After running `pnpm run build` the generated file `dist/index.html` is deployed
+and requests like `/dashboard` will resolve to that file. You can run
+`pnpm run test` to perform a basic health check that ensures `/dashboard`
+returns HTTP 200 locally.
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

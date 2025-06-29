@@ -84,6 +84,12 @@ solcraft-nexus/
 - Node.js 20+
 - Git
 
+### Environment Variables
+1. Copy `.env.production.example` to `.env.production`.
+2. Fill in your Supabase keys and other secrets.
+3. **Do not commit** the real `.env.production`.
+4. Rotate any previously exposed Supabase keys.
+
 ### Backend Setup
 ```bash
 cd backend

@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, getAccountInfo, walletFromSeed } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -141,20 +141,46 @@ export default async function handler(req, res) {
       });
     }
 
-    // Creazione token MPT su XRPL (simulato per ora)
+    // Creazione token MPT su XRPL
     let mptCreationResult;
     try {
-      // TODO: Implementare creazione MPT reale su XRPL
-      mptCreationResult = {
-        success: true,
-        transactionHash: `MPT_${mptId}_${Date.now().toString(16).toUpperCase()}`,
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000',
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true,
-        mptId: mptId
+      const { issuerSeed } = req.body;
+      if (!issuerSeed) {
+        throw new Error('issuerSeed is required to sign the transaction');
+      }
+
+      await initializeXRPL().catch(() => {});
+      const client = getXRPLClient();
+      const wallet = walletFromSeed(issuerSeed);
+
+      const metadataString = JSON.stringify(metadata || {});
+      const mptCreateTx = {
+        TransactionType: 'MPTokenIssuanceCreate',
+        Account: wallet.address,
+        MPTokenMetadata: Buffer.from(metadataString, 'utf8').toString('hex').toUpperCase(),
+        MaximumAmount: totalSupply.toString()
       };
 
+      if (decimals) {
+        mptCreateTx.AssetScale = decimals;
+      }
+
+      const prepared = await client.autofill(mptCreateTx);
+      const signed = wallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
+
+      const created = result.result.meta?.AffectedNodes?.find(n => n.CreatedNode && n.CreatedNode.NewFields?.MPTokenID);
+      const createdId = created?.CreatedNode?.NewFields?.MPTokenID;
+
+      mptCreationResult = {
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
+        transactionHash: result.result.hash,
+        ledgerIndex: result.result.ledger_index,
+        fee: prepared.Fee,
+        sequence: prepared.Sequence,
+        validated: result.result.validated,
+        mptId: createdId || mptId
+      };
     } catch (error) {
       console.error('MPT creation error:', error);
       mptCreationResult = {

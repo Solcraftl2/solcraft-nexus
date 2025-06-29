@@ -1,5 +1,7 @@
 import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
+import redisService from '../config/redis.js';
+import { rateLimitMiddleware, cacheMiddleware, initializeRedis } from '../middleware/redis.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -19,6 +21,21 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Inizializza Redis
+    await initializeRedis(req, res, () => {});
+
+    // Rate limiting per operazioni di tokenizzazione (max 10 per ora)
+    const rateLimitKey = `tokenization:${req.ip}`;
+    const rateLimitAllowed = await redisService.checkRateLimit(rateLimitKey, 10, 3600);
+    
+    if (!rateLimitAllowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Rate limit exceeded. Maximum 10 tokenizations per hour.',
+        retry_after: 3600
+      });
+    }
+
     // Verifica autenticazione
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -29,331 +46,247 @@ export default async function handler(req, res) {
     }
 
     const token = authHeader.substring(7);
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
+    let decodedToken;
     
-    let decoded;
     try {
-      decoded = jwt.verify(token, jwtSecret);
-    } catch (error) {
+      decodedToken = jwt.verify(token, process.env.JWT_SECRET || 'solcraft-nexus-xrpl-secure-2025');
+    } catch (jwtError) {
       return res.status(401).json({
         success: false,
-        error: 'Token non valido'
+        error: 'Token di autenticazione non valido'
       });
     }
 
-    const {
-      assetName,
-      assetType,
-      assetValue,
-      assetDescription,
-      assetLocation,
-      tokenSymbol,
-      totalSupply,
-      transferable,
-      clawback,
-      authorization,
-      documents,
-      metadata
-    } = req.body;
+    const { assetData, userWallet, tokenSymbol, totalSupply, issuerSeed } = req.body;
 
     // Validazione input
-    if (!assetName || !assetType || !assetValue || !tokenSymbol || !totalSupply) {
+    if (!assetData || !userWallet || !tokenSymbol || !totalSupply) {
       return res.status(400).json({
         success: false,
-        error: 'Campi obbligatori mancanti: assetName, assetType, assetValue, tokenSymbol, totalSupply'
+        error: 'Dati richiesti mancanti: assetData, userWallet, tokenSymbol, totalSupply'
       });
     }
 
-    // Validazione token symbol (deve essere 3 caratteri per XRPL)
-    if (tokenSymbol.length !== 3 || !/^[A-Z]{3}$/.test(tokenSymbol)) {
+    // Validazione tokenSymbol
+    if (tokenSymbol.length < 3 || tokenSymbol.length > 20) {
       return res.status(400).json({
         success: false,
-        error: 'Token symbol deve essere esattamente 3 lettere maiuscole (es: USD, EUR, GOL)'
+        error: 'Token symbol deve essere tra 3 e 20 caratteri'
       });
     }
 
-    // Validazione supply
-    const supply = parseFloat(totalSupply);
-    if (isNaN(supply) || supply <= 0) {
+    // Validazione totalSupply
+    if (totalSupply <= 0 || totalSupply > 100000000000) {
       return res.status(400).json({
         success: false,
-        error: 'Total supply deve essere un numero positivo'
+        error: 'Total supply deve essere tra 1 e 100,000,000,000'
       });
     }
 
-    // Generazione ID unico per il token
-    const tokenId = `${tokenSymbol}_${Date.now()}`;
-    const createdAt = new Date().toISOString();
+    // Cache check per tokenSymbol duplicato
+    const existingTokenKey = `token_exists:${tokenSymbol}`;
+    const existingToken = await redisService.get(existingTokenKey);
+    
+    if (existingToken) {
+      return res.status(409).json({
+        success: false,
+        error: 'Token symbol già esistente',
+        existing_token: existingToken
+      });
+    }
 
-    // Creazione token su XRPL (reale o testnet)
-    let tokenCreationResult = {
-      success: false,
-      txHash: null,
-      issuerAddress: null,
-      error: null
-    };
+    // Controllo duplicati nel database
+    const { data: existingTokens } = await supabase
+      .from('tokens')
+      .select('symbol')
+      .eq('symbol', tokenSymbol)
+      .limit(1);
 
-    try {
-      // Inizializza connessione XRPL
-      await initializeXRPL().catch(() => {}); // Ignora se già connesso
-
-      // TODO: Implementare creazione token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
+    if (existingTokens && existingTokens.length > 0) {
+      // Cache il risultato per evitare query future
+      await redisService.set(existingTokenKey, { symbol: tokenSymbol, exists: true }, 3600);
       
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
-
-      tokenCreationResult = {
-        success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
-        tokenSymbol: tokenSymbol,
-        totalSupply: supply.toString(),
-        created: true
-      };
-
-    } catch (error) {
-      console.error('Token creation error:', error);
-      tokenCreationResult.error = error.message;
-    }
-
-    // Salvataggio Asset nel database Supabase
-    let savedAsset;
-    try {
-      const assetData = {
-        name: assetName,
-        type: assetType,
-        description: assetDescription || '',
-        location: assetLocation || '',
-        value: parseFloat(assetValue),
-        currency: 'USD',
-        documents: documents || [],
-        metadata: metadata || {},
-        owner_id: decoded.userId,
-        status: 'active',
-        created_at: createdAt,
-        updated_at: createdAt
-      };
-
-      savedAsset = await insertAsset(assetData);
-      console.log('Asset saved to database:', savedAsset.id);
-
-    } catch (error) {
-      console.error('Error saving asset to database:', error);
-      return res.status(500).json({
+      return res.status(409).json({
         success: false,
-        error: 'Errore durante il salvataggio dell\'asset nel database',
-        details: error.message
+        error: 'Token symbol già esistente nel database'
       });
     }
 
-    // Salvataggio Token nel database Supabase
-    let savedToken;
+    // Inizializzazione XRPL
+    await initializeXRPL();
+    const client = getXRPLClient();
+
+    // Creazione wallet issuer
+    const issuerWallet = issuerSeed ? 
+      walletFromSeed(issuerSeed) : 
+      walletFromSeed(process.env.ISSUER_SEED || 'sEdTM1uX8pu2do5XvTnutH6HsouMaM2');
+
+    console.log('🏦 Issuer wallet address:', issuerWallet.address);
+    console.log('👤 User wallet address:', userWallet.address);
+
+    // Cache key per questa operazione di tokenizzazione
+    const operationKey = `tokenization_op:${tokenSymbol}:${userWallet.address}`;
+    
+    // Controllo se operazione già in corso
+    const existingOperation = await redisService.get(operationKey);
+    if (existingOperation) {
+      return res.status(409).json({
+        success: false,
+        error: 'Tokenization already in progress for this asset',
+        operation_id: existingOperation.operation_id
+      });
+    }
+
+    // Registra operazione in corso
+    const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await redisService.set(operationKey, { 
+      operation_id: operationId, 
+      status: 'in_progress',
+      started_at: new Date().toISOString()
+    }, 1800); // 30 minuti TTL
+
     try {
-      const tokenData = {
-        id: tokenId,
-        symbol: tokenSymbol,
-        name: `${assetName} Token`,
-        total_supply: supply,
-        circulating_supply: 0,
-        decimals: 6, // Standard XRPL
+      // Step 1: Creazione TrustLine REALE su XRPL
+      console.log('🔗 Creating TrustLine on XRPL...');
+      
+      const trustLineResult = await createTrustLine(
+        userWallet,
+        tokenSymbol,
+        issuerWallet.address,
+        totalSupply
+      );
+
+      if (!trustLineResult || !trustLineResult.hash) {
+        throw new Error('TrustLine creation failed - no transaction hash received');
+      }
+
+      console.log('✅ TrustLine created successfully:', trustLineResult.hash);
+
+      // Step 2: Verifica transazione su ledger
+      const txInfo = await client.request({
+        command: 'tx',
+        transaction: trustLineResult.hash
+      });
+
+      if (txInfo.result.meta.TransactionResult !== 'tesSUCCESS') {
+        throw new Error(`TrustLine transaction failed: ${txInfo.result.meta.TransactionResult}`);
+      }
+
+      // Step 3: Salvataggio Asset nel database
+      const assetRecord = {
+        name: assetData.name,
+        description: assetData.description,
+        asset_type: assetData.type || 'real_estate',
+        location: assetData.location,
+        value_usd: assetData.value,
+        owner_address: userWallet.address,
+        status: 'tokenized',
+        metadata: assetData.metadata || {},
+        created_at: new Date().toISOString()
+      };
+
+      const savedAsset = await insertAsset(assetRecord);
+      console.log('💾 Asset saved to database:', savedAsset.id);
+
+      // Step 4: Salvataggio Token nel database
+      const tokenRecord = {
         asset_id: savedAsset.id,
-        issuer_address: tokenCreationResult.issuerAddress,
-        blockchain_network: 'XRPL',
-        tx_hash: tokenCreationResult.txHash,
-        status: tokenCreationResult.success ? 'active' : 'failed',
-        transferable: transferable !== false,
-        clawback_enabled: clawback === true,
-        authorization_required: authorization === true,
-        initial_price: parseFloat(assetValue) / supply,
-        current_price: parseFloat(assetValue) / supply,
-        price_currency: 'USD',
-        creator_id: decoded.userId,
-        created_at: createdAt,
-        updated_at: createdAt
+        symbol: tokenSymbol,
+        name: `${assetData.name} Token`,
+        total_supply: totalSupply,
+        issuer_address: issuerWallet.address,
+        holder_address: userWallet.address,
+        xrpl_currency_code: tokenSymbol,
+        trust_line_hash: trustLineResult.hash,
+        ledger_index: txInfo.result.ledger_index,
+        status: 'active',
+        created_at: new Date().toISOString()
       };
 
-      savedToken = await insertToken(tokenData);
-      console.log('Token saved to database:', savedToken.id);
+      const savedToken = await insertToken(tokenRecord);
+      console.log('🪙 Token saved to database:', savedToken.id);
 
-    } catch (error) {
-      console.error('Error saving token to database:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Errore durante il salvataggio del token nel database',
-        details: error.message
-      });
-    }
+      // Step 5: Salvataggio Transazione
+      const transactionRecord = {
+        tx_hash: trustLineResult.hash,
+        transaction_type: 'tokenization',
+        from_address: issuerWallet.address,
+        to_address: userWallet.address,
+        amount: totalSupply,
+        currency: tokenSymbol,
+        asset_id: savedAsset.id,
+        token_id: savedToken.id,
+        fee: trustLineResult.fee || '12',
+        status: 'completed',
+        ledger_index: txInfo.result.ledger_index,
+        created_at: new Date().toISOString()
+      };
 
-    // Salvataggio Transazione nel database Supabase
-    if (tokenCreationResult.success) {
-      try {
-        const transactionData = {
-          tx_hash: tokenCreationResult.txHash,
-          type: 'token_creation',
-          from_address: null,
-          to_address: tokenCreationResult.issuerAddress,
-          amount: supply,
-          currency: tokenSymbol,
-          token_id: savedToken.id,
-          user_id: decoded.userId,
-          status: 'confirmed',
-          blockchain_network: 'XRPL',
-          block_height: null,
-          gas_fee: 0,
-          description: `Token creation for ${assetName}`,
-          metadata: {
-            assetName,
-            assetType,
-            assetValue,
-            tokenSymbol,
-            totalSupply: supply
-          },
-          created_at: createdAt
-        };
+      const savedTransaction = await insertTransaction(transactionRecord);
+      console.log('📝 Transaction saved to database:', savedTransaction.id);
 
-        const savedTransaction = await insertTransaction(transactionData);
-        console.log('Transaction saved to database:', savedTransaction.id);
-
-      } catch (error) {
-        console.error('Error saving transaction to database:', error);
-        // Non bloccare la risposta per errori di transazione
-      }
-    }
-
-    // Aggiorna portfolio dell'utente
-    try {
-      // Trova o crea portfolio principale dell'utente
-      const { data: portfolios, error: portfolioError } = await supabase
-        .from('portfolios')
-        .select('*')
-        .eq('user_id', decoded.userId)
-        .limit(1);
-
-      let portfolioId;
-      if (portfolioError || !portfolios || portfolios.length === 0) {
-        // Crea portfolio se non esiste
-        const { data: newPortfolio, error: createError } = await supabase
-          .from('portfolios')
-          .insert({
-            user_id: decoded.userId,
-            name: 'Portfolio Principale',
-            description: 'Portfolio di investimenti principale',
-            total_value: parseFloat(assetValue),
-            currency: 'USD',
-            created_at: createdAt
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        portfolioId = newPortfolio.id;
-      } else {
-        portfolioId = portfolios[0].id;
-        
-        // Aggiorna valore portfolio
-        await supabase
-          .from('portfolios')
-          .update({
-            total_value: portfolios[0].total_value + parseFloat(assetValue),
-            updated_at: createdAt
-          })
-          .eq('id', portfolioId);
-      }
-
-      // Aggiungi asset al portfolio
-      await supabase
-        .from('portfolio_assets')
-        .insert({
-          portfolio_id: portfolioId,
-          asset_id: savedAsset.id,
-          token_id: savedToken.id,
-          quantity: supply,
-          purchase_price: parseFloat(assetValue) / supply,
-          current_price: parseFloat(assetValue) / supply,
-          total_value: parseFloat(assetValue),
-          currency: 'USD',
-          created_at: createdAt
-        });
-
-    } catch (error) {
-      console.error('Error updating user portfolio:', error);
-      // Non bloccare la risposta per errori di portfolio
-    }
-
-    // Registra attività utente
-    try {
-      await supabase
-        .from('user_activities')
-        .insert({
-          user_id: decoded.userId,
-          activity_type: 'tokenization',
-          description: `Created token ${tokenSymbol} for asset ${assetName}`,
-          metadata: {
-            tokenId: savedToken.id,
-            assetId: savedAsset.id,
-            txHash: tokenCreationResult.txHash
-          },
-          created_at: createdAt
-        });
-    } catch (error) {
-      console.error('Error logging user activity:', error);
-      // Non bloccare la risposta per errori di logging
-    }
-
-    // Risposta di successo
-    if (tokenCreationResult.success) {
-      return res.status(201).json({
+      // Step 6: Cache dei risultati
+      const tokenizationResult = {
         success: true,
-        message: 'Asset tokenizzato con successo e salvato nel database!',
-        data: {
-          asset: {
-            id: savedAsset.id,
-            name: savedAsset.name,
-            type: savedAsset.type,
-            value: savedAsset.value,
-            location: savedAsset.location
-          },
-          token: {
-            id: savedToken.id,
-            symbol: savedToken.symbol,
-            totalSupply: savedToken.total_supply,
-            issuerAddress: savedToken.issuer_address,
-            status: savedToken.status
-          },
-          transaction: {
-            hash: tokenCreationResult.txHash,
-            status: 'confirmed',
-            network: 'XRPL Testnet',
-            explorer: `https://testnet.xrpl.org/transactions/${tokenCreationResult.txHash}`
-          },
-          nextSteps: [
-            'Il token è stato creato e salvato nel database',
-            'L\'asset è stato aggiunto al tuo portfolio',
-            'Puoi ora distribuire i token agli investitori',
-            'Monitora le transazioni nel dashboard'
-          ]
-        }
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        error: 'Errore durante la creazione del token sulla blockchain',
-        details: tokenCreationResult.error,
-        data: {
-          asset: savedAsset ? { id: savedAsset.id } : null,
-          token: savedToken ? { id: savedToken.id, status: 'failed' } : null
-        }
-      });
+        asset: savedAsset,
+        token: savedToken,
+        transaction: {
+          hash: trustLineResult.hash,
+          ledger_index: txInfo.result.ledger_index,
+          fee: trustLineResult.fee,
+          status: 'completed'
+        },
+        xrpl_details: {
+          trust_line_hash: trustLineResult.hash,
+          issuer_address: issuerWallet.address,
+          currency_code: tokenSymbol,
+          total_supply: totalSupply
+        },
+        operation_id: operationId,
+        completed_at: new Date().toISOString()
+      };
+
+      // Cache il token per evitare duplicati futuri
+      await redisService.set(existingTokenKey, { 
+        symbol: tokenSymbol, 
+        exists: true, 
+        token_id: savedToken.id 
+      }, 3600 * 24); // 24 ore
+
+      // Cache il risultato della tokenizzazione
+      await redisService.set(`tokenization_result:${operationId}`, tokenizationResult, 3600 * 24);
+
+      // Cache i dati del token per accesso rapido
+      await redisService.cacheTokenPrice(tokenSymbol, assetData.value / totalSupply, 3600);
+
+      // Rimuovi operazione in corso
+      await redisService.del(operationKey);
+
+      console.log('🎉 Tokenization completed successfully!');
+
+      return res.status(200).json(tokenizationResult);
+
+    } catch (operationError) {
+      // Rimuovi operazione in corso in caso di errore
+      await redisService.del(operationKey);
+      
+      // Cache dell'errore per evitare retry immediati
+      await redisService.set(`tokenization_error:${operationId}`, {
+        error: operationError.message,
+        timestamp: new Date().toISOString()
+      }, 300); // 5 minuti
+
+      throw operationError;
     }
 
   } catch (error) {
-    console.error('Tokenization error:', error);
+    console.error('❌ Tokenization error:', error);
+    
     return res.status(500).json({
       success: false,
-      error: 'Errore interno del server durante la tokenizzazione',
-      message: error.message
+      error: 'Errore durante la tokenizzazione',
+      details: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 }

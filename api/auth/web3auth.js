@@ -2,62 +2,44 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
 
-exports.handler = async (event, context) => {
+export default async function handler(req, res) {
   // CORS headers
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Content-Type': 'application/json'
-  };
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Content-Type', 'application/json');
 
   // Handle preflight requests
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: ''
-    };
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        message: 'Method not allowed'
-      })
-    };
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      message: 'Method not allowed'
+    });
   }
 
   try {
-    const { provider, loginType, mpcEnabled, network } = JSON.parse(event.body);
+    const { provider, loginType, mpcEnabled, network } = req.body;
 
     // Validazione input
     if (!provider || !loginType) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          message: 'Provider e loginType sono richiesti'
-        })
-      };
+      return res.status(400).json({
+        success: false,
+        message: 'Provider e loginType sono richiesti'
+      });
     }
 
     // Simulazione Web3Auth con MPC technology
     const supportedProviders = ['google', 'twitter', 'discord', 'facebook', 'apple'];
     
     if (!supportedProviders.includes(provider)) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          message: `Provider ${provider} non supportato. Supportati: ${supportedProviders.join(', ')}`
-        })
-      };
+      return res.status(400).json({
+        success: false,
+        message: `Provider ${provider} non supportato. Supportati: ${supportedProviders.join(', ')}`
+      });
     }
 
     // Simulazione generazione wallet MPC
@@ -150,44 +132,36 @@ exports.handler = async (event, context) => {
       ]
     };
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        message: `Web3Auth con ${provider} completato con successo`,
-        user: user,
-        token: token,
-        walletAddress: walletAddress,
-        balance: mockBalance,
-        mpcInfo: {
-          enabled: mpcEnabled,
-          threshold: '2/3',
-          keyShares: 3,
-          description: 'Wallet protetto da tecnologia MPC distribuita'
-        },
-        features: {
-          passwordless: true,
-          socialLogin: true,
-          selfCustodial: true,
-          crossPlatform: true,
-          recovery: 'Social recovery disponibile'
-        }
-      })
-    };
+    return res.status(200).json({
+      success: true,
+      message: `Web3Auth con ${provider} completato con successo`,
+      user: user,
+      token: token,
+      walletAddress: walletAddress,
+      balance: mockBalance,
+      mpcInfo: {
+        enabled: mpcEnabled,
+        threshold: '2/3',
+        keyShares: 3,
+        description: 'Wallet protetto da tecnologia MPC distribuita'
+      },
+      features: {
+        passwordless: true,
+        socialLogin: true,
+        selfCustodial: true,
+        crossPlatform: true,
+        recovery: 'Social recovery disponibile'
+      }
+    });
 
   } catch (error) {
     console.error('Errore Web3Auth:', error);
     
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        message: 'Errore interno del server durante l\'autenticazione Web3Auth',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      })
-    };
+    return res.status(500).json({
+      success: false,
+      message: 'Errore interno del server durante l\'autenticazione Web3Auth',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
-};
+}
 

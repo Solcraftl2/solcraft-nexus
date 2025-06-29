@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { initializeXRPL, walletFromSeed, createOffer } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -455,56 +455,32 @@ async function getArbitrageAlerts() {
 }
 
 async function executeArbitrage(arbitrageData) {
-  const {
-    opportunityId,
-    amount,
-    maxSlippage = 0.5,
-    autoExecute = false
-  } = arbitrageData;
+  const { traderSeed, buy, sell } = arbitrageData;
 
-  // Simulazione esecuzione arbitrage
+  if (!traderSeed || !buy || !sell) {
+    throw new Error('traderSeed, buy and sell parameters are required');
+  }
+
+  await initializeXRPL();
+  const wallet = walletFromSeed(traderSeed);
+
+  const buyResult = await createOffer(wallet, buy.takerGets, buy.takerPays, { flags: 0 });
+  if (!buyResult.success) {
+    throw new Error(buyResult.error || 'Buy leg failed');
+  }
+
+  const sellResult = await createOffer(wallet, sell.takerGets, sell.takerPays, { flags: 0 });
+  if (!sellResult.success) {
+    throw new Error(sellResult.error || 'Sell leg failed');
+  }
+
   return {
-    executionId: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    opportunityId,
-    amount: parseFloat(amount),
-    status: 'executing',
-    steps: [
-      {
-        step: 1,
-        action: 'buy_asset',
-        exchange: 'XRPL DEX',
-        amount: parseFloat(amount),
-        price: 0.5195,
-        status: 'pending',
-        txHash: null
-      },
-      {
-        step: 2,
-        action: 'transfer_asset',
-        fromExchange: 'XRPL DEX',
-        toExchange: 'Binance',
-        amount: parseFloat(amount),
-        status: 'waiting',
-        estimatedTime: 30
-      },
-      {
-        step: 3,
-        action: 'sell_asset',
-        exchange: 'Binance',
-        amount: parseFloat(amount),
-        price: 0.5267,
-        status: 'waiting',
-        txHash: null
-      }
-    ],
-    estimatedProfit: parseFloat(amount) * 0.0072,
-    estimatedFees: parseFloat(amount) * 0.0015,
-    netProfit: parseFloat(amount) * 0.0057,
-    maxSlippage,
-    startTime: new Date().toISOString(),
-    estimatedCompletion: new Date(Date.now() + 120000).toISOString(),
-    riskScore: 1.2,
-    confidence: 0.92
+    executionId: `exec_${Date.now()}`,
+    buyHash: buyResult.hash,
+    sellHash: sellResult.hash,
+    ledger_index_buy: buyResult.ledgerIndex,
+    ledger_index_sell: sellResult.ledgerIndex,
+    validated: buyResult.validated && sellResult.validated,
   };
 }
 

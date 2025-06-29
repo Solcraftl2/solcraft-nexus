@@ -273,6 +273,95 @@ export async function getAccountTransactions(address, limit = 20) {
   }
 }
 
+/**
+ * Create an offer on the XRPL decentralized exchange
+ */
+export async function createOffer(wallet, takerGets, takerPays, options = {}) {
+  const client = getXRPLClient();
+
+  const offer = {
+    TransactionType: 'OfferCreate',
+    Account: wallet.address,
+    TakerGets: takerGets,
+    TakerPays: takerPays,
+    Flags: options.flags || 0,
+  };
+
+  if (options.expiration) {
+    offer.Expiration = options.expiration;
+  }
+
+  if (options.offerSequence) {
+    offer.OfferSequence = options.offerSequence;
+  }
+
+  try {
+    const prepared = await client.autofill(offer);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+    if (result.result.engine_result !== 'tesSUCCESS') {
+      return { success: false, error: result.result.engine_result };
+    }
+    return {
+      success: true,
+      hash: result.result.hash,
+      ledgerIndex: result.result.ledger_index,
+      validated: result.result.validated,
+    };
+  } catch (error) {
+    console.error('❌ OfferCreate error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Deposit assets into an AMM liquidity pool
+ */
+export async function ammDeposit(wallet, asset, asset2, amount, amount2, options = {}) {
+  const client = getXRPLClient();
+
+  const tx = {
+    TransactionType: 'AMMDeposit',
+    Account: wallet.address,
+    Asset: asset,
+    Asset2: asset2,
+  };
+
+  if (amount) {
+    tx.Amount = amount;
+  }
+
+  if (amount2) {
+    tx.Amount2 = amount2;
+  }
+
+  if (options.lpTokenOut) {
+    tx.LPTokenOut = options.lpTokenOut;
+  }
+
+  if (options.flags) {
+    tx.Flags = options.flags;
+  }
+
+  try {
+    const prepared = await client.autofill(tx);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+    if (result.result.engine_result !== 'tesSUCCESS') {
+      return { success: false, error: result.result.engine_result };
+    }
+    return {
+      success: true,
+      hash: result.result.hash,
+      ledgerIndex: result.result.ledger_index,
+      validated: result.result.validated,
+    };
+  } catch (error) {
+    console.error('❌ AMMDeposit error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Utility functions
 export { xrpToDrops, dropsToXrp };
 
@@ -288,6 +377,8 @@ export default {
   sendXRPPayment,
   createTrustLine,
   getAccountTransactions,
+  createOffer,
+  ammDeposit,
   xrpToDrops,
   dropsToXrp
 };

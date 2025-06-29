@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { initializeXRPL, walletFromSeed, ammDeposit } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -399,33 +399,40 @@ async function getLiquidityAnalytics(poolId) {
 
 async function addLiquidity(liquidityData) {
   const {
+    traderSeed,
     poolId,
+    asset,
+    asset2,
     token0Amount,
     token1Amount,
     slippageTolerance = 0.5,
     deadline = 20 // minuti
   } = liquidityData;
+  if (!traderSeed || !asset || !asset2) {
+    throw new Error('traderSeed, asset and asset2 are required');
+  }
 
-  // Simulazione aggiunta liquidità
-  const lpTokensReceived = Math.sqrt(parseFloat(token0Amount) * parseFloat(token1Amount));
-  
+  await initializeXRPL();
+  const wallet = walletFromSeed(traderSeed);
+
+  const result = await ammDeposit(
+    wallet,
+    asset,
+    asset2,
+    token0Amount,
+    token1Amount,
+    { flags: 0 }
+  );
+
+  if (!result.success) {
+    throw new Error(result.error || 'AMM deposit failed');
+  }
+
   return {
     poolId,
-    token0Amount: parseFloat(token0Amount),
-    token1Amount: parseFloat(token1Amount),
-    lpTokensReceived,
-    shareOfPool: lpTokensReceived / 11747340, // Basato su supply totale
-    estimatedFees: {
-      daily: lpTokensReceived * 0.0034,
-      monthly: lpTokensReceived * 0.104,
-      yearly: lpTokensReceived * 1.25
-    },
-    priceImpact: 0.02,
-    slippageTolerance,
-    deadline: new Date(Date.now() + deadline * 60000).toISOString(),
-    txHash: `add_liquidity_${Math.random().toString(36).substr(2, 16)}`,
-    status: 'pending',
-    estimatedConfirmation: new Date(Date.now() + 4000).toISOString()
+    hash: result.hash,
+    ledger_index: result.ledgerIndex,
+    validated: result.validated,
   };
 }
 

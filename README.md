@@ -93,6 +93,14 @@ pip install -r requirements.txt
 python src/main.py
 ```
 
+### Database Update
+If you already have a database from a previous version, run the migration script
+to rename the `metadata` column in `security_events`:
+
+```bash
+python database/rename_security_events_metadata.py
+```
+
 ### Frontend Setup
 ```bash
 cd frontend

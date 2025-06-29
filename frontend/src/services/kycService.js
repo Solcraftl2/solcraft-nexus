@@ -138,34 +138,53 @@ export class KYCService {
     }
   }
 
-  // Verifica automatica documento (simulata)
+  // Invia il documento al provider KYC (Onfido)
   static async autoVerifyDocument(documentId, documentType) {
     try {
-      // Simulazione verifica automatica
-      const isValid = Math.random() > 0.2; // 80% successo
-      const status = isValid ? 'verified' : 'rejected';
-      const rejectionReason = isValid ? null : 'Documento non leggibile o danneggiato';
-
-      const { error } = await supabase
+      // Recupera informazioni documento
+      const { data: doc, error: docError } = await supabase
         .from('kyc_documents')
-        .update({
-          status,
-          verified_at: isValid ? new Date().toISOString() : null,
-          rejection_reason: rejectionReason,
-          verified_by: 'auto_system'
+        .select('user_id, file_path')
+        .eq('id', documentId)
+        .single();
+
+      if (docError) throw docError;
+
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from('kyc-documents')
+        .createSignedUrl(doc.file_path, 3600);
+
+      if (urlError) throw urlError;
+
+      const response = await fetch('/api/kyc/onfido-initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: doc.user_id,
+          documentId,
+          documentType,
+          fileUrl: urlData.signedUrl
         })
-        .eq('id', documentId);
+      });
 
-      if (error) throw error;
+      const result = await response.json();
 
-      // Se verificato, controlla se può avanzare di livello
-      if (isValid) {
-        await this.checkLevelUpgrade(documentId);
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Errore invio documento al provider');
       }
 
-      return { success: true, status };
+      await supabase
+        .from('kyc_documents')
+        .update({ status: 'submitted', provider_check_id: result.checkId })
+        .eq('id', documentId);
+
+      return { success: true, status: 'submitted' };
     } catch (error) {
-      console.error('Errore verifica automatica:', error);
+      console.error('Errore invio provider KYC:', error);
+      await supabase
+        .from('kyc_documents')
+        .update({ status: 'error', rejection_reason: error.message })
+        .eq('id', documentId);
       return { success: false, error: error.message };
     }
   }

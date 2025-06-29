@@ -200,16 +200,9 @@ def mint_tokens(mpt_id):
         amount = Decimal(str(data['amount']))
         memo = data.get('memo')
         
-        # For demo purposes, simulate minting
-        result = {
-            'success': True,
-            'transaction_hash': f'demo_mint_{current_user_id}_{datetime.utcnow().timestamp()}',
-            'mpt_id': mpt_id,
-            'recipient': recipient,
-            'amount_minted': amount
-        }
+        issuer_wallet = tokenization_service._get_user_wallet(user)
+        result = tokenization_service.mint_tokens(mpt_id, issuer_wallet, recipient, amount, memo)
         
-        # Record transaction
         transaction = Transaction(
             transaction_type='mint',
             status='completed',
@@ -268,15 +261,8 @@ def transfer_tokens(mpt_id):
         amount = Decimal(str(data['amount']))
         memo = data.get('memo')
         
-        # For demo purposes, simulate transfer
-        result = {
-            'success': True,
-            'transaction_hash': f'demo_transfer_{current_user_id}_{datetime.utcnow().timestamp()}',
-            'mpt_id': mpt_id,
-            'sender': user.wallet_address,
-            'recipient': recipient,
-            'amount_transferred': amount
-        }
+        sender_wallet = tokenization_service._get_user_wallet(user)
+        result = tokenization_service.transfer_tokens(sender_wallet, recipient, mpt_id, amount, memo)
         
         # Record transaction
         transaction = Transaction(

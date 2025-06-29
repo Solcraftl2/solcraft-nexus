@@ -2,40 +2,68 @@
 
 import { oracleDataSources } from '../data/insuranceData';
 
+// Basic placeholder oracle provider classes
+class ChainlinkOracle {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+  }
+
+  async connect() {
+    console.log('🔗 Connecting to Chainlink oracle');
+  }
+
+  async getData() {
+    return {};
+  }
+}
+
+class CoinGeckoAPI {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+  }
+
+  async connect() {
+    console.log('📈 Connecting to CoinGecko API');
+  }
+
+  async getData() {
+    return {};
+  }
+}
+
+class XRPLPriceOracle {
+  async connect() {
+    console.log('⚡ Connecting to XRPL Price Oracle');
+  }
+
+  async getData() {
+    return {};
+  }
+}
+
 class OracleService {
   constructor() {
     this.activeSubscriptions = new Map();
     this.triggerCallbacks = new Map();
     this.dataCache = new Map();
-    this.isSimulationMode = true; // Set to false for production oracle integration
+    this.oracleProviders = {
+      chainlink: new ChainlinkOracle(process.env.CHAINLINK_API_KEY),
+      coingecko: new CoinGeckoAPI(process.env.COINGECKO_API_KEY),
+      xrpl: new XRPLPriceOracle()
+    };
   }
 
   // Initialize oracle connections
   async initialize() {
     console.log('🔮 Oracle Service initializing...');
-    
-    if (this.isSimulationMode) {
-      this.startSimulationMode();
-    } else {
-      await this.connectToRealOracles();
+
+    for (const provider of Object.values(this.oracleProviders)) {
+      if (typeof provider.connect === 'function') {
+        await provider.connect();
+      }
     }
-    
+
     console.log('✅ Oracle Service initialized');
-  }
-
-  // Start simulation mode for development/demo
-  startSimulationMode() {
-    console.log('🎭 Starting Oracle Simulation Mode');
-    
-    // Simulate real-time data updates
-    setInterval(() => {
-      this.simulateDataUpdates();
-    }, 30000); // Update every 30 seconds
-
-    // Simulate trigger events occasionally
-    setInterval(() => {
-      this.simulateTriggerEvents();
-    }, 300000); // Check for triggers every 5 minutes
   }
 
   // Connect to real oracle networks (production)
@@ -187,9 +215,6 @@ class OracleService {
 
   // Get data from oracle source
   async getOracleData(dataSource) {
-    if (this.isSimulationMode) {
-      return this.getSimulatedData(dataSource);
-    }
 
     // Check cache first
     const cacheKey = `${dataSource}_${Date.now()}`;
@@ -206,73 +231,13 @@ class OracleService {
     return data;
   }
 
-  // Get simulated oracle data for development
-  getSimulatedData(dataSource) {
-    const now = new Date();
-    
-    switch (dataSource) {
-      case 'National Hurricane Center':
-        return {
-          timestamp: now,
-          hurricanes: [
-            {
-              name: 'Hurricane Test',
-              category: Math.floor(Math.random() * 5) + 1,
-              windSpeed: Math.floor(Math.random() * 100) + 80,
-              location: { lat: 25.7617, lng: -80.1918 }, // Miami
-              duration: Math.floor(Math.random() * 48) + 6
-            }
-          ],
-          alerts: []
-        };
-
-      case 'CyberSec Oracle Network':
-        return {
-          timestamp: now,
-          incidents: [
-            {
-              type: 'data_breach',
-              severity: Math.random() > 0.8 ? 'high' : 'medium',
-              recordsAffected: Math.floor(Math.random() * 5000000),
-              estimatedCost: Math.floor(Math.random() * 100000000),
-              duration: Math.floor(Math.random() * 72)
-            }
-          ],
-          threatLevel: Math.random() > 0.7 ? 'elevated' : 'normal'
-        };
-
-      case 'WHO Emergency Response':
-        return {
-          timestamp: now,
-          pandemicStatus: 'monitoring',
-          globalCases: Math.floor(Math.random() * 1000000),
-          mortalityRate: Math.random() * 0.05,
-          affectedCountries: Math.floor(Math.random() * 50) + 10,
-          pheicStatus: false
-        };
-
-      case 'EU ETS & Energy Oracle':
-        return {
-          timestamp: now,
-          carbonPrice: 50 + (Math.random() * 100), // €50-150/ton
-          renewableCapacity: 0.6 + (Math.random() * 0.3), // 60-90%
-          energyTransitionIndex: Math.random() * 100
-        };
-
-      default:
-        return {
-          timestamp: now,
-          status: 'normal',
-          value: Math.random() * 100
-        };
-    }
-  }
-
   // Fetch real oracle data (production implementation)
   async fetchRealOracleData(dataSource) {
-    // This would implement real API calls to oracle providers
-    // For now, return simulated data
-    return this.getSimulatedData(dataSource);
+    const provider = this.oracleProviders[dataSource];
+    if (provider && typeof provider.getData === 'function') {
+      return provider.getData();
+    }
+    return {};
   }
 
   // Evaluate if trigger conditions are met
@@ -390,45 +355,10 @@ class OracleService {
     console.log('📝 Trigger Event Log:', logEntry);
   }
 
-  // Simulate data updates for demo
-  simulateDataUpdates() {
-    console.log('🔄 Simulating oracle data updates...');
-    
-    // Clear old cache entries
-    this.dataCache.clear();
-    
-    // Trigger monitoring for active subscriptions
-    for (const [tokenId, subscription] of this.activeSubscriptions) {
-      if (subscription.isActive) {
-        this.monitorTrigger(subscription);
-      }
-    }
-  }
-
-  // Simulate trigger events for demo
-  simulateTriggerEvents() {
-    console.log('🎲 Simulating potential trigger events...');
-    
-    for (const [tokenId, subscription] of this.activeSubscriptions) {
-      if (subscription.isActive && Math.random() < 0.1) { // 10% chance
-        const simulatedTrigger = {
-          isTriggered: true,
-          triggerType: subscription.triggerConfig.type,
-          description: `Simulated trigger event for ${tokenId}`,
-          timestamp: new Date(),
-          data: this.getSimulatedData(subscription.triggerConfig.data_source)
-        };
-        
-        this.handleTriggerEvent(tokenId, simulatedTrigger);
-      }
-    }
-  }
-
   // Get oracle service status
   getStatus() {
     return {
       isInitialized: true,
-      mode: this.isSimulationMode ? 'simulation' : 'production',
       activeSubscriptions: this.activeSubscriptions.size,
       connectedOracles: oracleDataSources.length,
       cacheSize: this.dataCache.size,

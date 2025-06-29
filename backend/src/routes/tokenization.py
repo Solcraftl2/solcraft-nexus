@@ -355,8 +355,8 @@ def get_portfolio_tokens():
         if not portfolio:
             return jsonify({'error': 'Portfolio not found'}), 404
         
-        # Get token holdings
-        holdings = TokenHolding.query.filter_by(portfolio_id=portfolio.id).all()
+        # Get token holdings for the user
+        holdings = TokenHolding.query.filter_by(user_id=current_user_id).all()
         
         holdings_data = []
         for holding in holdings:
@@ -367,12 +367,12 @@ def get_portfolio_tokens():
                 'name': asset.name,
                 'symbol': asset.symbol,
                 'asset_type': asset.asset_type,
-                'balance': str(holding.balance),
-                'average_cost': str(holding.average_cost),
-                'total_cost': str(holding.total_cost),
-                'current_value': str(holding.current_value),
+                'amount': str(holding.amount),
+                'average_cost': str(holding.average_cost) if holding.average_cost else None,
+                'total_invested': str(holding.total_invested),
+                'current_value': str(holding.calculate_current_value()),
                 'unrealized_pnl': str(holding.unrealized_pnl),
-                'last_updated': holding.last_updated.isoformat()
+                'last_transaction_date': holding.last_transaction_date.isoformat() if holding.last_transaction_date else None
             })
         
         return jsonify({

@@ -4,6 +4,7 @@ from src.models.user import db, User
 from src.models.asset import Asset, TokenHolding, Portfolio
 from src.models.transaction import Transaction
 from src.services.tokenization_service import tokenization_service
+from src.services.secure_wallet_service import secure_wallet_service
 from decimal import Decimal
 from datetime import datetime
 import logging
@@ -200,14 +201,17 @@ def mint_tokens(mpt_id):
         amount = Decimal(str(data['amount']))
         memo = data.get('memo')
         
-        # For demo purposes, simulate minting
-        result = {
-            'success': True,
-            'transaction_hash': f'demo_mint_{current_user_id}_{datetime.utcnow().timestamp()}',
-            'mpt_id': mpt_id,
-            'recipient': recipient,
-            'amount_minted': amount
-        }
+        # Retrieve issuer wallet for signing
+        issuer_wallet = secure_wallet_service.get_wallet_for_transaction(current_user_id)
+
+        # Mint tokens on XRPL
+        result = tokenization_service.mint_tokens(
+            mpt_id,
+            issuer_wallet,
+            recipient,
+            amount,
+            memo
+        )
         
         # Record transaction
         transaction = Transaction(
@@ -268,15 +272,17 @@ def transfer_tokens(mpt_id):
         amount = Decimal(str(data['amount']))
         memo = data.get('memo')
         
-        # For demo purposes, simulate transfer
-        result = {
-            'success': True,
-            'transaction_hash': f'demo_transfer_{current_user_id}_{datetime.utcnow().timestamp()}',
-            'mpt_id': mpt_id,
-            'sender': user.wallet_address,
-            'recipient': recipient,
-            'amount_transferred': amount
-        }
+        # Retrieve sender wallet for signing
+        sender_wallet = secure_wallet_service.get_wallet_for_transaction(current_user_id)
+
+        # Execute transfer on XRPL
+        result = tokenization_service.transfer_tokens(
+            sender_wallet,
+            recipient,
+            mpt_id,
+            amount,
+            memo
+        )
         
         # Record transaction
         transaction = Transaction(

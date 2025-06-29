@@ -161,6 +161,13 @@ npm run dev
 - **Enterprise Security** standards
 - **Production Ready** platform
 
+## 🚀 Deployment on Vercel & Netlify
+
+Both platforms require SPA-style rewrites so that client-side routing works correctly.
+
+- **Vercel** uses the `vercel.json` file included in the repository. The catch-all rule rewrites all non-API paths to `index.html`. Ensure the build command generates `dist/index.html` (run `pnpm run build`). The `postbuild` script fails if this file is missing.
+- **Netlify** honors the redirects defined in `netlify.toml`. The final `/*` redirect must point to `/index.html` so that routes like `/dashboard` resolve correctly. The `publish = "dist"` setting expects the same build output directory.
+
 ## 🤝 Contributing
 
 1. Fork the repository

@@ -168,15 +168,24 @@ export async function getAccountBalance(address) {
  */
 export async function sendXRPPayment(fromWallet, toAddress, amount, memo = null) {
   const client = getXRPLClient();
-  
+
   const payment = {
     TransactionType: 'Payment',
     Account: fromWallet.address,
-    Destination: toAddress,
-    Amount: xrpToDrops(amount.toString())
+    Destination: toAddress
   };
-  
-  // Aggiungi memo se fornito
+
+  // Supporta sia pagamenti XRP che token IOU
+  if (typeof amount === 'object') {
+    payment.Amount = {
+      currency: amount.currency,
+      issuer: amount.issuer || fromWallet.address,
+      value: amount.value.toString()
+    };
+  } else {
+    payment.Amount = xrpToDrops(amount.toString());
+  }
+
   if (memo) {
     payment.Memos = [{
       Memo: {
@@ -184,24 +193,20 @@ export async function sendXRPPayment(fromWallet, toAddress, amount, memo = null)
       }
     }];
   }
-  
+
   try {
     const prepared = await client.autofill(payment);
     const signed = fromWallet.sign(prepared);
     const result = await client.submitAndWait(signed.tx_blob);
-    
+
     return {
-      success: true,
       hash: result.result.hash,
       validated: result.result.validated,
       meta: result.result.meta
     };
   } catch (error) {
     console.error('❌ Errore invio pagamento:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    throw error; // Propaga errore
   }
 }
 
@@ -225,18 +230,14 @@ export async function createTrustLine(wallet, currency, issuer, limit = '1000000
     const prepared = await client.autofill(trustSet);
     const signed = wallet.sign(prepared);
     const result = await client.submitAndWait(signed.tx_blob);
-    
+
     return {
-      success: true,
       hash: result.result.hash,
       validated: result.result.validated
     };
   } catch (error) {
     console.error('❌ Errore creazione trust line:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    throw error; // Propaga errore
   }
 }
 

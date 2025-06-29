@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
+import { initializeXRPL, walletFromSeed, createTrustLine, sendXRPPayment } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 
@@ -97,17 +97,36 @@ export default async function handler(req, res) {
       // Inizializza connessione XRPL
       await initializeXRPL().catch(() => {}); // Ignora se già connesso
 
-      // TODO: Implementare creazione token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
+      const issuerSeed = process.env.XRPL_ISSUER_SEED;
+      const distributionSeed = process.env.XRPL_DISTRIBUTION_SEED;
+
+      if (!issuerSeed || !distributionSeed) {
+        throw new Error('Wallet seeds not configured');
+      }
+
+      const issuerWallet = walletFromSeed(issuerSeed);
+      const distributionWallet = walletFromSeed(distributionSeed);
+
+      // Crea trust line per account di distribuzione
+      await createTrustLine(
+        distributionWallet,
+        tokenSymbol,
+        issuerWallet.address,
+        supply.toString()
+      );
+
+      // Emetti e trasferisci token
+      const paymentResult = await sendXRPPayment(
+        issuerWallet,
+        distributionWallet.address,
+        { currency: tokenSymbol, issuer: issuerWallet.address, value: supply.toString() },
+        'Token issuance'
+      );
 
       tokenCreationResult = {
         success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
+        txHash: paymentResult.hash,
+        issuerAddress: issuerWallet.address,
         tokenSymbol: tokenSymbol,
         totalSupply: supply.toString(),
         created: true

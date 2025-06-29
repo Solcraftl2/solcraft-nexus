@@ -1,5 +1,6 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, getAccountInfo, walletFromSeed } from '../config/xrpl.js';
 import { AccountSet, convertStringToHex } from 'xrpl';
+import { supabase, insertTransaction } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -44,6 +45,7 @@ export default async function handler(req, res) {
 
     const {
       walletAddress,
+      walletSeed,
       configurations = {},
       domain,
       emailHash,
@@ -53,10 +55,10 @@ export default async function handler(req, res) {
       flags = {}
     } = req.body;
 
-    if (!walletAddress) {
+    if (!walletAddress || !walletSeed) {
       return res.status(400).json({
         success: false,
-        error: 'Indirizzo wallet richiesto'
+        error: 'Indirizzo wallet e seed sono richiesti'
       });
     }
 
@@ -219,23 +221,62 @@ export default async function handler(req, res) {
       }
     }
 
-    // Simula l'invio della transazione
+    // Invia realmente la transazione AccountSet
     try {
-      const simulatedTxResult = {
-        success: true,
-        transactionHash: 'mock_config_' + Date.now(),
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '12',
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true
-      };
+      await initializeXRPL().catch(() => {});
+      const client = getXRPLClient();
+      const wallet = walletFromSeed(walletSeed);
+
+      const prepared = await client.autofill(accountSetTx);
+      const signed = wallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
+
+      if (result.result.meta?.TransactionResult !== 'tesSUCCESS') {
+        throw new Error(result.result.meta?.TransactionResult || 'AccountSet failed');
+      }
+
+      const createdAt = new Date().toISOString();
+
+      try {
+        await insertTransaction({
+          tx_hash: result.result.hash,
+          type: 'account_set',
+          from_address: walletAddress,
+          to_address: walletAddress,
+          amount: 0,
+          currency: 'XRP',
+          user_id: decoded.userId,
+          status: result.result.validated ? 'confirmed' : 'pending',
+          blockchain_network: process.env.XRPL_NETWORK || 'testnet',
+          block_height: result.result.ledger_index,
+          gas_fee: parseFloat(prepared.Fee) / 1000000,
+          description: 'Account configuration',
+          metadata: { appliedConfigurations: configurationSteps },
+          created_at: createdAt
+        });
+
+        await supabase.from('user_activities').insert({
+          user_id: decoded.userId,
+          activity_type: 'account_configuration',
+          description: 'Account configuration executed',
+          metadata: { txHash: result.result.hash, walletAddress },
+          created_at: createdAt
+        });
+      } catch (dbError) {
+        console.error('Supabase logging error:', dbError);
+      }
 
       const response = {
         success: true,
         message: 'Configurazione account completata con successo!',
         account: walletAddress,
         appliedConfigurations: configurationSteps,
-        transaction: simulatedTxResult,
+        transaction: {
+          hash: result.result.hash,
+          ledgerIndex: result.result.ledger_index,
+          fee: prepared.Fee,
+          validated: result.result.validated
+        },
         accountSettings: {
           domain: domain,
           emailHash: emailHash,

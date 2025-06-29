@@ -1,7 +1,8 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
-import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
+/* eslint-env node */
+/* global process */
+import { supabase, insertAsset, insertToken, insertTransaction } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+import { issueMPT } from '../services/xrplMptService.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -35,7 +36,7 @@ export default async function handler(req, res) {
     let decoded;
     try {
       decoded = jwt.verify(token, jwtSecret);
-    } catch (error) {
+    } catch {
       return res.status(401).json({
         success: false,
         error: 'Token non valido'
@@ -88,10 +89,10 @@ export default async function handler(req, res) {
       });
     }
 
-    // Generazione ID unici
+    // Generazione ID token interno
     const tokenId = `MPT_${tokenSymbol}_${Date.now()}`;
-    const mptId = crypto.randomBytes(16).toString('hex').toUpperCase();
     const createdAt = new Date().toISOString();
+    let mptId = null;
 
     // Calcola metriche del token
     const tokenMetrics = {
@@ -141,26 +142,34 @@ export default async function handler(req, res) {
       });
     }
 
-    // Creazione token MPT su XRPL (simulato per ora)
+    // Creazione token MPT su XRPL tramite servizio
     let mptCreationResult;
     try {
-      // TODO: Implementare creazione MPT reale su XRPL
-      mptCreationResult = {
-        success: true,
-        transactionHash: `MPT_${mptId}_${Date.now().toString(16).toUpperCase()}`,
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000',
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true,
-        mptId: mptId
-      };
-
+      const flags = calculateMptFlags({ transferable, burnable, mintable, freezable });
+      mptCreationResult = await issueMPT({
+        metadata,
+        maximumAmount: totalSupply,
+        assetScale: decimals || 0,
+        flags
+      });
+      mptId = mptCreationResult.mptId;
     } catch (error) {
       console.error('MPT creation error:', error);
       mptCreationResult = {
         success: false,
         error: error.message
       };
+    }
+
+    if (mptCreationResult.success && savedAsset) {
+      try {
+        await supabase
+          .from('assets')
+          .update({ metadata: { ...savedAsset.metadata, mptId } })
+          .eq('id', savedAsset.id);
+      } catch (e) {
+        console.error('Error updating asset with MPT ID:', e);
+      }
     }
 
     // Salvataggio Token MPT nel database Supabase
@@ -425,7 +434,6 @@ function calculateLiquidityScore(assetType, assetValue) {
 }
 
 function calculateRiskScore(assetType, complianceSettings) {
-  const baseRisk = 50;
   const typeRisk = {
     'real_estate': 30,
     'commodity': 60,
@@ -440,7 +448,16 @@ function calculateRiskScore(assetType, complianceSettings) {
   return Math.max(0, Math.min(100, (typeRisk[assetType] || 50) + complianceBonus));
 }
 
-function generateComplianceDocuments(params) {
+function calculateMptFlags({ transferable, burnable, mintable, freezable }) {
+  let flags = 0;
+  if (transferable !== false) flags |= 0x00000001; // Transferable
+  if (burnable === true) flags |= 0x00000002; // Burnable
+  if (mintable === true) flags |= 0x00000004; // Mintable (custom flag)
+  if (freezable === true) flags |= 0x00000008; // Freezable (custom flag)
+  return flags;
+}
+
+function generateComplianceDocuments() {
   return [
     {
       type: 'token_creation_certificate',

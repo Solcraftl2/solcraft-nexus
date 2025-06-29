@@ -15,7 +15,7 @@ class XRPLTokenizationService {
         // Account Issuer configurato per tokenizzazione
         this.issuerWallet = null;
         this.issuerAddress = process.env.VITE_ISSUER_ADDRESS;
-        this.issuerSecret = process.env.VITE_ISSUER_SECRET;
+        this.issuerSecret = null; // moved to backend
     }
 
     /**
@@ -29,11 +29,7 @@ class XRPLTokenizationService {
                 console.log('✅ Connesso a XRPL network');
             }
             
-            // Inizializza wallet issuer se configurato
-            if (this.issuerSecret) {
-                this.issuerWallet = Wallet.fromSeed(this.issuerSecret);
-                console.log('✅ Issuer wallet inizializzato:', this.issuerWallet.address);
-            }
+            // Issuer wallet is managed server-side
             
             return true;
         } catch (error) {
@@ -65,9 +61,6 @@ class XRPLTokenizationService {
         try {
             await this.connect();
             
-            if (!this.issuerWallet) {
-                throw new Error('Issuer wallet non configurato');
-            }
 
             // Validazione dati asset
             this.validateAssetData(assetData);
@@ -78,20 +71,16 @@ class XRPLTokenizationService {
             // Costruzione transazione MPTokenIssuanceCreate REALE
             const transaction = {
                 TransactionType: 'MPTokenIssuanceCreate',
-                Account: this.issuerWallet.address,
+                Account: this.issuerAddress,
                 MPTokenMetadata: this.encodeMetadata(metadata),
                 MaximumAmount: assetData.totalSupply.toString(),
                 TransferFee: this.calculateTransferFee(assetData.transferFeePercent || 0.5),
                 Flags: this.calculateMPTFlags(assetData)
             };
 
-            // Preparazione e firma transazione
-            const prepared = await this.client.autofill(transaction);
-            const signed = this.issuerWallet.sign(prepared);
-
-            // Invio transazione REALE su XRPL
-            console.log('🚀 Invio transazione MPT su XRPL...');
-            const result = await this.client.submitAndWait(signed.tx_blob);
+            // Firma e invio tramite backend
+            console.log('🚀 Invio transazione MPT via backend...');
+            const result = await this.signAndSubmitTransaction(transaction);
 
             if (result.result.meta.TransactionResult === 'tesSUCCESS') {
                 // Estrazione MPT Issuance ID dalla transazione
@@ -101,7 +90,7 @@ class XRPLTokenizationService {
                 const tokenRecord = {
                     mptIssuanceId,
                     transactionHash: result.result.hash,
-                    issuerAddress: this.issuerWallet.address,
+                    issuerAddress: this.issuerAddress,
                     metadata,
                     assetData,
                     createdAt: new Date().toISOString(),
@@ -172,13 +161,34 @@ class XRPLTokenizationService {
      */
     calculateMPTFlags(assetData) {
         let flags = 0;
-        
+
         // Flag standard per asset immobiliari
         if (assetData.transferable !== false) flags |= 0x00000001; // Transferable
         if (assetData.burnable === true) flags |= 0x00000002; // Burnable
         if (assetData.onlyXRP === true) flags |= 0x00000004; // OnlyXRP
-        
+
         return flags;
+    }
+
+    /**
+     * Richiede al backend la firma e l'invio di una transazione
+     */
+    async signAndSubmitTransaction(transaction) {
+        try {
+            const response = await fetch('/api/xrpl/sign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transaction })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Signing failed');
+            }
+            return data;
+        } catch (error) {
+            console.error('❌ Errore firma backend:', error);
+            throw error;
+        }
     }
 
     /**
@@ -234,21 +244,15 @@ class XRPLTokenizationService {
         try {
             await this.connect();
 
-            if (!this.issuerWallet) {
-                throw new Error('Issuer wallet non configurato');
-            }
-
             const transaction = {
                 TransactionType: 'MPTokenAuthorize',
-                Account: this.issuerWallet.address,
+                Account: this.issuerAddress,
                 MPTokenIssuanceID: mptIssuanceId,
                 Holder: destinationAddress,
                 Amount: amount.toString()
             };
 
-            const prepared = await this.client.autofill(transaction);
-            const signed = this.issuerWallet.sign(prepared);
-            const result = await this.client.submitAndWait(signed.tx_blob);
+            const result = await this.signAndSubmitTransaction(transaction);
 
             if (result.result.meta.TransactionResult === 'tesSUCCESS') {
                 console.log('✅ Token MPT inviati con successo');
@@ -321,13 +325,9 @@ class XRPLTokenizationService {
         try {
             await this.connect();
 
-            if (!this.issuerWallet) {
-                throw new Error('Issuer wallet non configurato');
-            }
-
             const response = await this.client.request({
                 command: 'account_objects',
-                account: this.issuerWallet.address,
+                account: this.issuerAddress,
                 type: 'mptoken'
             });
 

@@ -22,22 +22,30 @@ export default async function handler(req, res) {
   try {
     await client.connect()
     
-    const { 
-      issuerSeed,
+    const {
       metadata,
       maximumAmount,
       transferFee = 0,
       flags = 0,
       assetScale = 0
     } = req.body
-    
-    if (!issuerSeed || !metadata) {
-      return res.status(400).json({
+
+    const issuerSeed = process.env.ISSUER_SECRET
+
+    if (!issuerSeed) {
+      return res.status(500).json({
         success: false,
-        error: 'Issuer seed and metadata are required'
+        error: 'Issuer secret not configured'
       })
     }
-    
+
+    if (!metadata) {
+      return res.status(400).json({
+        success: false,
+        error: 'Metadata is required'
+      })
+    }
+
     const issuerWallet = Wallet.fromSeed(issuerSeed)
     
     // Prepare MPT metadata

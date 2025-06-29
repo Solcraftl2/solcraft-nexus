@@ -75,8 +75,29 @@ export const insertTransaction = async (transactionData) => {
     .insert(transactionData)
     .select()
     .single();
-  
+
   return validateSupabaseResponse(data, error, 'Insert transaction');
+};
+
+export const insertOrder = async (orderData) => {
+  const { data, error } = await supabase
+    .from('orders')
+    .insert(orderData)
+    .select()
+    .single();
+
+  return validateSupabaseResponse(data, error, 'Insert order');
+};
+
+export const updateOrder = async (orderId, updates) => {
+  const { data, error } = await supabase
+    .from('orders')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  return validateSupabaseResponse(data, error, 'Update order');
 };
 
 export const getUserPortfolio = async (userId) => {

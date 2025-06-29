@@ -7,8 +7,8 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 
 // Configurazione
-const supabaseUrl = 'https://dtzlkcqddjaoubrjnzjw.supabase.co'
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0emxrY3FkZGphb3VicmpuempqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzUyMDQ5NjMsImV4cCI6MjA1MDc4MDk2M30.eYJhbGc1OjJIUzI1NiIsInR5cCI6IkpXVCJ9'
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 

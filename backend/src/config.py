@@ -17,6 +17,7 @@ class Config:
     # XRP Ledger Configuration
     XRPL_SERVER = os.environ.get('XRPL_SERVER') or 'wss://s.devnet.rippletest.net:51233'
     XRPL_EXPLORER = os.environ.get('XRPL_EXPLORER') or 'https://devnet.xrpl.org'
+    ISSUER_SECRET = os.environ.get('ISSUER_SECRET')
     
     # OAuth Configuration
     # Google OAuth

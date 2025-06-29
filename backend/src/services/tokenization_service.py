@@ -5,6 +5,7 @@ from xrpl.wallet import Wallet
 from xrpl.utils import xrp_to_drops
 import json
 import logging
+import os
 from decimal import Decimal
 from typing import Dict, List, Any, Optional
 from datetime import datetime
@@ -20,35 +21,50 @@ class TokenizationService:
     
     def __init__(self):
         self.xrpl_service = XRPLService()
+        secret = os.environ.get("ISSUER_SECRET")
+        self.issuer_wallet = Wallet.from_seed(secret) if secret else None
     
     def create_asset_token(self, asset_data: Dict[str, Any], issuer_wallet: Wallet) -> Dict[str, Any]:
         """Create a new token for an asset (simulated for demo)"""
         try:
-            # For demo purposes, we'll simulate token creation
-            # In production, this would use Multi-Purpose Tokens when available
-            
             # Prepare token metadata
             metadata = self._prepare_token_metadata(asset_data)
-            
-            # Generate a simulated MPT ID
-            import hashlib
-            import time
-            token_data = f"{asset_data['name']}{asset_data['symbol']}{issuer_wallet.address}{time.time()}"
-            mpt_id = f"MPT_{hashlib.md5(token_data.encode()).hexdigest()[:16].upper()}"
-            
-            # Simulate successful token creation
+
+            # Create a simple payment embedding metadata to demonstrate signing
+            memo_hex = metadata.encode()
+            payment = Payment(
+                account=issuer_wallet.address,
+                destination=issuer_wallet.address,
+                amount="1",
+                memos=[{"Memo": {"MemoData": memo_hex.hex()}}]
+            )
+
+            signed_tx = xrpl.transaction.safe_sign_and_autofill_transaction(
+                payment,
+                issuer_wallet,
+                self.xrpl_service.client
+            )
+            response = xrpl.transaction.send_reliable_submission(
+                signed_tx,
+                self.xrpl_service.client
+            )
+
+            if not response.is_successful():
+                raise Exception(f"XRPL error: {response.result}")
+
+            mpt_id = self._extract_mpt_id_from_response(response.result)
             result = {
                 'success': True,
                 'mpt_id': mpt_id,
-                'transaction_hash': f"demo_tokenization_{hashlib.md5(token_data.encode()).hexdigest()[:16]}",
-                'ledger_index': 12345678,
+                'transaction_hash': response.result['hash'],
+                'ledger_index': response.result.get('ledger_index'),
                 'issuer_address': issuer_wallet.address,
                 'total_supply': asset_data['total_supply'],
                 'metadata': metadata
             }
-            
-            logger.info(f"Simulated token creation for asset {asset_data['name']}: {mpt_id}")
-            
+
+            logger.info(f"Token created for asset {asset_data['name']}: {mpt_id}")
+
             return result
                 
         except Exception as e:
@@ -225,9 +241,8 @@ class TokenizationService:
                 issuer_user.wallet_type = wallet_data['wallet_type']
                 db.session.commit()
             
-            # For demo purposes, we'll simulate the wallet
-            # In production, you'd retrieve the actual wallet securely
-            issuer_wallet = self._get_user_wallet(issuer_user)
+            # Use platform issuer wallet if configured, otherwise fall back
+            issuer_wallet = self.issuer_wallet or self._get_user_wallet(issuer_user)
             
             # Prepare asset data for tokenization
             asset_data = {

@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -90,6 +90,9 @@ export default async function handler(req, res) {
         let result;
 
         switch (action) {
+          case 'create_pool':
+            result = await createLiquidityPool(liquidityData);
+            break;
           case 'add_liquidity':
             result = await addLiquidity(liquidityData);
             break;
@@ -397,93 +400,159 @@ async function getLiquidityAnalytics(poolId) {
   return baseAnalytics;
 }
 
+async function createLiquidityPool(data) {
+  const { walletSeed, asset, asset2, amount, amount2, tradingFee = 0 } = data;
+
+  await initializeXRPL();
+  const client = getXRPLClient();
+  const wallet = walletFromSeed(walletSeed);
+
+  const tx = {
+    TransactionType: 'AMMCreate',
+    Account: wallet.address,
+    Amount: amount,
+    Amount2: amount2,
+    TradingFee: parseInt(tradingFee),
+    Asset: asset,
+    Asset2: asset2
+  };
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${result.result.meta.TransactionResult}`);
+  }
+
+  return {
+    hash: result.result.hash,
+    transaction: result.result
+  };
+}
+
 async function addLiquidity(liquidityData) {
   const {
-    poolId,
-    token0Amount,
-    token1Amount,
-    slippageTolerance = 0.5,
-    deadline = 20 // minuti
+    walletSeed,
+    asset,
+    asset2,
+    amount,
+    amount2,
+    tradingFee = 0
   } = liquidityData;
 
-  // Simulazione aggiunta liquidità
-  const lpTokensReceived = Math.sqrt(parseFloat(token0Amount) * parseFloat(token1Amount));
-  
+  await initializeXRPL();
+  const client = getXRPLClient();
+  const wallet = walletFromSeed(walletSeed);
+
+  const tx = {
+    TransactionType: 'AMMDeposit',
+    Account: wallet.address,
+    Amount: amount,
+    Amount2: amount2,
+    TradingFee: parseInt(tradingFee),
+    Asset: asset,
+    Asset2: asset2
+  };
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${result.result.meta.TransactionResult}`);
+  }
+
   return {
-    poolId,
-    token0Amount: parseFloat(token0Amount),
-    token1Amount: parseFloat(token1Amount),
-    lpTokensReceived,
-    shareOfPool: lpTokensReceived / 11747340, // Basato su supply totale
-    estimatedFees: {
-      daily: lpTokensReceived * 0.0034,
-      monthly: lpTokensReceived * 0.104,
-      yearly: lpTokensReceived * 1.25
-    },
-    priceImpact: 0.02,
-    slippageTolerance,
-    deadline: new Date(Date.now() + deadline * 60000).toISOString(),
-    txHash: `add_liquidity_${Math.random().toString(36).substr(2, 16)}`,
-    status: 'pending',
-    estimatedConfirmation: new Date(Date.now() + 4000).toISOString()
+    hash: result.result.hash,
+    transaction: result.result
   };
 }
 
 async function removeLiquidity(liquidityData) {
-  const {
-    poolId,
-    lpTokenAmount,
-    minToken0Amount,
-    minToken1Amount
-  } = liquidityData;
+  const { walletSeed, asset, asset2, lpTokenIn } = liquidityData;
+
+  await initializeXRPL();
+  const client = getXRPLClient();
+  const wallet = walletFromSeed(walletSeed);
+
+  const tx = {
+    TransactionType: 'AMMWithdraw',
+    Account: wallet.address,
+    Asset: asset,
+    Asset2: asset2,
+    LPTokenIn: lpTokenIn
+  };
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${result.result.meta.TransactionResult}`);
+  }
 
   return {
-    poolId,
-    lpTokensBurned: parseFloat(lpTokenAmount),
-    token0Received: parseFloat(lpTokenAmount) * 1.02, // Esempio calcolo
-    token1Received: parseFloat(lpTokenAmount) * 0.52,
-    fees: {
-      withdrawal: parseFloat(lpTokenAmount) * 0.001,
-      currency: 'XRP'
-    },
-    txHash: `remove_liquidity_${Math.random().toString(36).substr(2, 16)}`,
-    status: 'pending',
-    estimatedConfirmation: new Date(Date.now() + 4000).toISOString()
+    hash: result.result.hash,
+    transaction: result.result
   };
 }
 
 async function claimLiquidityRewards(liquidityData) {
-  const { poolIds = [], claimAll = false } = liquidityData;
+  const { walletSeed, asset, asset2 } = liquidityData;
 
-  const rewards = claimAll ? 259 : poolIds.length * 85; // Esempio
+  await initializeXRPL();
+  const client = getXRPLClient();
+  const wallet = walletFromSeed(walletSeed);
+
+  const tx = {
+    TransactionType: 'AMMVote',
+    Account: wallet.address,
+    Asset: asset,
+    Asset2: asset2,
+    TradingFee: 0
+  };
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${result.result.meta.TransactionResult}`);
+  }
 
   return {
-    totalClaimed: rewards,
-    poolsClaimed: claimAll ? ['pool_xrp_usd', 'pool_rlusd_xrp', 'pool_solo_xrp'] : poolIds,
-    breakdown: [
-      { poolId: 'pool_xrp_usd', amount: 125 },
-      { poolId: 'pool_rlusd_xrp', amount: 89 },
-      { poolId: 'pool_solo_xrp', amount: 45 }
-    ],
-    txHash: `claim_rewards_${Math.random().toString(36).substr(2, 16)}`,
-    status: 'pending',
-    estimatedConfirmation: new Date(Date.now() + 3000).toISOString()
+    hash: result.result.hash,
+    transaction: result.result
   };
 }
 
 async function stakeLPTokens(liquidityData) {
-  const { poolId, lpTokenAmount, stakingPeriod = 30 } = liquidityData;
+  const { walletSeed, asset, asset2, lpTokenIn } = liquidityData;
+
+  await initializeXRPL();
+  const client = getXRPLClient();
+  const wallet = walletFromSeed(walletSeed);
+
+  const tx = {
+    TransactionType: 'AMMBid',
+    Account: wallet.address,
+    Asset: asset,
+    Asset2: asset2,
+    LPTokenIn: lpTokenIn
+  };
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${result.result.meta.TransactionResult}`);
+  }
 
   return {
-    poolId,
-    stakedAmount: parseFloat(lpTokenAmount),
-    stakingPeriod, // giorni
-    bonusApy: 2.5, // Bonus APY per staking
-    totalApy: 15.0, // APY base + bonus
-    unlockDate: new Date(Date.now() + stakingPeriod * 24 * 60 * 60 * 1000).toISOString(),
-    estimatedRewards: parseFloat(lpTokenAmount) * 0.15 * (stakingPeriod / 365),
-    txHash: `stake_lp_${Math.random().toString(36).substr(2, 16)}`,
-    status: 'pending'
+    hash: result.result.hash,
+    transaction: result.result
   };
 }
 

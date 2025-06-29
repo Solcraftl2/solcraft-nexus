@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import xrplTokenizationService from '../services/xrplTokenizationService.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -153,17 +153,30 @@ export default async function handler(req, res) {
       standard: 'XRPL-MPT-RWA'
     };
 
-    // Simula la creazione del token MPT
-    try {
-      const simulatedTxResult = {
-        success: true,
-        transactionHash: 'mpt_create_' + Date.now(),
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000', // 2000 drops per MPT creation
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true,
-        mptId: mptId
-      };
+      // Creazione reale del token MPT tramite servizio condiviso
+      try {
+        const assetForXRPL = {
+          name: assetName,
+          symbol: tokenSymbol,
+          location: assetLocation,
+          description: assetDescription,
+          faceValue: assetValue,
+          totalSupply: totalSupply,
+          currency: assetCurrency,
+          valuation: appraisalValue || assetValue,
+          legalDocuments: []
+        };
+
+        const creation = await xrplTokenizationService.createRealEstateToken(assetForXRPL);
+        await xrplTokenizationService.disconnect();
+
+        const simulatedTxResult = {
+          success: true,
+          transactionHash: creation.transactionHash,
+          ledgerIndex: creation.ledgerIndex,
+          validated: true,
+          mptId: creation.mptIssuanceId
+        };
 
       // Calcola metriche del token
       const tokenMetrics = {

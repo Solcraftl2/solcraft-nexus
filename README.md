@@ -131,8 +131,7 @@ npm run dev
 ## 🔐 Default Credentials
 
 **Admin User:**
-- Email: `admin@solcraft-nexus.com`
-- Password: `admin123`
+There are no pre-defined credentials. Administrators should register through the platform and create their own login details.
 
 ## 🌟 Core Functionalities
 

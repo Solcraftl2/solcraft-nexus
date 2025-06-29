@@ -1,0 +1,36 @@
+name: Dashboard Route Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm run build
+      - name: Verify /dashboard route
+        run: |
+          pnpm run preview -- --port 4173 &
+          PREVIEW_PID=$!
+          for i in {1..10}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:4173/dashboard || true)
+            if [ "$STATUS" = "200" ]; then
+              break
+            fi
+            sleep 2
+          done
+          kill $PREVIEW_PID
+          if [ "$STATUS" != "200" ]; then
+            echo "Unexpected status $STATUS" && exit 1
+          fi

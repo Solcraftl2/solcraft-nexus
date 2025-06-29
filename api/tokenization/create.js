@@ -97,21 +97,47 @@ export default async function handler(req, res) {
       // Inizializza connessione XRPL
       await initializeXRPL().catch(() => {}); // Ignora se già connesso
 
-      // TODO: Implementare creazione token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
+      const client = getXRPLClient();
 
-      tokenCreationResult = {
-        success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
-        tokenSymbol: tokenSymbol,
-        totalSupply: supply.toString(),
-        created: true
+      // Wallet emittente configurato tramite variabile d'ambiente
+      const issuerSeed = process.env.ISSUER_WALLET_SEED;
+      if (!issuerSeed) {
+        throw new Error('Issuer seed non configurato');
+      }
+
+      const issuerWallet = walletFromSeed(issuerSeed);
+
+      // Crea trust line per il token (opzionale ma consigliato)
+      await createTrustLine(issuerWallet, tokenSymbol, issuerWallet.address, supply.toString());
+
+      // Transazione di creazione token (self-payment)
+      const payment = {
+        TransactionType: 'Payment',
+        Account: issuerWallet.address,
+        Destination: issuerWallet.address,
+        Amount: {
+          currency: tokenSymbol,
+          issuer: issuerWallet.address,
+          value: supply.toString()
+        }
       };
+
+      const prepared = await client.autofill(payment);
+      const signed = issuerWallet.sign(prepared);
+      const result = await client.submitAndWait(signed.tx_blob);
+
+      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
+        tokenCreationResult = {
+          success: true,
+          txHash: result.result.hash,
+          issuerAddress: issuerWallet.address,
+          tokenSymbol: tokenSymbol,
+          totalSupply: supply.toString(),
+          created: true
+        };
+      } else {
+        throw new Error(`Transaction failed: ${result.result.meta.TransactionResult}`);
+      }
 
     } catch (error) {
       console.error('Token creation error:', error);

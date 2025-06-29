@@ -17,6 +17,11 @@ class Config:
     # XRP Ledger Configuration
     XRPL_SERVER = os.environ.get('XRPL_SERVER') or 'wss://s.devnet.rippletest.net:51233'
     XRPL_EXPLORER = os.environ.get('XRPL_EXPLORER') or 'https://devnet.xrpl.org'
+
+    # Ethereum Configuration
+    ETH_PROVIDER_URL = os.environ.get('ETH_PROVIDER_URL', 'https://rpc.ankr.com/eth_sepolia')
+    ETH_PRIVATE_KEY = os.environ.get('ETH_PRIVATE_KEY')
+    ETH_ADDRESS = os.environ.get('ETH_ADDRESS')
     
     # OAuth Configuration
     # Google OAuth

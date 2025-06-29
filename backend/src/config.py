@@ -6,7 +6,7 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'solcraft-nexus-secret-key-change-in-production'
     
     # Database Configuration
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f"sqlite:///{os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'database', 'app.db')}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # JWT Configuration

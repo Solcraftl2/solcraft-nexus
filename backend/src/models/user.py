@@ -17,6 +17,7 @@ class User(db.Model):
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20))
+    email_verified = db.Column(db.Boolean, default=False)  # Added email verification column
     
     # Account type and status
     account_type = db.Column(db.String(20), nullable=False, default='individual')  # individual, organization

@@ -5,6 +5,8 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  SUPABASE_URL = "${SUPABASE_URL}"
+  SUPABASE_SERVICE_ROLE_KEY = "${SUPABASE_SERVICE_ROLE_KEY}"
 
 [[redirects]]
   from = "/api/*"

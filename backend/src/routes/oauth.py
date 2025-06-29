@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 oauth_bp = Blueprint('oauth', __name__)
 
-@oauth_bp.route('/auth/oauth/<provider>/login', methods=['GET'])
+@oauth_bp.route('/<provider>/login', methods=['GET'])
 def oauth_login(provider):
     """Initiate OAuth login with external provider"""
     try:
@@ -33,7 +33,7 @@ def oauth_login(provider):
         logger.error(f"Error initiating OAuth login for {provider}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@oauth_bp.route('/auth/oauth/<provider>/callback', methods=['GET', 'POST'])
+@oauth_bp.route('/<provider>/callback', methods=['GET', 'POST'])
 def oauth_callback(provider):
     """Handle OAuth callback from external provider"""
     try:
@@ -92,7 +92,7 @@ def oauth_callback(provider):
             redirect_url = f"{frontend_url}/auth/error?error={str(e)}"
             return redirect(redirect_url)
 
-@oauth_bp.route('/auth/oauth/providers', methods=['GET'])
+@oauth_bp.route('/providers', methods=['GET'])
 def get_oauth_providers():
     """Get list of available OAuth providers"""
     try:
@@ -136,7 +136,7 @@ def get_oauth_providers():
         logger.error(f"Error getting OAuth providers: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@oauth_bp.route('/auth/oauth/<provider>/link', methods=['POST'])
+@oauth_bp.route('/<provider>/link', methods=['POST'])
 def link_oauth_account(provider):
     """Link OAuth account to existing user (for users who are already logged in)"""
     try:
@@ -165,7 +165,7 @@ def link_oauth_account(provider):
         logger.error(f"Error linking OAuth account for {provider}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@oauth_bp.route('/auth/oauth/<provider>/unlink', methods=['DELETE'])
+@oauth_bp.route('/<provider>/unlink', methods=['DELETE'])
 def unlink_oauth_account(provider):
     """Unlink OAuth account from user"""
     try:
@@ -195,7 +195,7 @@ def unlink_oauth_account(provider):
         return jsonify({'error': str(e)}), 500
 
 # Additional route for handling Apple's specific callback format
-@oauth_bp.route('/auth/oauth/apple/callback', methods=['POST'])
+@oauth_bp.route('/apple/callback', methods=['POST'])
 def apple_callback_post():
     """Handle Apple's POST callback (Apple sends POST instead of GET)"""
     return oauth_callback('apple')

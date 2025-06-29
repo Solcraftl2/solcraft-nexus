@@ -73,14 +73,14 @@ class OrganizationMembership(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     
     role = db.Column(db.Enum(RoleType), nullable=False)
     status = db.Column(db.String(20), default='active')  # active, suspended, pending
     
     # Metadata
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
-    invited_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    invited_by = db.Column(db.String(36), db.ForeignKey('users.id'))
     
     # Constraints
     __table_args__ = (
@@ -102,12 +102,12 @@ class UserPermission(db.Model):
     __tablename__ = 'user_permissions'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'))
-    asset_id = db.Column(db.Integer, db.ForeignKey('assets.id'))
+    asset_id = db.Column(db.String(36), db.ForeignKey('assets.id'))
     
     permission = db.Column(db.Enum(PermissionType), nullable=False)
-    granted_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    granted_by = db.Column(db.String(36), db.ForeignKey('users.id'))
     granted_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime)  # Optional expiration
     
@@ -127,9 +127,9 @@ class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'))
-    asset_id = db.Column(db.Integer, db.ForeignKey('assets.id'))
+    asset_id = db.Column(db.String(36), db.ForeignKey('assets.id'))
     
     action = db.Column(db.String(100), nullable=False)
     resource_type = db.Column(db.String(50), nullable=False)

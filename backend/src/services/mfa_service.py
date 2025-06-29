@@ -12,7 +12,7 @@ class TwoFactorAuth(db.Model):
     __tablename__ = 'two_factor_auth'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False, unique=True)
     
     # TOTP settings
     secret_key = db.Column(db.String(32), nullable=False)
@@ -43,7 +43,7 @@ class LoginAttempt(db.Model):
     __tablename__ = 'login_attempts'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'))
     ip_address = db.Column(db.String(45), nullable=False)
     user_agent = db.Column(db.String(500))
     
@@ -73,7 +73,7 @@ class SecurityEvent(db.Model):
     __tablename__ = 'security_events'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'))
     
     event_type = db.Column(db.String(50), nullable=False)  # login, password_change, 2fa_enabled, etc.
     severity = db.Column(db.String(20), default='info')  # info, warning, critical

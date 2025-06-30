@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, getAccountInfo, walletFromSeed } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -44,17 +44,20 @@ export default async function handler(req, res) {
 
     const {
       issuerAccount,
+      issuerSeed,
       assetDetails,
       tokenConfig,
       complianceSettings,
       metadata
     } = req.body;
 
+    const walletSeed = issuerSeed || process.env.ISSUER_WALLET_SEED;
+
     // Validazione input
-    if (!issuerAccount || !assetDetails || !tokenConfig) {
+    if (!issuerAccount || !walletSeed || !assetDetails || !tokenConfig) {
       return res.status(400).json({
         success: false,
-        error: 'Parametri obbligatori mancanti: issuerAccount, assetDetails, tokenConfig'
+        error: 'Parametri obbligatori mancanti: issuerAccount, issuerSeed, assetDetails, tokenConfig'
       });
     }
 
@@ -141,19 +144,65 @@ export default async function handler(req, res) {
       });
     }
 
-    // Creazione token MPT su XRPL (simulato per ora)
+    // Creazione token MPT su XRPL
     let mptCreationResult;
+    const useMock = process.env.MOCK_XRPL === 'true';
+
     try {
-      // TODO: Implementare creazione MPT reale su XRPL
-      mptCreationResult = {
-        success: true,
-        transactionHash: `MPT_${mptId}_${Date.now().toString(16).toUpperCase()}`,
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '2000',
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true,
-        mptId: mptId
-      };
+      if (!useMock) {
+        await initializeXRPL().catch(() => {});
+        const client = getXRPLClient();
+        const issuerWallet = walletFromSeed(walletSeed);
+
+        const metadataHex = Buffer.from(JSON.stringify(metadata || {}))
+          .toString('hex')
+          .toUpperCase();
+
+        const mptCreateTx = {
+          TransactionType: 'MPTokenIssuanceCreate',
+          Account: issuerWallet.address,
+          MPTokenMetadata: metadataHex,
+          MaximumAmount: totalSupply.toString()
+        };
+
+        const prepared = await client.autofill(mptCreateTx);
+        const signed = issuerWallet.sign(prepared);
+        const result = await client.submitAndWait(signed.tx_blob);
+
+        let onChainMptId = mptId;
+        const created = result.result.meta?.CreatedNode
+          ? Array.isArray(result.result.meta.CreatedNode)
+            ? result.result.meta.CreatedNode
+            : [result.result.meta.CreatedNode]
+          : [];
+        for (const node of created) {
+          if (node.NewFields && node.NewFields.MPTokenID) {
+            onChainMptId = node.NewFields.MPTokenID;
+            break;
+          }
+        }
+
+        mptCreationResult = {
+          success: true,
+          transactionHash: result.result.hash,
+          ledgerIndex: result.result.ledger_index,
+          fee: prepared.Fee,
+          sequence: prepared.Sequence,
+          validated: result.result.validated,
+          mptId: onChainMptId
+        };
+      } else {
+        // Logic mocked when MOCK_XRPL=true
+        mptCreationResult = {
+          success: true,
+          transactionHash: `MPT_${mptId}_${Date.now().toString(16).toUpperCase()}`,
+          ledgerIndex: Math.floor(Math.random() * 1000000),
+          fee: '2000',
+          sequence: Math.floor(Math.random() * 1000),
+          validated: true,
+          mptId: mptId
+        };
+      }
 
     } catch (error) {
       console.error('MPT creation error:', error);

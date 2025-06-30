@@ -50,6 +50,7 @@ solcraft-nexus/
 │   │   ├── services/       # Business logic
 │   │   └── config.py       # Configuration
 │   └── requirements.txt
+├── netlify/functions/       # Serverless API endpoints
 ├── frontend/               # React Frontend
 │   ├── src/
 │   │   ├── components/     # UI components

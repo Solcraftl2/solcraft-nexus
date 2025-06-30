@@ -1,11 +1,12 @@
 [build]
-  command = "npm run build"
+  command = "npm install && npm run build"
   functions = "netlify/functions"
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "18"
-  NPM_VERSION = "9"
+  NODE_VERSION = "20"
+  NPM_VERSION = "10"
+  PNPM_VERSION = "9"
 
 [dev]
   framework = "vite"
@@ -15,7 +16,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@xrpl", "xrpl", "ripple-lib"]
+  external_node_modules = ["@xrpl", "xrpl", "ripple-lib", "@upstash/redis", "ioredis", "redis"]
 
 [[redirects]]
   from = "/api/*"

@@ -99,6 +99,7 @@ cd frontend
 npm install
 npm run dev
 ```
+The Vite configuration is located at the project root (`vite.config.js`).
 
 ## 🔌 API Endpoints
 

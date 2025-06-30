@@ -145,10 +145,11 @@ python src/main.py
 
 ### Frontend
 ```bash
-cd solcraft-nexus-frontend
+cd frontend
 npm install
 npm run dev
 ```
+La configurazione di Vite si trova nella root del progetto (`vite.config.js`).
 
 ## 🔐 Credenziali Default
 

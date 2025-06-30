@@ -99,6 +99,10 @@ cd frontend
 npm install
 npm run dev
 ```
+For a production build (used by Netlify), run:
+```bash
+npm install && npm run build
+```
 
 ## 🔌 API Endpoints
 

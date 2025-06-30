@@ -149,6 +149,10 @@ cd solcraft-nexus-frontend
 npm install
 npm run dev
 ```
+Per creare una build di produzione (come avviene su Netlify):
+```bash
+npm install && npm run build
+```
 
 ## 🔐 Credenziali Default
 

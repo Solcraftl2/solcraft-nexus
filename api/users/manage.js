@@ -1,3 +1,4 @@
+import { applySecurityHeaders } from '../../utils/securityHeaders.js';
 // SolCraft Nexus - User Management API
 // Integrazione XRPL + Supabase basata su studio approfondito
 
@@ -20,8 +21,8 @@ const XRPL_NETWORKS = {
 }
 
 export default async function handler(req, res) {
+  applySecurityHeaders(res);
   // CORS Headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   

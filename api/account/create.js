@@ -1,10 +1,11 @@
+import { applySecurityHeaders } from '../../utils/securityHeaders.js';
 import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import { Wallet } from 'xrpl';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  applySecurityHeaders(res);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 

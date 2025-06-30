@@ -1,9 +1,10 @@
+import { applySecurityHeaders } from '../../../utils/securityHeaders.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
 export default async function handler(req, res) {
+  applySecurityHeaders(res);
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 

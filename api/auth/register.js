@@ -118,7 +118,7 @@ export default async function handler(req, res) {
     }
 
     // Genera JWT token
-    const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
+    const JWT_SECRET = process.env.JWT_SECRET || 'development-secret';
     const token = jwt.sign(
       {
         userId: newUser.id,

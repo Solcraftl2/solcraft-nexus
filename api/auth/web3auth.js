@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
+const JWT_SECRET = process.env.JWT_SECRET || 'development-secret';
 
 export default async function handler(req, res) {
   // CORS headers

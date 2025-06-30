@@ -161,6 +161,29 @@ npm run dev
 - **Enterprise Security** standards
 - **Production Ready** platform
 
+## 🔧 Environment Variables
+
+Create a `.env.production` file for production deployments. These variables are required:
+
+| Variable | Description |
+| --- | --- |
+| `SUPABASE_URL` | URL of your Supabase project |
+| `SUPABASE_ANON_KEY` | Supabase anon or client key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
+| `JWT_SECRET` | Secret used to sign JWT tokens |
+| `XRPL_MAINNET_URL` | WebSocket URL for XRPL mainnet |
+| `XRPL_TESTNET_URL` | WebSocket URL for XRPL testnet |
+| `XRPL_DEVNET_URL` | WebSocket URL for XRPL devnet |
+| `DEFAULT_NETWORK` | Default XRPL network (e.g., `testnet`) |
+| `API_BASE_URL` | Base URL for the API server |
+| `FRONTEND_URL` | URL of the frontend application |
+| `BCRYPT_ROUNDS` | Number of bcrypt hashing rounds |
+| `SESSION_DURATION` | JWT session duration |
+| `KYC_REQUIRED` | Set to `true` if KYC is mandatory |
+| `AUDIT_ENABLED` | Enable audit logging with `true` |
+
+Add `.env.production` to `.gitignore` to keep credentials private.
+
 ## 🤝 Contributing
 
 1. Fork the repository

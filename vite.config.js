@@ -24,6 +24,7 @@ export default defineConfig({
     emptyOutDir: true,
     // Configurazione per ottimizzazione
     rollupOptions: {
+      external: ['@upstash/redis', 'xrpl', 'ioredis', 'redis'],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],

@@ -100,6 +100,16 @@ npm install
 npm run dev
 ```
 
+### Environment Variables
+
+The backend functions require a few Supabase variables:
+
+- `SUPABASE_URL` – your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_ANON_KEY` – an API key used by the
+  Netlify functions to access the database.
+
+Set these variables in your deployment environment or a local `.env` file.
+
 ## 🔌 API Endpoints
 
 ### Authentication

@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, walletFromSeed, createOffer } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -307,38 +307,32 @@ async function getTradingPairs() {
 }
 
 async function placeDEXOrder(orderData) {
-  const {
-    pair,
-    side, // 'buy' or 'sell'
-    type, // 'market', 'limit', 'stop'
-    amount,
-    price,
-    stopPrice,
-    timeInForce = 'GTC' // GTC, IOC, FOK
-  } = orderData;
+  const { traderSeed, takerGets, takerPays, expiration, offerSequence, flags = 0 } = orderData;
 
-  // Simulazione piazzamento ordine su XRPL DEX
-  const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+  if (!traderSeed || !takerGets || !takerPays) {
+    throw new Error('traderSeed, takerGets and takerPays are required');
+  }
+
+  await initializeXRPL();
+  const wallet = walletFromSeed(traderSeed);
+
+  const result = await createOffer(wallet, takerGets, takerPays, {
+    expiration,
+    offerSequence,
+    flags,
+  });
+
+  if (!result.success) {
+    throw new Error(result.error || 'Offer submission failed');
+  }
+
   return {
-    orderId,
-    pair,
-    side,
-    type,
-    amount: parseFloat(amount),
-    price: price ? parseFloat(price) : null,
-    stopPrice: stopPrice ? parseFloat(stopPrice) : null,
-    status: 'pending',
-    timeInForce,
-    filled: 0,
-    remaining: parseFloat(amount),
-    fees: {
-      estimated: parseFloat(amount) * 0.0015,
-      currency: pair.split('/')[1]
-    },
-    timestamp: new Date().toISOString(),
-    estimatedSettlement: new Date(Date.now() + 4000).toISOString(),
-    txHash: `tx_${Math.random().toString(36).substr(2, 16)}`
+    orderId: result.hash,
+    trader: wallet.address,
+    taker_gets: takerGets,
+    taker_pays: takerPays,
+    ledger_index: result.ledgerIndex,
+    validated: result.validated,
   };
 }
 

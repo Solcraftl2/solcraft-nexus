@@ -1,5 +1,5 @@
 [build]
-  command = "npm install --no-frozen-lockfile && npm run build"
+  command = "npm install --no-frozen-lockfile && vite build --config vite.config.js"
   functions = "netlify/functions"
   publish = "dist"
 

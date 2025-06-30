@@ -1,3 +1,13 @@
+import {
+  initializeXRPL,
+  disconnectXRPL,
+  walletFromSeed,
+  sendXRPPayment,
+  getAccountBalance
+} from '../config/xrpl.js'
+import { ethers } from 'ethers'
+import { requireAuth } from '../middleware/auth.js'
+
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -10,13 +20,9 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      // Get user from authorization header
-      const authHeader = req.headers.authorization
-      if (!authHeader) {
-        return res.status(401).json({
-          success: false,
-          error: 'Token di autorizzazione richiesto'
-        })
+      const decoded = requireAuth(req, res)
+      if (!decoded) {
+        return
       }
 
       const { 
@@ -24,9 +30,7 @@ export default async function handler(req, res) {
         amount, 
         currency, 
         memo, 
-        priority = 'normal',
-        fromAddress,
-        privateKey // In production, this would be handled securely
+        priority = 'normal'
       } = req.body
 
       // Validate required fields
@@ -107,48 +111,62 @@ export default async function handler(req, res) {
         }
       }
 
-      // In a real implementation, you would:
-      // 1. Verify user has sufficient balance
-      // 2. Create and sign the transaction
-      // 3. Broadcast to the network
-      // 4. Monitor transaction status
-      // 5. Update user's balance and transaction history
-
-      // For demo purposes, we'll simulate a successful transaction
-      const transactionId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      
-      const transactionData = {
-        id: transactionId,
-        type: 'send',
-        status: 'pending',
-        fromAddress: fromAddress || 'rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-        toAddress: toAddress,
-        amount: numAmount,
-        currency: currency.toUpperCase(),
-        fee: estimatedFee,
-        feeCurrency: currency.toUpperCase(),
-        memo: memo || '',
-        priority: priority,
-        estimatedTime: estimatedTime,
-        createdAt: new Date().toISOString(),
-        network: networkType,
-        confirmations: 0,
-        requiredConfirmations: networkType === 'xrp' ? 1 : 12
+      let txHash = ''
+      if (networkType === 'xrp') {
+        await initializeXRPL()
+        const seed = process.env.XRPL_WALLET_SEED
+        if (!seed) {
+          throw new Error('XRPL server wallet not configured')
+        }
+        const wallet = walletFromSeed(seed)
+        const balance = await getAccountBalance(wallet.address)
+        if (parseFloat(balance.xrp) < numAmount) {
+          await disconnectXRPL()
+          return res.status(400).json({
+            success: false,
+            error: 'Saldo insufficiente'
+          })
+        }
+        const result = await sendXRPPayment(wallet, toAddress, numAmount, memo)
+        await disconnectXRPL()
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+        txHash = result.hash
+      } else if (networkType === 'ethereum') {
+        const providerUrl = process.env.ETH_PROVIDER_URL
+        const ethKey = process.env.ETH_PRIVATE_KEY
+        if (!providerUrl || !ethKey) {
+          throw new Error('Ethereum wallet not configured')
+        }
+        const provider = new ethers.JsonRpcProvider(providerUrl)
+        const wallet = new ethers.Wallet(ethKey, provider)
+        const balance = await provider.getBalance(wallet.address)
+        if (balance < ethers.parseEther(numAmount.toString())) {
+          return res.status(400).json({
+            success: false,
+            error: 'Saldo ETH insufficiente'
+          })
+        }
+        const tx = await wallet.sendTransaction({
+          to: toAddress,
+          value: ethers.parseEther(numAmount.toString()),
+          data: memo ? ethers.hexlify(ethers.toUtf8Bytes(memo)) : undefined
+        })
+        await tx.wait()
+        txHash = tx.hash
+      } else {
+        return res.status(400).json({ success: false, error: 'Currency not supported' })
       }
 
-      // Simulate transaction processing
-      setTimeout(() => {
-        // In reality, you would update the transaction status in your database
-        console.log(`Transaction ${transactionId} confirmed`)
-      }, 5000)
+      console.log('Transaction sent', { to: toAddress, amount: numAmount, currency, txHash })
 
       return res.status(200).json({
         success: true,
         message: 'Transazione inviata con successo!',
         data: {
-          transaction: transactionData,
-          estimatedArrival: estimatedTime,
-          trackingUrl: `https://explorer.${networkType}.com/tx/${transactionId}`
+          transactionHash: txHash,
+          network: networkType
         },
         timestamp: new Date().toISOString()
       })

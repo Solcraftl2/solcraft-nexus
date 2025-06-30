@@ -128,7 +128,9 @@ npm run dev
 - `POST /api/v1/security/mfa/verify` - Verify 2FA
 - `GET /api/v1/security/report` - Security report
 
-## 🔐 Default Credentials
+## 🔐 Demo Credentials
+
+These credentials are **for demonstration purposes only** and should never be used in a production environment.
 
 **Admin User:**
 - Email: `admin@solcraft-nexus.com`

@@ -19,10 +19,15 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    // Ensure environment variables are provided
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      throw new Error('Upstash Redis environment variables not configured');
+    }
+
     // Configurazione Redis Upstash
     const redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL || 'https://trusted-grackle-16855.upstash.io',
-      token: process.env.UPSTASH_REDIS_REST_TOKEN || 'AkHXAAIgcDHtRT0JFBE_i6iQG_9O9zIKlH3arFQzSZbEaotOjnQlcw'
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN
     });
 
     // Test connessione Redis

@@ -16,7 +16,19 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@xrpl", "xrpl", "ripple-lib", "@upstash/redis", "ioredis", "redis"]
+  external_node_modules = [
+    "@xrpl",
+    "xrpl",
+    "ripple-lib",
+    "@upstash/redis",
+    "ioredis",
+    "redis",
+    "@supabase/supabase-js",
+    "bcryptjs",
+    "jsonwebtoken",
+    "crypto-js",
+    "axios"
+  ]
 
 [[redirects]]
   from = "/api/*"

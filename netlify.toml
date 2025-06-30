@@ -1,22 +1,16 @@
 [build]
   command = "npm install --no-frozen-lockfile && npm run build"
-  functions = "netlify/functions"
   publish = "dist"
-
+  
 [build.environment]
   NODE_VERSION = "20"
-  NPM_VERSION = "10"
-  PNPM_VERSION = "9"
-
-[dev]
-  framework = "vite"
-  targetPort = 3000
-  port = 8888
-  autoLaunch = false
+  NPM_FLAGS = "--no-frozen-lockfile"
+  NETLIFY_BUILD_DEBUG = "true"
 
 [functions]
-  node_bundler = "esbuild"
-  external_node_modules = ["@xrpl", "xrpl", "ripple-lib", "@upstash/redis", "ioredis", "redis"]
+  directory = "netlify/functions"
+  external_node_modules = ["@upstash/redis", "xrpl", "ioredis", "redis", "@supabase/supabase-js", "bcryptjs", "jsonwebtoken", "crypto-js", "axios"]
+  included_files = ["netlify/functions/**/*"]
 
 [[redirects]]
   from = "/api/*"
@@ -27,31 +21,4 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
-[context.production.environment]
-  NODE_ENV = "production"
-
-[context.deploy-preview.environment]
-  NODE_ENV = "development"
-
-[context.branch-deploy.environment]
-  NODE_ENV = "development"
-
-# Headers per sicurezza
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.xrpl.org https://xrplcluster.com https://*.supabase.co https://*.upstash.io"
-
-# Headers per API
-[[headers]]
-  for = "/.netlify/functions/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Headers = "Content-Type, Authorization"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
 

@@ -1,173 +1,162 @@
-# SolCraft Nexus - Professional Tokenization Platform
+# 🚀 SolCraft Nexus - Real World Asset Tokenization Platform
 
-![SolCraft Nexus](https://img.shields.io/badge/SolCraft-Nexus-blue?style=for-the-badge)
-![Ripple](https://img.shields.io/badge/Ripple-XRP_Ledger-green?style=for-the-badge)
-![React](https://img.shields.io/badge/React-Frontend-61DAFB?style=for-the-badge&logo=react)
-![Flask](https://img.shields.io/badge/Flask-Backend-000000?style=for-the-badge&logo=flask)
+## 🌟 Overview
 
-## 🚀 Overview
+SolCraft Nexus è una piattaforma avanzata per la tokenizzazione di Real World Assets (RWA) costruita su XRPL (XRP Ledger). La piattaforma permette agli utenti di tokenizzare asset fisici e digitali in modo sicuro e trasparente.
 
-SolCraft Nexus is a comprehensive, enterprise-grade tokenization platform built on Ripple XRP Ledger. Designed with simplicity, security, and professionalism in mind, it enables seamless asset tokenization for individuals and organizations.
+## 🏗️ Architettura
 
-## ✨ Key Features
+### **Frontend**
+- **Framework:** React 19 + Vite
+- **Styling:** Tailwind CSS 4.1
+- **UI Components:** Radix UI + Shadcn/ui
+- **State Management:** TanStack Query
+- **Routing:** React Router DOM 7
 
-### 🔐 **Security First**
-- Multi-Factor Authentication (2FA)
-- Advanced encryption for sensitive data
-- Secure wallet management
-- Complete audit trail
-- Enterprise-grade security standards
+### **Backend & API**
+- **Platform:** Netlify Functions (Serverless)
+- **Runtime:** Node.js 20
+- **Database:** Supabase (PostgreSQL)
+- **Cache:** Redis (Upstash)
+- **Authentication:** Web3Auth + Wallet Connect
 
-### 💼 **Professional Design**
-- Elegant color palette (white, black, gray, dark blue)
-- Minimalist and serious interface
-- Interactive guides and tooltips
-- Mobile-responsive design
-- Intuitive user experience
+### **Blockchain**
+- **Network:** XRPL (XRP Ledger)
+- **Libraries:** xrpl 4.3, ripple-lib
+- **Wallets:** XUMM, Crossmark, Web3Auth
 
-### 🌐 **Blockchain Integration**
-- Full XRP Ledger integration
-- Custodial and non-custodial wallet support
-- Send/receive XRP and tokens
-- Advanced asset tokenization
-- Optimized fee management
+## 🚀 Deployment
 
-### 👥 **Multi-User & Governance**
-- Organizations and teams
-- Granular roles and permissions
-- Governance and voting system
-- Automatic dividend distribution
-- Business intelligence dashboard
+### **Production Environment**
+- **Platform:** Netlify
+- **URL:** https://solcraft-nexus-production.netlify.app
+- **API Endpoint:** `/.netlify/functions/`
+- **CDN:** Global edge network
 
-## 🏗️ Architecture
+### **Environment Variables**
+```bash
+# Redis Configuration
+UPSTASH_REDIS_REST_URL=https://trusted-grackle-16855.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token_here
 
-```
-solcraft-nexus/
-├── backend/                 # Flask API Backend
-│   ├── src/
-│   │   ├── models/         # Database models
-│   │   ├── routes/         # API endpoints
-│   │   ├── services/       # Business logic
-│   │   └── config.py       # Configuration
-│   └── requirements.txt
-├── frontend/               # React Frontend
-│   ├── src/
-│   │   ├── components/     # UI components
-│   │   └── App.jsx        # Main application
-│   └── package.json
-└── docs/                  # Documentation
+# Supabase Configuration  
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_key
+
+# XRPL Configuration
+XRPL_NETWORK=mainnet
+XRPL_SERVER=wss://xrplcluster.com
 ```
 
-## 🛠️ Tech Stack
+## 🛠️ Development
 
-### Backend
-- **Flask** - Python web framework
-- **SQLAlchemy** - Database ORM
-- **xrpl-py** - XRP Ledger integration
-- **Cryptography** - Advanced encryption
-- **PyOTP** - 2FA authentication
-- **Authlib** - OAuth integration
-
-### Frontend
-- **React** - UI framework
-- **Tailwind CSS** - Styling
-- **Responsive Design** - Mobile-first approach
-
-### Blockchain
-- **XRP Ledger** - Primary blockchain
-- **Ripple API** - Native integration
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.11+
+### **Prerequisites**
 - Node.js 20+
+- npm 10+
 - Git
 
-### Backend Setup
+### **Installation**
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python src/main.py
-```
+# Clone repository
+git clone https://github.com/Solcraftl2/solcraft-nexus.git
+cd solcraft-nexus
 
-### Frontend Setup
-```bash
-cd frontend
+# Install dependencies
 npm install
+
+# Start development server
 npm run dev
 ```
 
-## 🔌 API Endpoints
+### **Build**
+```bash
+# Production build
+npm run build
 
-### Authentication
-- `POST /api/v1/users/register` - User registration
-- `POST /api/v1/users/login` - User login
-- `GET /api/v1/users/profile` - User profile
+# Preview build
+npm run preview
+```
 
-### OAuth
-- `GET /api/v1/auth/oauth/providers` - Available providers
-- `GET /api/v1/auth/oauth/{provider}/login` - OAuth login
+### **Local Testing**
+```bash
+# Test Netlify Functions locally
+npx netlify dev
 
-### Wallet & Crypto
-- `POST /api/v1/wallet/create` - Create wallet
-- `GET /api/v1/wallet/balance` - Wallet balance
-- `POST /api/v1/wallet/send` - Send crypto
-- `POST /api/v1/wallet/receive` - Receive crypto
+# Run tests
+npm test
+```
 
-### Tokenization
-- `POST /api/v1/assets` - Create asset
-- `GET /api/v1/assets` - List assets
-- `POST /api/v1/tokens/create` - Tokenize asset
-- `GET /api/v1/marketplace` - Token marketplace
+## 📁 Project Structure
 
-### Security
-- `POST /api/v1/security/mfa/setup` - Setup 2FA
-- `POST /api/v1/security/mfa/verify` - Verify 2FA
-- `GET /api/v1/security/report` - Security report
+```
+solcraft-nexus/
+├── frontend/                 # React frontend application
+│   ├── src/
+│   │   ├── components/      # UI components
+│   │   ├── services/        # API services
+│   │   ├── hooks/          # Custom hooks
+│   │   └── utils/          # Utilities
+│   └── public/             # Static assets
+├── netlify/                 # Netlify Functions
+│   └── functions/          # Serverless API endpoints
+│       ├── auth/           # Authentication APIs
+│       ├── tokenization/   # Tokenization APIs
+│       ├── health/         # Health check APIs
+│       └── assets/         # Asset management APIs
+├── netlify.toml            # Netlify configuration
+├── package.json            # Dependencies & scripts
+└── README.md              # This file
+```
 
-## 🔐 Default Credentials
+## 🔧 API Endpoints
 
-**Admin User:**
-- Email: `admin@solcraft-nexus.com`
-- Password: `admin123`
+### **Health Checks**
+- `GET /.netlify/functions/health/system` - System status
+- `GET /.netlify/functions/health/redis` - Redis connectivity
 
-## 🌟 Core Functionalities
+### **Authentication**
+- `POST /.netlify/functions/auth/login` - User login
+- `POST /.netlify/functions/auth/register` - User registration
+- `POST /.netlify/functions/auth/web3auth` - Web3 authentication
 
-### ✅ Base Functions
-- [x] Send/receive cryptocurrency
-- [x] Connect wallets (custodial & non-custodial)
-- [x] OAuth login (Google, Apple, GitHub, Microsoft)
-- [x] Asset tokenization
-- [x] API for future integrations
+### **Tokenization**
+- `POST /.netlify/functions/tokenization/create` - Create new token
+- `GET /.netlify/functions/tokenization/list` - List user tokens
+- `GET /.netlify/functions/tokenization/details/:id` - Token details
 
-### ✅ Advanced Features
-- [x] Multi-factor authentication
-- [x] Multi-user management
-- [x] Governance system
-- [x] Dividend distribution
-- [x] Audit and compliance
-- [x] Advanced encryption
-- [x] Analytics dashboard
+### **Assets**
+- `GET /.netlify/functions/assets/list` - List available assets
+- `POST /.netlify/functions/assets/upload` - Upload asset metadata
 
-## 📊 Project Metrics
+## 🔒 Security Features
 
-- **12 Phases** completed 100%
-- **50+ API Endpoints** implemented
-- **15+ Backend Services**
-- **20+ React Components**
-- **Enterprise Security** standards
-- **Production Ready** platform
+- **Rate Limiting:** 10 requests/minute per user
+- **CORS Protection:** Configured headers
+- **Input Validation:** Zod schema validation
+- **Authentication:** JWT + Web3 signatures
+- **Environment Isolation:** Separate dev/prod configs
+
+## 🚀 Performance
+
+- **Edge Computing:** Global CDN deployment
+- **Caching:** Redis-based caching layer
+- **Optimization:** Tree-shaking, code splitting
+- **Monitoring:** Built-in health checks
+
+## 📊 Monitoring & Analytics
+
+- **Health Endpoints:** Real-time system monitoring
+- **Error Tracking:** Comprehensive error handling
+- **Performance Metrics:** Response time tracking
+- **User Analytics:** Usage statistics
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
 ## 📄 License
 
@@ -175,15 +164,23 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-For support, email support@solcraft-nexus.com or join our Slack channel.
+- **Documentation:** [Wiki](https://github.com/Solcraftl2/solcraft-nexus/wiki)
+- **Issues:** [GitHub Issues](https://github.com/Solcraftl2/solcraft-nexus/issues)
+- **Email:** info@solcraftl2.com
 
-## 🙏 Acknowledgments
+## 🎯 Roadmap
 
-- Ripple for the XRP Ledger technology
-- The open-source community for amazing tools and libraries
-- All contributors who made this project possible
+- [x] ✅ XRPL Integration
+- [x] ✅ Web3 Authentication
+- [x] ✅ Netlify Functions Migration
+- [x] ✅ Redis Caching
+- [ ] 🔄 Advanced Analytics
+- [ ] 🔄 Multi-chain Support
+- [ ] 🔄 Mobile App
 
 ---
 
-**SolCraft Nexus** - Professional tokenization made simple and secure. 🚀
+**Built with ❤️ by the SolCraft Team**
+
+**Powered by XRPL | Deployed on Netlify | Secured by Web3**
 

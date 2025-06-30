@@ -161,6 +161,10 @@ npm run dev
 - **Enterprise Security** standards
 - **Production Ready** platform
 
+## 🚀 Deployment on Netlify
+
+The project is configured for Netlify using Node.js **20**. Run `npm run netlify:build` to test the build locally and `npm run netlify:dev` to serve the frontend and functions. See [docs/netlify_deployment.md](docs/netlify_deployment.md) for the full list of required environment variables.
+
 ## 🤝 Contributing
 
 1. Fork the repository

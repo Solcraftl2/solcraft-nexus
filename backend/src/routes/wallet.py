@@ -4,6 +4,8 @@ from src.models.user import db, User
 from src.models.transaction import Transaction
 from src.services.wallet_service import xrpl_service
 from src.services.secure_wallet_service import secure_wallet_service
+from src.services.ethereum_service import ethereum_service
+from src.config import Config
 from src.services.transaction_optimization_service import transaction_optimization_service
 from src.services.blockchain_notification_service import blockchain_notification_service
 from decimal import Decimal
@@ -170,44 +172,14 @@ def send_crypto():
         destination_tag = data.get('destination_tag')
         memo = data.get('memo')
         
-        # Validate destination address
-        if not xrpl_service.validate_address(destination):
-            return jsonify({'error': 'Invalid destination address'}), 400
-        
-        # For demo purposes, we'll simulate the transaction
-        # In production, you'd retrieve the user's wallet securely and send the transaction
-        
-        if currency == 'XRP':
-            # Simulate XRP transaction
-            transaction_result = {
-                'success': True,
-                'hash': f'demo_hash_{current_user_id}_{datetime.utcnow().timestamp()}',
-                'amount_sent': amount,
-                'destination': destination,
-                'fee': Decimal('0.00001')
-            }
-        else:
-            # Simulate token transaction
-            transaction_result = {
-                'success': True,
-                'hash': f'demo_hash_{current_user_id}_{datetime.utcnow().timestamp()}',
-                'currency': currency,
-                'amount_sent': amount,
-                'destination': destination
-            }
-        
-        # Record transaction in database
         transaction = Transaction(
             transaction_type='send',
-            status='completed',
+            status='pending',
             user_id=current_user_id,
             amount=amount,
             total_value=amount,
-            fee=transaction_result.get('fee', Decimal('0')),
-            xrpl_transaction_hash=transaction_result['hash'],
-            notes=f"Sent {amount} {currency} to {destination}",
+            notes=f"Sending {amount} {currency} to {destination}",
             executed_at=datetime.utcnow(),
-            confirmed_at=datetime.utcnow(),
             transaction_metadata={
                 'destination': destination,
                 'currency': currency,
@@ -215,10 +187,64 @@ def send_crypto():
                 'memo': memo
             }
         )
-        
         db.session.add(transaction)
         db.session.commit()
-        
+
+        if currency == 'XRP':
+            if not xrpl_service.validate_address(destination):
+                transaction.status = 'failed'
+                db.session.commit()
+                return jsonify({'error': 'Invalid destination address'}), 400
+
+            wallet = secure_wallet_service.get_wallet_for_transaction(current_user_id)
+            sender_info = xrpl_service.get_account_info(wallet.address)
+            if sender_info['available_balance'] < amount:
+                transaction.status = 'failed'
+                db.session.commit()
+                return jsonify({'error': 'Insufficient balance'}), 400
+
+            tx_result = xrpl_service.send_xrp(wallet, destination, amount, destination_tag, memo)
+            transaction.fee = tx_result.get('fee', Decimal('0'))
+            transaction.xrpl_transaction_hash = tx_result['hash']
+            transaction.xrpl_ledger_index = tx_result.get('ledger_index')
+            transaction.status = 'completed' if tx_result['success'] else 'failed'
+            transaction.confirmed_at = datetime.utcnow()
+            transaction.notes = f"Sent {amount} XRP to {destination}"
+            db.session.commit()
+            transaction_result = tx_result
+        elif currency == 'ETH':
+            if not ethereum_service.web3.is_address(destination):
+                transaction.status = 'failed'
+                db.session.commit()
+                return jsonify({'error': 'Invalid destination address'}), 400
+
+            eth_pk = Config.ETH_PRIVATE_KEY
+            eth_address = Config.ETH_ADDRESS
+            if not eth_pk or not eth_address:
+                transaction.status = 'failed'
+                db.session.commit()
+                return jsonify({'error': 'Ethereum wallet not configured'}), 500
+
+            balance = ethereum_service.get_balance(eth_address)
+            est_fee = Decimal(ethereum_service.web3.from_wei(21000 * ethereum_service.web3.eth.gas_price, 'ether'))
+            if balance < amount + est_fee:
+                transaction.status = 'failed'
+                db.session.commit()
+                return jsonify({'error': 'Insufficient ETH balance'}), 400
+
+            tx_result = ethereum_service.send_eth(eth_pk, destination, amount)
+            transaction.fee = tx_result.get('fee', Decimal('0'))
+            transaction.xrpl_transaction_hash = tx_result['hash']
+            transaction.status = 'completed' if tx_result['success'] else 'failed'
+            transaction.confirmed_at = datetime.utcnow()
+            transaction.notes = f"Sent {amount} ETH to {destination}"
+            db.session.commit()
+            transaction_result = tx_result
+        else:
+            transaction.status = 'failed'
+            db.session.commit()
+            return jsonify({'error': 'Unsupported currency'}), 400
+
         return jsonify({
             'message': 'Transaction sent successfully',
             'transaction': transaction_result
@@ -273,6 +299,7 @@ def generate_receive_address():
         return jsonify({'error': str(e)}), 500
 
 @wallet_bp.route('/crypto/estimate-fee', methods=['GET'])
+@jwt_required()
 def estimate_transaction_fee():
     """Estimate transaction fee"""
     try:
@@ -295,6 +322,7 @@ def estimate_transaction_fee():
         return jsonify({'error': str(e)}), 500
 
 @wallet_bp.route('/crypto/validate-address', methods=['POST'])
+@jwt_required()
 def validate_address():
     """Validate a cryptocurrency address"""
     try:

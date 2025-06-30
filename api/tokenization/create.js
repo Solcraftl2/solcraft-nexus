@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 
@@ -90,24 +90,72 @@ export default async function handler(req, res) {
       success: false,
       txHash: null,
       issuerAddress: null,
+      ledgerIndex: null,
+      fee: null,
       error: null
     };
 
     try {
       // Inizializza connessione XRPL
       await initializeXRPL().catch(() => {}); // Ignora se già connesso
+      const client = getXRPLClient();
 
-      // TODO: Implementare creazione token reale su XRPL
-      // Per ora simuliamo il processo con dati realistici
-      
-      // Simula indirizzo issuer (in produzione sarebbe il tuo issuing address)
-      const mockIssuerAddress = 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH';
-      const mockTxHash = `${tokenSymbol}${Date.now().toString(16).toUpperCase()}`;
+      // Wallet issuer e wallet di distribuzione da variabili ambiente
+      const issuerSeed = process.env.XRPL_ISSUER_SEED;
+      const distributionSeed = process.env.XRPL_DISTRIBUTION_SEED;
+
+      if (!issuerSeed || !distributionSeed) {
+        throw new Error('Wallet seeds not configured');
+      }
+
+      const issuerWallet = walletFromSeed(issuerSeed);
+      const distributionWallet = walletFromSeed(distributionSeed);
+
+      // 1. Creazione TrustSet (distribution -> issuer)
+      const trustSet = {
+        TransactionType: 'TrustSet',
+        Account: distributionWallet.address,
+        LimitAmount: {
+          currency: tokenSymbol,
+          issuer: issuerWallet.address,
+          value: supply.toString()
+        }
+      };
+
+      const preparedTrust = await client.autofill(trustSet);
+      const signedTrust = distributionWallet.sign(preparedTrust);
+      const trustResult = await client.submitAndWait(signedTrust.tx_blob);
+
+      if (trustResult.result.meta.TransactionResult !== 'tesSUCCESS') {
+        throw new Error(`TrustSet failed: ${trustResult.result.meta.TransactionResult}`);
+      }
+
+      // 2. Invio token dall'issuer al distribution wallet
+      const paymentTx = {
+        TransactionType: 'Payment',
+        Account: issuerWallet.address,
+        Destination: distributionWallet.address,
+        Amount: {
+          currency: tokenSymbol,
+          issuer: issuerWallet.address,
+          value: supply.toString()
+        }
+      };
+
+      const preparedPayment = await client.autofill(paymentTx);
+      const signedPayment = issuerWallet.sign(preparedPayment);
+      const paymentResult = await client.submitAndWait(signedPayment.tx_blob);
+
+      if (paymentResult.result.meta.TransactionResult !== 'tesSUCCESS') {
+        throw new Error(`Payment failed: ${paymentResult.result.meta.TransactionResult}`);
+      }
 
       tokenCreationResult = {
         success: true,
-        txHash: mockTxHash,
-        issuerAddress: mockIssuerAddress,
+        txHash: paymentResult.result.hash,
+        issuerAddress: issuerWallet.address,
+        ledgerIndex: paymentResult.result.ledger_index,
+        fee: preparedPayment.Fee,
         tokenSymbol: tokenSymbol,
         totalSupply: supply.toString(),
         created: true
@@ -116,6 +164,14 @@ export default async function handler(req, res) {
     } catch (error) {
       console.error('Token creation error:', error);
       tokenCreationResult.error = error.message;
+    }
+
+    if (!tokenCreationResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'XRPL transaction failed',
+        details: tokenCreationResult.error
+      });
     }
 
     // Salvataggio Asset nel database Supabase
@@ -200,8 +256,8 @@ export default async function handler(req, res) {
           user_id: decoded.userId,
           status: 'confirmed',
           blockchain_network: 'XRPL',
-          block_height: null,
-          gas_fee: 0,
+          block_height: tokenCreationResult.ledgerIndex,
+          gas_fee: tokenCreationResult.fee ? parseFloat(tokenCreationResult.fee) / 1000000 : 0,
           description: `Token creation for ${assetName}`,
           metadata: {
             assetName,

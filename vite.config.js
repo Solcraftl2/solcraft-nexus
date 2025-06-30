@@ -6,20 +6,22 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   // Specifica la directory root del frontend
-  root: './frontend',
+  // Aggiornato per indicare la root del progetto
+  root: './',
   
   plugins: [react(), tailwindcss()],
   
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./frontend/src"),
+      // Alias per l'importazione dei moduli dal frontend
+      "@": path.resolve(__dirname, "./src"),
     },
   },
   
   // Configurazione build
   build: {
     // Output nella directory dist della root del progetto
-    outDir: '../dist',
+    outDir: './dist',
     // Pulisce la directory di output prima del build
     emptyOutDir: true,
     // Configurazione per ottimizzazione

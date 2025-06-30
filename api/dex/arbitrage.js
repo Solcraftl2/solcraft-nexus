@@ -1,4 +1,4 @@
-import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -455,56 +455,49 @@ async function getArbitrageAlerts() {
 }
 
 async function executeArbitrage(arbitrageData) {
-  const {
-    opportunityId,
-    amount,
-    maxSlippage = 0.5,
-    autoExecute = false
-  } = arbitrageData;
+  const { buySeed, sellSeed, buyTakerGets, buyTakerPays, sellTakerGets, sellTakerPays } = arbitrageData;
 
-  // Simulazione esecuzione arbitrage
+  await initializeXRPL();
+  const client = getXRPLClient();
+
+  const buyWallet = walletFromSeed(buySeed);
+  const sellWallet = walletFromSeed(sellSeed || buySeed);
+
+  const buyTx = {
+    TransactionType: 'OfferCreate',
+    Account: buyWallet.address,
+    TakerGets: buyTakerGets,
+    TakerPays: buyTakerPays
+  };
+
+  const preparedBuy = await client.autofill(buyTx);
+  const signedBuy = buyWallet.sign(preparedBuy);
+  const buyResult = await client.submitAndWait(signedBuy.tx_blob);
+
+  if (buyResult.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${buyResult.result.meta.TransactionResult}`);
+  }
+
+  const sellTx = {
+    TransactionType: 'OfferCreate',
+    Account: sellWallet.address,
+    TakerGets: sellTakerGets,
+    TakerPays: sellTakerPays
+  };
+
+  const preparedSell = await client.autofill(sellTx);
+  const signedSell = sellWallet.sign(preparedSell);
+  const sellResult = await client.submitAndWait(signedSell.tx_blob);
+
+  if (sellResult.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(`Ledger submission failed: ${sellResult.result.meta.TransactionResult}`);
+  }
+
   return {
-    executionId: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    opportunityId,
-    amount: parseFloat(amount),
-    status: 'executing',
-    steps: [
-      {
-        step: 1,
-        action: 'buy_asset',
-        exchange: 'XRPL DEX',
-        amount: parseFloat(amount),
-        price: 0.5195,
-        status: 'pending',
-        txHash: null
-      },
-      {
-        step: 2,
-        action: 'transfer_asset',
-        fromExchange: 'XRPL DEX',
-        toExchange: 'Binance',
-        amount: parseFloat(amount),
-        status: 'waiting',
-        estimatedTime: 30
-      },
-      {
-        step: 3,
-        action: 'sell_asset',
-        exchange: 'Binance',
-        amount: parseFloat(amount),
-        price: 0.5267,
-        status: 'waiting',
-        txHash: null
-      }
-    ],
-    estimatedProfit: parseFloat(amount) * 0.0072,
-    estimatedFees: parseFloat(amount) * 0.0015,
-    netProfit: parseFloat(amount) * 0.0057,
-    maxSlippage,
-    startTime: new Date().toISOString(),
-    estimatedCompletion: new Date(Date.now() + 120000).toISOString(),
-    riskScore: 1.2,
-    confidence: 0.92
+    buyHash: buyResult.result.hash,
+    sellHash: sellResult.result.hash,
+    buyResult: buyResult.result,
+    sellResult: sellResult.result
   };
 }
 

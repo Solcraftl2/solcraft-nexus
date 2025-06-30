@@ -1,5 +1,5 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
-import { TrustSet, convertStringToHex } from 'xrpl';
+import { getXRPLClient, initializeXRPL, getAccountInfo, walletFromSeed, createTrustLine, removeTrustLine } from '../config/xrpl.js';
+import { convertStringToHex } from 'xrpl';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
@@ -91,52 +91,10 @@ export default async function handler(req, res) {
       } catch (error) {
         console.error('Trust lines fetch error:', error);
         
-        // Fallback con dati mock se XRPL non disponibile
-        const mockTrustLines = [
-          {
-            currency: 'USD',
-            issuer: 'rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq',
-            balance: 100.50,
-            limit: 1000000,
-            limitPeer: 0,
-            qualityIn: 0,
-            qualityOut: 0,
-            noRipple: false,
-            noRipplePeer: false,
-            authorized: true,
-            peerAuthorized: true,
-            frozen: false,
-            peerFrozen: false
-          },
-          {
-            currency: 'EUR',
-            issuer: 'rLNaPoKeeBjZe2qs6x52yVPZpZ8td4dc6w',
-            balance: 250.75,
-            limit: 500000,
-            limitPeer: 0,
-            qualityIn: 0,
-            qualityOut: 0,
-            noRipple: false,
-            noRipplePeer: false,
-            authorized: true,
-            peerAuthorized: true,
-            frozen: false,
-            peerFrozen: false
-          }
-        ];
-
-        return res.status(200).json({
-          success: true,
-          account: walletAddress,
-          trustLines: mockTrustLines,
-          totalLines: mockTrustLines.length,
-          accountInfo: {
-            balance: '25000000', // 25 XRP
-            sequence: 1,
-            ownerCount: 2,
-            reserve: 6000000 // 6 XRP reserve
-          },
-          note: 'Dati simulati - XRPL non disponibile'
+        return res.status(500).json({
+          success: false,
+          error: "Errore durante il recupero delle trust lines",
+          message: error.message
         });
       }
     }
@@ -147,15 +105,16 @@ export default async function handler(req, res) {
         currency,
         issuer,
         limit,
+        walletSeed,
         qualityIn = 0,
         qualityOut = 0,
         noRipple = false
       } = req.body;
 
-      if (!currency || !issuer || !limit) {
+      if (!currency || !issuer || !limit || !walletSeed) {
         return res.status(400).json({
           success: false,
-          error: 'Currency, issuer e limit sono richiesti'
+          error: 'Currency, issuer, limit e walletSeed sono richiesti'
         });
       }
 
@@ -168,45 +127,37 @@ export default async function handler(req, res) {
       }
 
       try {
-        // In produzione, qui creeresti e invieresti la transazione TrustSet
-        const trustSetTx = {
-          TransactionType: 'TrustSet',
-          Account: walletAddress,
-          LimitAmount: {
-            currency: currency.length === 3 ? currency : convertStringToHex(currency),
-            issuer: issuer,
-            value: limit.toString()
-          },
-          QualityIn: qualityIn,
-          QualityOut: qualityOut,
-          Flags: noRipple ? 0x00020000 : 0 // tfSetNoRipple
-        };
+        await initializeXRPL();
+        const client = getXRPLClient();
+        const wallet = walletFromSeed(walletSeed);
 
-        // Simula creazione trust line
-        const simulatedResult = {
-          success: true,
-          transactionHash: 'mock_' + Date.now(),
-          ledgerIndex: Math.floor(Math.random() * 1000000),
-          fee: '12', // 12 drops
-          sequence: Math.floor(Math.random() * 1000)
-        };
+        const cur = currency.length === 3 ? currency : convertStringToHex(currency);
+        const result = await createTrustLine(wallet, cur, issuer, limit.toString());
 
-        return res.status(201).json({
-          success: true,
-          message: 'Trust line creata con successo!',
-          trustLine: {
-            currency: currency,
-            issuer: issuer,
-            limit: parseFloat(limit),
-            qualityIn: qualityIn,
-            qualityOut: qualityOut,
-            noRipple: noRipple,
-            status: 'created'
-          },
-          transaction: simulatedResult,
-          note: process.env.XRPL_NETWORK === 'testnet' ? 
-            'Trust line creata su testnet' : 
-            'Transazione simulata - configurare wallet per mainnet'
+        if (result.success) {
+          return res.status(201).json({
+            success: true,
+            message: 'Trust line creata con successo!',
+            trustLine: {
+              currency: currency,
+              issuer: issuer,
+              limit: parseFloat(limit),
+              qualityIn: qualityIn,
+              qualityOut: qualityOut,
+              noRipple: noRipple,
+              status: 'created'
+            },
+            transaction: {
+              hash: result.hash,
+              validated: result.validated
+            }
+          });
+        }
+
+        return res.status(400).json({
+          success: false,
+          error: 'Trust line creation failed',
+          message: result.error
         });
 
       } catch (error) {
@@ -221,33 +172,43 @@ export default async function handler(req, res) {
 
     // DELETE - Rimuovi trust line (imposta limit a 0)
     if (req.method === 'DELETE') {
-      const { currency, issuer } = req.body;
+      const { currency, issuer, walletSeed } = req.body;
 
-      if (!currency || !issuer) {
+      if (!currency || !issuer || !walletSeed) {
         return res.status(400).json({
           success: false,
-          error: 'Currency e issuer sono richiesti per rimuovere trust line'
+          error: 'Currency, issuer e walletSeed sono richiesti per rimuovere trust line'
         });
       }
 
       try {
-        // Simula rimozione trust line
-        const simulatedResult = {
-          success: true,
-          transactionHash: 'mock_delete_' + Date.now(),
-          ledgerIndex: Math.floor(Math.random() * 1000000),
-          fee: '12'
-        };
+        await initializeXRPL();
+        const client = getXRPLClient();
+        const wallet = walletFromSeed(walletSeed);
 
-        return res.status(200).json({
-          success: true,
-          message: 'Trust line rimossa con successo!',
-          removedTrustLine: {
-            currency: currency,
-            issuer: issuer,
-            status: 'removed'
-          },
-          transaction: simulatedResult
+        const cur = currency.length === 3 ? currency : convertStringToHex(currency);
+        const result = await removeTrustLine(wallet, cur, issuer);
+
+        if (result.success) {
+          return res.status(200).json({
+            success: true,
+            message: 'Trust line rimossa con successo!',
+            removedTrustLine: {
+              currency: currency,
+              issuer: issuer,
+              status: 'removed'
+            },
+            transaction: {
+              hash: result.hash,
+              validated: result.validated
+            }
+          });
+        }
+
+        return res.status(400).json({
+          success: false,
+          error: 'Trust line removal failed',
+          message: result.error
         });
 
       } catch (error) {

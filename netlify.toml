@@ -1,5 +1,6 @@
 [build]
-  command = "npm install --no-frozen-lockfile && npm run build"
+  # Install dependencies and build the frontend using npm
+  command = "npm install && npm run build"
   functions = "netlify/functions"
   publish = "dist"
 

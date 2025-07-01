@@ -1,3 +1,4 @@
+import { applySecurityHeaders } from '../../utils/securityHeaders.js';
 import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import redisService from '../config/redis.js';
@@ -5,7 +6,7 @@ import { rateLimitMiddleware, cacheMiddleware, initializeRedis } from '../middle
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  applySecurityHeaders(res);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 

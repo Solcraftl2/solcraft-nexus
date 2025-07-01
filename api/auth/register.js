@@ -1,10 +1,11 @@
+import { applySecurityHeaders } from '../../utils/securityHeaders.js';
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 import { supabase, getUserByEmail, insertUser, handleSupabaseError } from '../config/supabaseClient.js';
 
 export default async function handler(req, res) {
+  applySecurityHeaders(res);
   // Gestione CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
 

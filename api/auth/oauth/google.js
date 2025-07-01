@@ -1,11 +1,12 @@
+import { applySecurityHeaders } from '../../../utils/securityHeaders.js';
 // Netlify Function - Google OAuth
 exports.handler = async (event, context) => {
   const headers = {
-    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Content-Type': 'application/json'
   }
+  applySecurityHeaders({ setHeader: (k, v) => (headers[k] = v) })
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' }

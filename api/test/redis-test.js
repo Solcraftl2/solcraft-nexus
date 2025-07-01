@@ -7,8 +7,8 @@ async function testRedisConnection() {
     
     // Configurazione Redis con credenziali Upstash
     const redis = new Redis({
-      url: 'https://trusted-grackle-16855.upstash.io',
-      token: 'AkHXAAIgcDHtRT0JFBE_i6iQG_9O9zIKlH3arFQzSZbEaotOjnQlcw'
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN
     });
     
     // Test ping
@@ -67,9 +67,9 @@ async function testRedisConfig() {
   console.log('🔧 Testing Redis configuration...');
   
   const config = {
-    url: 'https://trusted-grackle-16855.upstash.io',
-    token: 'AkHXAAIgcDHtRT0JFBE_i6iQG_9O9zIKlH3arFQzSZbEaotOjnQlcw',
-    redis_url: 'rediss://default:AUHXAAIjcDEwYTMzMjJiZjMyZjE0YmUzYTg5NzZkOTczMzRmY2JlN3AxMA@trusted-grackle-16855.upstash.io:6379'
+    url: process.env.UPSTASH_REDIS_REST_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    redis_url: process.env.REDIS_URL
   };
   
   console.log('📋 Redis Configuration:');

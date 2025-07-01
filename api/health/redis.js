@@ -16,10 +16,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      throw new Error('Upstash Redis environment variables not configured');
+    }
+
     // Configurazione Redis con credenziali Upstash
     const redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL || 'https://trusted-grackle-16855.upstash.io',
-      token: process.env.UPSTASH_REDIS_REST_TOKEN || 'AkHXAAIgcDHtRT0JFBE_i6iQG_9O9zIKlH3arFQzSZbEaotOjnQlcw'
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN
     });
 
     const startTime = Date.now();
@@ -64,8 +68,8 @@ export default async function handler(req, res) {
         }
       },
       configuration: {
-        url: process.env.UPSTASH_REDIS_REST_URL ? 'configured' : 'using_default',
-        token: process.env.UPSTASH_REDIS_REST_TOKEN ? 'configured' : 'using_default'
+        url: process.env.UPSTASH_REDIS_REST_URL ? 'configured' : 'missing',
+        token: process.env.UPSTASH_REDIS_REST_TOKEN ? 'configured' : 'missing'
       },
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development'

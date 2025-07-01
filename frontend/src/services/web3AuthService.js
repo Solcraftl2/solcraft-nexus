@@ -74,12 +74,13 @@ class Web3AuthService {
       }
 
       console.log(`🔐 Tentativo login con ${provider}...`);
-      
+
       const web3authProvider = await this.web3auth.connect();
-      
+
       if (web3authProvider) {
         this.provider = web3authProvider;
         const userInfo = await this.getUserInfo();
+        const idToken = await this.web3auth.authenticateUser();
         
         console.log("✅ Login sociale completato:", userInfo);
         
@@ -94,7 +95,8 @@ class Web3AuthService {
             provider: provider,
             verified: userInfo.verifierIdField === 'email'
           },
-          provider: this.provider
+          provider: this.provider,
+          idToken
         };
       }
       
@@ -131,6 +133,7 @@ class Web3AuthService {
 
         if (accounts && accounts.length > 0) {
           const address = accounts[0];
+          const idToken = await this.web3auth.authenticateUser();
           
           // Ottieni informazioni account
           const accountInfo = await this.getAccountInfo(address);
@@ -147,7 +150,8 @@ class Web3AuthService {
               provider: 'xrpl',
               verified: true
             },
-            provider: this.provider
+            provider: this.provider,
+            idToken
           };
         }
       }
@@ -176,6 +180,13 @@ class Web3AuthService {
       console.error("❌ Errore getUserInfo:", error);
       throw error;
     }
+  }
+
+  async getIdToken() {
+    if (!this.web3auth) {
+      throw new Error("Web3Auth non inizializzato");
+    }
+    return this.web3auth.authenticateUser();
   }
 
   /**

@@ -1,6 +1,5 @@
 import React from 'react';
 import web3AuthService from './web3AuthService';
-import { supabase } from './supabaseService';
 
 /**
  * Auth Service - Gestione autenticazione completa
@@ -73,7 +72,7 @@ export const AuthProvider = ({ children }) => {
       const result = await web3AuthService.loginSocial(provider);
 
       if (result.success) {
-        await handleUserLogin(result.user, 'social', provider);
+        await handleUserLogin(result.user, 'social', provider, result.idToken);
         return { success: true, user: result.user };
       } else {
         throw new Error(result.error || 'Login sociale fallito');
@@ -100,7 +99,7 @@ export const AuthProvider = ({ children }) => {
       const result = await web3AuthService.connectWallet();
 
       if (result.success) {
-        await handleUserLogin(result.user, 'wallet', walletType);
+        await handleUserLogin(result.user, 'wallet', walletType, result.idToken);
         return { success: true, user: result.user };
       } else {
         throw new Error(result.error || 'Connessione wallet fallita');
@@ -117,77 +116,34 @@ export const AuthProvider = ({ children }) => {
   /**
    * Gestisce il login dell'utente e la sincronizzazione con Supabase
    */
-  const handleUserLogin = async (userData, authMethod, provider) => {
+  const handleUserLogin = async (userData, authMethod, provider, idToken) => {
     try {
       console.log("👤 Gestione login utente:", userData);
 
-      // Crea o aggiorna utente in Supabase
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq(authMethod === 'wallet' ? 'wallet_address' : 'email', 
-            authMethod === 'wallet' ? userData.wallet_address : userData.email)
-        .single();
+      const response = await fetch('/api/auth/web3auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          token: idToken,
+          walletAddress: userData.wallet_address,
+        }),
+      });
+      const result = await response.json();
 
-      let finalUser;
-
-      if (existingUser && !fetchError) {
-        // Aggiorna utente esistente
-        const { data: updatedUser, error: updateError } = await supabase
-          .from('users')
-          .update({
-            last_login: new Date().toISOString(),
-            auth_method: authMethod,
-            provider: provider,
-            verified: userData.verified || false,
-            ...(userData.name && { name: userData.name }),
-            ...(userData.avatar_url && { avatar_url: userData.avatar_url }),
-            ...(userData.balance && { balance: userData.balance }),
-          })
-          .eq('id', existingUser.id)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
-        finalUser = updatedUser;
-        console.log("✅ Utente esistente aggiornato");
+      if (response.ok && result.success) {
+        setUser(result.user);
+        localStorage.setItem('authToken', result.token);
+        console.log("✅ Login completato con successo");
       } else {
-        // Crea nuovo utente
-        const newUserData = {
-          id: userData.id,
-          email: userData.email || null,
-          name: userData.name || 'Utente Anonimo',
-          avatar_url: userData.avatar_url || null,
-          wallet_address: userData.wallet_address || null,
-          balance: userData.balance || '0',
-          auth_method: authMethod,
-          provider: provider,
-          verified: userData.verified || false,
-          created_at: new Date().toISOString(),
-          last_login: new Date().toISOString(),
-        };
-
-        const { data: newUser, error: createError } = await supabase
-          .from('users')
-          .insert([newUserData])
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        finalUser = newUser;
-        console.log("✅ Nuovo utente creato");
+        throw new Error(result.message || 'Backend auth failed');
       }
-
-      setUser(finalUser);
-      console.log("✅ Login completato con successo");
-      
     } catch (error) {
       console.error("❌ Errore gestione login:", error);
-      // Anche se Supabase fallisce, mantieni l'utente locale
       setUser({
         ...userData,
         auth_method: authMethod,
-        provider: provider,
+        provider,
       });
     }
   };

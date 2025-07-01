@@ -1,167 +1,140 @@
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
+import { supabase, getUserByEmail } from '../config/supabaseClient.js';
+import { createWallet } from '../config/xrpl.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
 
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Content-Type', 'application/json');
 
-  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      success: false,
-      message: 'Method not allowed'
-    });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   try {
-    const { provider, loginType, mpcEnabled, network } = req.body;
+    const { provider, token, walletAddress } = req.body;
 
-    // Validazione input
-    if (!provider || !loginType) {
-      return res.status(400).json({
-        success: false,
-        message: 'Provider e loginType sono richiesti'
-      });
+    if (!provider || !token) {
+      return res.status(400).json({ success: false, message: 'Provider e token richiesti' });
     }
 
-    // Simulazione Web3Auth con MPC technology
-    const supportedProviders = ['google', 'twitter', 'discord', 'facebook', 'apple'];
-    
-    if (!supportedProviders.includes(provider)) {
-      return res.status(400).json({
-        success: false,
-        message: `Provider ${provider} non supportato. Supportati: ${supportedProviders.join(', ')}`
+    let userInfo = null;
+
+    if (provider === 'google') {
+      const googleRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${token}`);
+      if (googleRes.ok) {
+        const g = await googleRes.json();
+        userInfo = {
+          id: g.sub,
+          email: g.email,
+          name: g.name,
+          picture: g.picture,
+          verified: g.email_verified === 'true'
+        };
+      }
+    } else if (provider === 'github') {
+      const userRes = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'User-Agent': 'SolCraft-Nexus'
+        }
       });
+      if (userRes.ok) {
+        const gh = await userRes.json();
+        let email = gh.email;
+        if (!email) {
+          const emailRes = await fetch('https://api.github.com/user/emails', {
+            headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'SolCraft-Nexus' }
+          });
+          if (emailRes.ok) {
+            const emails = await emailRes.json();
+            const primary = emails.find(e => e.primary) || emails[0];
+            email = primary?.email;
+          }
+        }
+        userInfo = {
+          id: gh.id,
+          email,
+          name: gh.name || gh.login,
+          picture: gh.avatar_url,
+          verified: true
+        };
+      }
+    } else if (provider === 'discord') {
+      const dRes = await fetch('https://discord.com/api/users/@me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (dRes.ok) {
+        const d = await dRes.json();
+        userInfo = {
+          id: d.id,
+          email: d.email,
+          name: d.username,
+          picture: d.avatar ? `https://cdn.discordapp.com/avatars/${d.id}/${d.avatar}.png` : null,
+          verified: d.verified
+        };
+      }
+    } else {
+      return res.status(400).json({ success: false, message: `Provider ${provider} non supportato` });
     }
 
-    // Simulazione generazione wallet MPC
-    const generateMPCWallet = (provider, network) => {
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(2, 15);
-      
-      if (network === 'xrpl') {
-        // Genera indirizzo XRPL simulato
-        return `rMPC${provider.toUpperCase()}${timestamp.toString().slice(-6)}${random.slice(0, 6)}`;
-      } else {
-        // Genera indirizzo Ethereum simulato
-        return `0xMPC${timestamp.toString(16)}${random}`.slice(0, 42);
-      }
-    };
+    if (!userInfo || !userInfo.email) {
+      return res.status(400).json({ success: false, message: 'Impossibile ottenere dati utente' });
+    }
 
-    // Genera wallet MPC
-    const walletAddress = generateMPCWallet(provider, network || 'xrpl');
-    
-    // Simulazione dati utente da provider social
-    const mockUserData = {
-      google: {
-        id: `google_${Date.now()}`,
-        email: 'user@gmail.com',
-        name: 'Google User',
-        picture: 'https://via.placeholder.com/150'
-      },
-      twitter: {
-        id: `twitter_${Date.now()}`,
-        username: 'twitter_user',
-        name: 'Twitter User',
-        picture: 'https://via.placeholder.com/150'
-      },
-      discord: {
-        id: `discord_${Date.now()}`,
-        username: 'discord_user',
-        name: 'Discord User',
-        picture: 'https://via.placeholder.com/150'
-      }
-    };
+    let user = await getUserByEmail(userInfo.email.toLowerCase());
 
-    const userData = mockUserData[provider] || {
-      id: `${provider}_${Date.now()}`,
-      name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} User`
-    };
+    if (user) {
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          name: userInfo.name,
+          avatar_url: userInfo.picture,
+          last_login: new Date().toISOString(),
+          provider,
+          auth_method: 'web3auth'
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+      if (error) throw error;
+      user = data;
+    } else {
+      const wallet = walletAddress || createWallet().address;
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          email: userInfo.email.toLowerCase(),
+          name: userInfo.name,
+          avatar_url: userInfo.picture,
+          wallet_address: wallet,
+          provider,
+          auth_method: 'web3auth',
+          created_at: new Date().toISOString(),
+          last_login: new Date().toISOString()
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      user = data;
+    }
 
-    // Crea utente Web3Auth
-    const user = {
-      id: userData.id,
-      email: userData.email || `${userData.username || userData.id}@${provider}.com`,
-      name: userData.name,
-      picture: userData.picture,
-      provider: provider,
-      authMethod: 'web3auth',
-      walletAddress: walletAddress,
-      mpcEnabled: mpcEnabled,
-      network: network || 'xrpl',
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString()
-    };
-
-    // Genera JWT token
-    const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email,
-        walletAddress: walletAddress,
-        authMethod: 'web3auth',
-        provider: provider
-      },
+    const jwtToken = jwt.sign(
+      { userId: user.id, email: user.email, walletAddress: user.wallet_address, provider },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Simulazione balance wallet (per demo)
-    const mockBalance = {
-      xrp: (Math.random() * 1000).toFixed(2),
-      usd: (Math.random() * 5000).toFixed(2),
-      tokens: [
-        {
-          currency: 'USD',
-          issuer: 'rUSDIssuer123456789',
-          balance: (Math.random() * 10000).toFixed(2)
-        },
-        {
-          currency: 'EUR',
-          issuer: 'rEURIssuer123456789', 
-          balance: (Math.random() * 8000).toFixed(2)
-        }
-      ]
-    };
-
-    return res.status(200).json({
-      success: true,
-      message: `Web3Auth con ${provider} completato con successo`,
-      user: user,
-      token: token,
-      walletAddress: walletAddress,
-      balance: mockBalance,
-      mpcInfo: {
-        enabled: mpcEnabled,
-        threshold: '2/3',
-        keyShares: 3,
-        description: 'Wallet protetto da tecnologia MPC distribuita'
-      },
-      features: {
-        passwordless: true,
-        socialLogin: true,
-        selfCustodial: true,
-        crossPlatform: true,
-        recovery: 'Social recovery disponibile'
-      }
-    });
-
+    return res.status(200).json({ success: true, user, token: jwtToken });
   } catch (error) {
-    console.error('Errore Web3Auth:', error);
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Errore interno del server durante l\'autenticazione Web3Auth',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Web3Auth error:', error);
+    return res.status(500).json({ success: false, message: 'Errore interno del server' });
   }
 }
-

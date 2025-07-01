@@ -1,5 +1,6 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL, getAccountInfo, walletFromSeed } from '../config/xrpl.js';
 import { AccountSet, convertStringToHex } from 'xrpl';
+import calculateAccountFlags from '../utils/calculateAccountFlags.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -44,6 +45,7 @@ export default async function handler(req, res) {
 
     const {
       walletAddress,
+      walletSeed,
       configurations = {},
       domain,
       emailHash,
@@ -53,10 +55,10 @@ export default async function handler(req, res) {
       flags = {}
     } = req.body;
 
-    if (!walletAddress) {
+    if (!walletAddress || !walletSeed) {
       return res.status(400).json({
         success: false,
-        error: 'Indirizzo wallet richiesto'
+        error: 'Indirizzo wallet e seed richiesti'
       });
     }
 
@@ -67,7 +69,6 @@ export default async function handler(req, res) {
     };
 
     const configurationSteps = [];
-    let txFlags = 0;
 
     // Configurazione Domain
     if (domain) {
@@ -152,42 +153,16 @@ export default async function handler(req, res) {
       });
     }
 
-    // Configurazione Flags
-    const flagMappings = {
-      requireDestinationTag: { flag: 0x00000001, name: 'RequireDestTag' },
-      requireAuth: { flag: 0x00000002, name: 'RequireAuth' },
-      disallowXRP: { flag: 0x00000003, name: 'DisallowXRP' },
-      disableMaster: { flag: 0x00000004, name: 'DisableMaster' },
-      accountTxnID: { flag: 0x00000005, name: 'AccountTxnID' },
-      noFreeze: { flag: 0x00000006, name: 'NoFreeze' },
-      globalFreeze: { flag: 0x00000007, name: 'GlobalFreeze' },
-      defaultRipple: { flag: 0x00000008, name: 'DefaultRipple' },
-      depositAuth: { flag: 0x00000009, name: 'DepositAuth' }
-    };
-
-    Object.entries(flags).forEach(([flagName, enable]) => {
-      if (flagMappings[flagName]) {
-        const mapping = flagMappings[flagName];
-        if (enable) {
-          txFlags |= mapping.flag;
-          configurationSteps.push({
-            type: 'flag_enable',
-            value: flagName,
-            description: `Attivazione flag: ${mapping.name}`
-          });
-        } else {
-          txFlags |= (mapping.flag | 0x00020000); // Clear flag
-          configurationSteps.push({
-            type: 'flag_disable',
-            value: flagName,
-            description: `Disattivazione flag: ${mapping.name}`
-          });
-        }
-      }
-    });
-
-    if (txFlags > 0) {
-      accountSetTx.Flags = txFlags;
+    // Configurazione Flags tramite util
+    const flagData = calculateAccountFlags(flags);
+    if (flagData.Flags) {
+      accountSetTx.Flags = flagData.Flags;
+    }
+    if (flagData.SetFlag !== undefined) {
+      accountSetTx.SetFlag = flagData.SetFlag;
+    }
+    if (flagData.ClearFlag !== undefined) {
+      accountSetTx.ClearFlag = flagData.ClearFlag;
     }
 
     // Configurazioni specifiche per account di tokenizzazione
@@ -219,23 +194,28 @@ export default async function handler(req, res) {
       }
     }
 
-    // Simula l'invio della transazione
+    // Invio reale della transazione
     try {
-      const simulatedTxResult = {
-        success: true,
-        transactionHash: 'mock_config_' + Date.now(),
-        ledgerIndex: Math.floor(Math.random() * 1000000),
-        fee: '12',
-        sequence: Math.floor(Math.random() * 1000),
-        validated: true
-      };
+      await initializeXRPL().catch(() => {})
+      const client = getXRPLClient()
+      const wallet = walletFromSeed(walletSeed)
+
+      const prepared = await client.autofill(accountSetTx)
+      const signed = wallet.sign(prepared)
+      const result = await client.submitAndWait(signed.tx_blob)
 
       const response = {
-        success: true,
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
         message: 'Configurazione account completata con successo!',
         account: walletAddress,
         appliedConfigurations: configurationSteps,
-        transaction: simulatedTxResult,
+        transaction: {
+          transactionHash: result.result.hash,
+          ledgerIndex: result.result.ledger_index,
+          fee: result.result.Fee,
+          sequence: result.result.Sequence,
+          validated: result.result.validated
+        },
         accountSettings: {
           domain: domain,
           emailHash: emailHash,

@@ -1,4 +1,6 @@
-import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
+import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
+import { Wallet } from 'xrpl';
+import { supabase, insertTransaction } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -59,15 +61,10 @@ export default async function handler(req, res) {
 
       } catch (error) {
         console.error('MPT fetch error:', error);
-        
-        // Fallback con dati mock
-        const mockTokens = generateMockMPTTokens();
-        return res.status(200).json({
-          success: true,
-          tokens: mockTokens,
-          totalTokens: mockTokens.length,
-          summary: calculatePortfolioSummary(mockTokens),
-          note: 'Dati simulati - XRPL non disponibile'
+        return res.status(500).json({
+          success: false,
+          error: 'Errore durante il recupero dei token',
+          message: error.message
         });
       }
     }
@@ -272,52 +269,14 @@ async function getMPTTokenInfo(tokenId) {
 }
 
 async function getUserMPTTokens(userId) {
-  // In produzione, recupererebbe dal database dell'utente
-  return generateMockMPTTokens();
-}
-
-function generateMockMPTTokens() {
-  return [
-    {
-      id: 'PROP001_A1B2C3D4',
-      symbol: 'PROP001',
-      name: 'Manhattan Office Building',
-      assetType: 'real_estate',
-      assetValue: 50000000,
-      totalSupply: 1000000,
-      userBalance: 5000,
-      userValue: 260000,
-      status: 'active',
-      yieldRate: 4.2,
-      created: '2024-01-01T00:00:00Z'
-    },
-    {
-      id: 'GOLD001_E5F6G7H8',
-      symbol: 'GOLD001',
-      name: 'Physical Gold Reserve',
-      assetType: 'commodity',
-      assetValue: 10000000,
-      totalSupply: 500000,
-      userBalance: 1000,
-      userValue: 20000,
-      status: 'active',
-      yieldRate: 0.0,
-      created: '2024-01-15T00:00:00Z'
-    },
-    {
-      id: 'ART001_I9J0K1L2',
-      symbol: 'ART001',
-      name: 'Renaissance Art Collection',
-      assetType: 'art',
-      assetValue: 25000000,
-      totalSupply: 100000,
-      userBalance: 250,
-      userValue: 62500,
-      status: 'active',
-      yieldRate: 0.0,
-      created: '2024-02-01T00:00:00Z'
-    }
-  ];
+  const { data, error } = await supabase
+    .from('mpt_tokens')
+    .select('*')
+    .eq('creator_id', userId);
+  if (error) {
+    throw new Error(error.message);
+  }
+  return data || [];
 }
 
 function calculatePortfolioSummary(tokens) {
@@ -356,39 +315,206 @@ function calculatePortfolioRisk(tokens) {
 }
 
 async function updateMPTToken(params) {
-  // Simula aggiornamento token
+  await initializeXRPL();
+  const client = getXRPLClient();
+
+  const { data: token, error } = await supabase
+    .from('mpt_tokens')
+    .select('*')
+    .eq('id', params.tokenId)
+    .single();
+  if (error || !token) {
+    throw new Error('Token not found');
+  }
+
+  const { data: account, error: accErr } = await supabase
+    .from('xrpl_accounts')
+    .select('*')
+    .eq('user_id', params.updatedBy)
+    .eq('network', token.network)
+    .single();
+  if (accErr || !account) {
+    throw new Error('XRPL account not found');
+  }
+
+  const wallet = Wallet.fromSeed(account.private_key);
+
+  const tx = {
+    TransactionType: 'AccountSet',
+    Account: wallet.address,
+    Memos: params.metadataUpdate
+      ? [{ Memo: { MemoData: Buffer.from(JSON.stringify(params.metadataUpdate)).toString('hex') } }]
+      : undefined
+  };
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(result.result.meta.TransactionResult);
+  }
+
+  const updates = {};
+  if (params.assetValuation) updates.asset_valuation = params.assetValuation;
+  if (params.metadataUpdate) updates.metadata = {
+    ...(token.metadata || {}),
+    ...params.metadataUpdate
+  };
+  if (Object.keys(updates).length > 0) {
+    updates.updated_at = new Date().toISOString();
+    await supabase.from('mpt_tokens').update(updates).eq('id', params.tokenId);
+  }
+
+  await insertTransaction({
+    tx_hash: result.result.hash,
+    type: 'mpt_update',
+    from_address: wallet.address,
+    to_address: wallet.address,
+    amount: null,
+    currency: token.currency_code,
+    token_id: params.tokenId,
+    user_id: params.updatedBy,
+    status: result.result.validated ? 'confirmed' : 'submitted',
+    blockchain_network: token.network,
+    metadata: { reason: params.operationalChanges || null },
+    created_at: new Date().toISOString()
+  });
+
   return {
-    token: {
-      id: params.tokenId,
-      lastUpdated: new Date().toISOString()
-    },
-    changes: Object.keys(params).filter(key => params[key] && key !== 'tokenId' && key !== 'updatedBy'),
+    token: { id: params.tokenId, lastUpdated: new Date().toISOString(), txHash: result.result.hash },
+    changes: Object.keys(updates),
     auditLog: {
       action: 'update',
       timestamp: new Date().toISOString(),
-      user: params.updatedBy,
-      changes: 'Token metadata and valuation updated'
+      user: params.updatedBy
     }
   };
 }
 
 async function executeMPTOperation(params) {
-  // Simula operazione su token
+  await initializeXRPL();
+  const client = getXRPLClient();
+
+  const { data: token, error } = await supabase
+    .from('mpt_tokens')
+    .select('*')
+    .eq('id', params.tokenId)
+    .single();
+  if (error || !token) {
+    throw new Error('Token not found');
+  }
+
+  const { data: account, error: accErr } = await supabase
+    .from('xrpl_accounts')
+    .select('*')
+    .eq('user_id', params.executedBy)
+    .eq('network', token.network)
+    .single();
+  if (accErr || !account) {
+    throw new Error('XRPL account not found');
+  }
+
+  const wallet = Wallet.fromSeed(account.private_key);
+  let tx;
+
+  switch (params.operation) {
+    case 'mint':
+      tx = {
+        TransactionType: 'Payment',
+        Account: wallet.address,
+        Destination: params.recipient,
+        Amount: {
+          currency: token.currency_code,
+          issuer: wallet.address,
+          value: params.amount.toString()
+        }
+      };
+      break;
+    case 'burn':
+      tx = {
+        TransactionType: 'Payment',
+        Account: wallet.address,
+        Destination: wallet.address,
+        Amount: {
+          currency: token.currency_code,
+          issuer: wallet.address,
+          value: params.amount.toString()
+        },
+        Flags: 0x00020000
+      };
+      break;
+    case 'transfer':
+      tx = {
+        TransactionType: 'Payment',
+        Account: wallet.address,
+        Destination: params.recipient,
+        Amount: {
+          currency: token.currency_code,
+          issuer: token.issuer_address || wallet.address,
+          value: params.amount.toString()
+        }
+      };
+      break;
+    case 'authorize':
+    case 'revoke':
+      tx = {
+        TransactionType: 'AllowTrust',
+        Account: wallet.address,
+        Trustor: params.recipient,
+        Currency: token.currency_code,
+        Authorized: params.operation === 'authorize'
+      };
+      break;
+    default:
+      throw new Error('Unsupported operation');
+  }
+
+  if (params.reason) {
+    tx.Memos = [{ Memo: { MemoData: Buffer.from(params.reason).toString('hex') } }];
+  }
+
+  const prepared = await client.autofill(tx);
+  const signed = wallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+    throw new Error(result.result.meta.TransactionResult);
+  }
+
+  let newSupply = parseFloat(token.current_supply || 0);
+  if (params.operation === 'mint') newSupply += parseFloat(params.amount || 0);
+  if (params.operation === 'burn') newSupply -= parseFloat(params.amount || 0);
+
+  if (params.operation === 'mint' || params.operation === 'burn') {
+    await supabase
+      .from('mpt_tokens')
+      .update({ current_supply: newSupply, updated_at: new Date().toISOString() })
+      .eq('id', params.tokenId);
+  }
+
+  await insertTransaction({
+    tx_hash: result.result.hash,
+    type: `mpt_${params.operation}`,
+    from_address: wallet.address,
+    to_address: params.recipient || wallet.address,
+    amount: params.amount || null,
+    currency: token.currency_code,
+    token_id: params.tokenId,
+    user_id: params.executedBy,
+    status: result.result.validated ? 'confirmed' : 'submitted',
+    blockchain_network: token.network,
+    created_at: new Date().toISOString()
+  });
+
   return {
     operation: {
       type: params.operation,
       amount: params.amount,
-      recipient: params.recipient,
-      timestamp: new Date().toISOString()
+      recipient: params.recipient
     },
-    transaction: {
-      hash: 'mpt_op_' + Date.now(),
-      fee: '12',
-      validated: true
-    },
-    newState: {
-      totalSupply: params.operation === 'mint' ? 'increased' : params.operation === 'burn' ? 'decreased' : 'unchanged'
-    },
+    transaction: { hash: result.result.hash, validated: result.result.validated },
+    newState: { currentSupply: newSupply },
     auditLog: {
       action: params.operation,
       timestamp: new Date().toISOString(),

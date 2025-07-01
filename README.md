@@ -67,6 +67,7 @@ npm install
 # Start development server
 npm run dev
 ```
+The Vite configuration is located at the project root (`vite.config.js`).
 
 ### **Build**
 ```bash

@@ -4,14 +4,17 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  root: './',
+  // Use the frontend directory as the project root
+  root: './frontend',
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      // Alias to the src folder inside the frontend directory
+      "@": path.resolve(__dirname, "./frontend/src"),
     },
   },
   build: {
-    outDir: './dist',
+    // Place the build output in the project root dist folder
+    outDir: '../dist',
     rollupOptions: {
       external: ['@upstash/redis', 'xrpl', 'ioredis', 'redis']
     }

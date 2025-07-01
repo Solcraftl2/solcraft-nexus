@@ -95,7 +95,7 @@ async function originalHandler(req, res)`
 
 // Migra tutte le API
 function migrateAPIs() {
-  const apiDir = './api';
+  const apiDir = fs.existsSync('./api') ? './api' : './netlify/functions';
   const netlifyDir = './netlify/functions';
   
   function processDirectory(dir, targetDir) {

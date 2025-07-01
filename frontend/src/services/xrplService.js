@@ -319,6 +319,54 @@ class XRPLService {
   }
 
   /**
+   * Rimuove una Trust Line esistente
+   * @param {Object} wallet - Wallet che rimuove la trust line
+   * @param {string} currency - Codice valuta
+   * @param {string} issuer - Indirizzo emittente
+   * @returns {Promise<Object>} Risultato della rimozione
+   */
+  async removeTrustLine(wallet, currency, issuer) {
+    try {
+      await this.connect();
+
+      const trustSet = {
+        TransactionType: 'TrustSet',
+        Account: wallet.address,
+        LimitAmount: {
+          currency: currency,
+          issuer: issuer,
+          value: '0'
+        },
+        Fee: '12'
+      };
+
+      const prepared = await this.client.autofill(trustSet);
+      const signed = wallet.sign(prepared);
+      const result = await this.client.submitAndWait(signed.tx_blob);
+
+      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
+        return {
+          success: true,
+          data: {
+            hash: result.result.hash,
+            currency: currency,
+            issuer: issuer
+          }
+        };
+      } else {
+        throw new Error(`Rimozione Trust Line fallita: ${result.result.meta.TransactionResult}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Errore rimozione Trust Line:', error);
+      return {
+        success: false,
+        error: error.message || 'Errore durante la rimozione della Trust Line'
+      };
+    }
+  }
+
+  /**
    * Ottieni cronologia transazioni
    * @param {string} address - Indirizzo del wallet
    * @param {number} limit - Numero massimo di transazioni

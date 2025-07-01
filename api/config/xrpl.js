@@ -189,7 +189,14 @@ export async function sendXRPPayment(fromWallet, toAddress, amount, memo = null)
     const prepared = await client.autofill(payment);
     const signed = fromWallet.sign(prepared);
     const result = await client.submitAndWait(signed.tx_blob);
-    
+
+    if (result.result?.meta?.TransactionResult !== 'tesSUCCESS') {
+      return {
+        success: false,
+        error: result.result?.meta?.TransactionResult || 'Transaction failed'
+      };
+    }
+
     return {
       success: true,
       hash: result.result.hash,
@@ -225,7 +232,14 @@ export async function createTrustLine(wallet, currency, issuer, limit = '1000000
     const prepared = await client.autofill(trustSet);
     const signed = wallet.sign(prepared);
     const result = await client.submitAndWait(signed.tx_blob);
-    
+
+    if (result.result?.meta?.TransactionResult !== 'tesSUCCESS') {
+      return {
+        success: false,
+        error: result.result?.meta?.TransactionResult || 'Transaction failed'
+      };
+    }
+
     return {
       success: true,
       hash: result.result.hash,
@@ -233,6 +247,48 @@ export async function createTrustLine(wallet, currency, issuer, limit = '1000000
     };
   } catch (error) {
     console.error('❌ Errore creazione trust line:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Rimuovi trust line impostando il limite a 0
+ */
+export async function removeTrustLine(wallet, currency, issuer) {
+  const client = getXRPLClient();
+
+  const trustSet = {
+    TransactionType: 'TrustSet',
+    Account: wallet.address,
+    LimitAmount: {
+      currency: currency,
+      issuer: issuer,
+      value: '0'
+    }
+  };
+
+  try {
+    const prepared = await client.autofill(trustSet);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    if (result.result?.meta?.TransactionResult !== 'tesSUCCESS') {
+      return {
+        success: false,
+        error: result.result?.meta?.TransactionResult || 'Transaction failed'
+      };
+    }
+
+    return {
+      success: true,
+      hash: result.result.hash,
+      validated: result.result.validated
+    };
+  } catch (error) {
+    console.error('❌ Errore rimozione trust line:', error);
     return {
       success: false,
       error: error.message
@@ -274,7 +330,7 @@ export async function getAccountTransactions(address, limit = 20) {
 }
 
 // Utility functions
-export { xrpToDrops, dropsToXrp };
+export { xrpToDrops, dropsToXrp, removeTrustLine };
 
 export default {
   initializeXRPL,
@@ -287,6 +343,7 @@ export default {
   getAccountBalance,
   sendXRPPayment,
   createTrustLine,
+  removeTrustLine,
   getAccountTransactions,
   xrpToDrops,
   dropsToXrp

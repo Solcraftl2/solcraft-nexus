@@ -99,8 +99,61 @@ export const updateUserProfile = async (userId, updates) => {
     .eq('id', userId)
     .select()
     .single();
-  
+
   return validateSupabaseResponse(data, error, 'Update user profile');
+};
+
+export const getMarketplaceAssets = async (filters = {}) => {
+  const {
+    categoryId,
+    minPrice,
+    maxPrice,
+    minYield,
+    maxYield,
+    location,
+    featured,
+    search,
+    limit = 12,
+    offset = 0,
+    sortBy = 'created_at',
+    sortOrder = 'desc'
+  } = filters;
+
+  let query = supabase
+    .from('assets')
+    .select(
+      `
+        *,
+        asset_categories(name, icon),
+        asset_details(details, financials, highlights)
+      `,
+      { count: 'exact' }
+    )
+    .eq('status', 'active');
+
+  if (categoryId) query = query.eq('category_id', categoryId);
+  if (featured) query = query.eq('featured', true);
+  if (minPrice) query = query.gte('token_price', parseFloat(minPrice));
+  if (maxPrice) query = query.lte('token_price', parseFloat(maxPrice));
+  if (minYield) query = query.gte('expected_yield', parseFloat(minYield));
+  if (maxYield) query = query.lte('expected_yield', parseFloat(maxYield));
+  if (location) query = query.ilike('location', `%${location}%`);
+  if (search) {
+    const pattern = `%${search}%`;
+    query = query.or(
+      `name.ilike.${pattern},description.ilike.${pattern}`
+    );
+  }
+
+  const { data, error, count } = await query
+    .order(sortBy, { ascending: sortOrder !== 'desc' })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    throw new Error(`Get marketplace assets failed: ${error.message}`);
+  }
+
+  return { data, count };
 };
 
 export default supabase;

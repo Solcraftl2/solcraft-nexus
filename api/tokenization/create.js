@@ -26,13 +26,18 @@ export default async function handler(req, res) {
 
     // Rate limiting per operazioni di tokenizzazione (max 10 per ora)
     const rateLimitKey = `tokenization:${req.ip}`;
-    const rateLimitAllowed = await redisService.checkRateLimit(rateLimitKey, 10, 3600);
-    
-    if (!rateLimitAllowed) {
+    const rl = await redisService.checkRateLimit(rateLimitKey, 10, 3600);
+
+    res.setHeader('X-RateLimit-Limit', 10);
+    res.setHeader('X-RateLimit-Remaining', rl.remaining);
+    res.setHeader('X-RateLimit-Reset', rl.reset);
+
+    if (!rl.allowed) {
+      res.setHeader('Retry-After', rl.reset);
       return res.status(429).json({
         success: false,
         error: 'Rate limit exceeded. Maximum 10 tokenizations per hour.',
-        retry_after: 3600
+        retry_after: rl.reset
       });
     }
 

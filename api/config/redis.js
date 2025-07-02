@@ -189,25 +189,40 @@ class RedisService {
   // Rate limiting
   async checkRateLimit(identifier, limit = 100, window = 3600) {
     const key = `rate_limit:${identifier}`;
-    
+
     try {
+      let count = 0;
+      let ttl = window;
+
       if (this.upstashClient) {
-        const count = await this.upstashClient.incr(key);
+        count = await this.upstashClient.incr(key);
         if (count === 1) {
           await this.upstashClient.expire(key, window);
+          ttl = window;
+        } else {
+          ttl = await this.upstashClient.ttl(key);
         }
-        return count <= limit;
       } else if (this.client && this.isConnected) {
-        const count = await this.client.incr(key);
+        count = await this.client.incr(key);
         if (count === 1) {
           await this.client.expire(key, window);
+          ttl = window;
+        } else {
+          ttl = await this.client.ttl(key);
         }
-        return count <= limit;
+      } else {
+        return { allowed: true, remaining: limit, reset: window };
       }
-      return true; // Allow if Redis not available
+
+      const remaining = limit - count;
+      return {
+        allowed: remaining >= 0,
+        remaining: remaining >= 0 ? remaining : 0,
+        reset: ttl
+      };
     } catch (error) {
       console.error('Rate limit check error:', error);
-      return true; // Allow on error
+      return { allowed: true, remaining: limit, reset: window }; // Allow on error
     }
   }
 

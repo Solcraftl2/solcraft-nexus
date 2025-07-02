@@ -111,26 +111,49 @@ export const cacheMiddleware = (ttl = 3600, keyGenerator = null) => {
 // Middleware per rate limiting
 export const rateLimitMiddleware = (options = {}) => {
   const {
-    limit = 100,
-    window = 3600,
+    limit = parseInt(process.env.RATE_LIMIT_PER_MINUTE) || 60,
+    window = 60,
     keyGenerator = (req) => req.ip || 'anonymous',
-    message = 'Rate limit exceeded'
+    message = 'Rate limit exceeded',
+    perUser = false,
+    perEndpoint = false
   } = options;
 
   return async (req, res, next) => {
     try {
-      const identifier = keyGenerator(req);
-      const allowed = await redisService.checkRateLimit(identifier, limit, window);
-      
+      let identifierParts = [];
+      if (perUser) {
+        identifierParts.push(req.user?.id || req.ip || 'anonymous');
+      }
+      if (perEndpoint) {
+        identifierParts.push(req.originalUrl || req.url);
+      }
+      if (identifierParts.length === 0) {
+        identifierParts.push(keyGenerator(req));
+      }
+
+      const identifier = identifierParts.join(':');
+
+      const { allowed, remaining, reset } = await redisService.checkRateLimit(
+        identifier,
+        typeof limit === 'function' ? limit(req) : limit,
+        typeof window === 'function' ? window(req) : window
+      );
+
+      res.setHeader('X-RateLimit-Limit', typeof limit === 'function' ? limit(req) : limit);
+      res.setHeader('X-RateLimit-Remaining', remaining);
+      res.setHeader('X-RateLimit-Reset', reset);
+
       if (!allowed) {
+        res.setHeader('Retry-After', reset);
         return res.status(429).json({
           error: 'Rate limit exceeded',
-          message: message,
-          limit: limit,
-          window: window
+          message,
+          limit: typeof limit === 'function' ? limit(req) : limit,
+          window: typeof window === 'function' ? window(req) : window
         });
       }
-      
+
       next();
     } catch (error) {
       console.error('Rate limit middleware error:', error);

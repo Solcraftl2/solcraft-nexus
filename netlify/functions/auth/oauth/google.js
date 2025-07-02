@@ -71,7 +71,7 @@ exports.handler = async (event, context) => {
   }
 };
 
-async function originalHandler(req, res) => {
+async function originalHandler(req, res) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',

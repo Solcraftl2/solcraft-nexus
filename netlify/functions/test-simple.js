@@ -1,22 +1,17 @@
-exports.handler = async (event, context) => {
-  // Gestione CORS
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Content-Type': 'application/json'
-  };
+import { withCors } from './utils/cors.js';
+import logger from './utils/logger.js';
 
-  // Gestione preflight OPTIONS
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: ''
-    };
-  }
-
+/**
+ * Funzione di test semplice per SolCraft Nexus
+ * Verifica il funzionamento delle Netlify Functions
+ */
+const testHandler = async (event, context) => {
   try {
+    logger.info('Test API called', { 
+      method: event.httpMethod, 
+      path: event.path 
+    });
+
     const response = {
       success: true,
       message: 'SolCraft Nexus API - Netlify Functions Working!',
@@ -43,23 +38,28 @@ exports.handler = async (event, context) => {
         environment_vars: {
           redis_url_configured: !!process.env.UPSTASH_REDIS_REST_URL,
           redis_token_configured: !!process.env.UPSTASH_REDIS_REST_TOKEN,
+          supabase_configured: !!process.env.SUPABASE_URL,
+          jwt_configured: !!process.env.JWT_SECRET,
           node_env: process.env.NODE_ENV || 'development'
         }
       }
     };
 
+    logger.info('Test API response generated', { 
+      success: true, 
+      environment: response.environment 
+    });
+
     return {
       statusCode: 200,
-      headers,
       body: JSON.stringify(response, null, 2)
     };
 
   } catch (error) {
-    console.error('Test Simple API Error:', error);
+    logger.error('Test API error', error);
     
     return {
       statusCode: 500,
-      headers,
       body: JSON.stringify({
         success: false,
         error: error.message,
@@ -68,4 +68,7 @@ exports.handler = async (event, context) => {
     };
   }
 };
+
+// Esporta con CORS wrapper
+export const handler = withCors(testHandler);
 

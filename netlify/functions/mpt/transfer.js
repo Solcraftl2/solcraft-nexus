@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -59,7 +60,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -149,7 +150,7 @@ async function originalHandler(req, res) {
     
     if (requiresAuth) {
       // In a real implementation, you would check if the sender is authorized
-      console.log('Destination requires authorization - implement authorization check')
+      logger.info('Destination requires authorization - implement authorization check');
     }
     
     // Prepare Payment Transaction for MPT
@@ -208,7 +209,7 @@ async function originalHandler(req, res) {
     })
     
   } catch (error) {
-    console.error('MPT transfer error:', error)
+    logger.error('MPT transfer error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to transfer Multi-Purpose Token'

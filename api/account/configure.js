@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
 import { AccountSet, convertStringToHex } from 'xrpl';
 import jwt from 'jsonwebtoken';
@@ -261,7 +262,7 @@ export default async function handler(req, res) {
       return res.status(200).json(response);
 
     } catch (error) {
-      console.error('Account configuration error:', error);
+      logger.error('Account configuration error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore durante la configurazione account',
@@ -270,7 +271,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('Account configure API error:', error);
+    logger.error('Account configure API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server durante la configurazione',

@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import redisService from '../config/redis.js';
 
 // Middleware per inizializzazione Redis
@@ -9,7 +10,7 @@ export const initializeRedis = async (req, res, next) => {
     req.redis = redisService;
     next();
   } catch (error) {
-    console.error('Redis initialization failed:', error);
+    logger.error('Redis initialization failed:', error);
     // Continue without Redis if it fails
     req.redis = null;
     next();
@@ -55,7 +56,7 @@ export const cacheMiddleware = (ttl = 3600, keyGenerator = null) => {
 
       next();
     } catch (error) {
-      console.error('Cache middleware error:', error);
+      logger.error('Cache middleware error:', error);
       next();
     }
   };
@@ -86,7 +87,7 @@ export const rateLimitMiddleware = (options = {}) => {
       
       next();
     } catch (error) {
-      console.error('Rate limit middleware error:', error);
+      logger.error('Rate limit middleware error:', error);
       // Allow request if rate limiting fails
       next();
     }
@@ -115,7 +116,7 @@ export const sessionMiddleware = async (req, res, next) => {
     
     next();
   } catch (error) {
-    console.error('Session middleware error:', error);
+    logger.error('Session middleware error:', error);
     next();
   }
 };
@@ -153,7 +154,7 @@ async function invalidateCachePattern(pattern, req) {
       await redisService.del(key);
     }
   } catch (error) {
-    console.error('Cache invalidation error:', error);
+    logger.error('Cache invalidation error:', error);
   }
 }
 

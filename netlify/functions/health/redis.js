@@ -1,34 +1,29 @@
-const { Redis } = require('@upstash/redis');
+import { logger } from '../utils/logger.js';
+import { withCors } from '../utils/cors.js';
+import { Redis } from '@upstash/redis';
 
-exports.handler = async (event, context) => {
-  // Gestione CORS
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Content-Type': 'application/json'
-  };
-
-  // Gestione preflight OPTIONS
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: ''
-    };
-  }
-
+async function redisHealthCheck(event, context) {
   try {
+    logger.info('Starting Redis health check', { 
+      timestamp: new Date().toISOString(),
+      environment: 'netlify-functions'
+    });
+
     // Configurazione Redis Upstash
     const redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL || 'https://trusted-grackle-16855.upstash.io',
-      token: process.env.UPSTASH_REDIS_REST_TOKEN || 'AkHXAAIgcDHtRT0JFBE_i6iQG_9O9zIKlH3arFQzSZbEaotOjnQlcw'
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN
     });
 
     // Test connessione Redis
     const startTime = Date.now();
     const pingResult = await redis.ping();
     const responseTime = Date.now() - startTime;
+
+    logger.debug('Redis ping completed', { 
+      result: pingResult, 
+      responseTime: `${responseTime}ms` 
+    });
 
     // Test operazioni CRUD
     const testKey = `health_check_${Date.now()}`;
@@ -37,6 +32,13 @@ exports.handler = async (event, context) => {
     await redis.set(testKey, testValue, { ex: 60 }); // TTL 60 secondi
     const getValue = await redis.get(testKey);
     await redis.del(testKey);
+
+    const crudSuccess = getValue === testValue;
+    
+    logger.debug('Redis CRUD test completed', { 
+      testKey, 
+      success: crudSuccess 
+    });
 
     const healthStatus = {
       success: true,
@@ -51,9 +53,9 @@ exports.handler = async (event, context) => {
         },
         crud_operations: {
           set: 'pass',
-          get: getValue === testValue ? 'pass' : 'fail',
+          get: crudSuccess ? 'pass' : 'fail',
           delete: 'pass',
-          status: getValue === testValue ? 'pass' : 'fail'
+          status: crudSuccess ? 'pass' : 'fail'
         }
       },
       performance: {
@@ -64,14 +66,23 @@ exports.handler = async (event, context) => {
       uptime_check: true
     };
 
+    logger.info('Redis health check completed successfully', { 
+      status: healthStatus.status,
+      responseTime: `${responseTime}ms`,
+      performanceGrade: healthStatus.performance.performance_grade
+    });
+
     return {
       statusCode: 200,
-      headers,
       body: JSON.stringify(healthStatus)
     };
 
   } catch (error) {
-    console.error('Redis Health Check Error:', error);
+    logger.error('Redis Health Check Error', { 
+      error: error.message,
+      stack: error.stack,
+      type: error.constructor.name
+    });
     
     const errorResponse = {
       success: false,
@@ -96,9 +107,10 @@ exports.handler = async (event, context) => {
 
     return {
       statusCode: 500,
-      headers,
       body: JSON.stringify(errorResponse)
     };
   }
-};
+}
+
+export const handler = withCors(redisHealthCheck);
 

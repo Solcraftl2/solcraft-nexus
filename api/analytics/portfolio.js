@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Portfolio analytics error:', error);
+        logger.error('Portfolio analytics error:', error);
         
         // Fallback con analytics mock
         const mockAnalytics = generateMockAnalytics(analysisType, timeframe);
@@ -118,7 +119,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Custom report generation error:', error);
+        logger.error('Custom report generation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la generazione del report',
@@ -133,7 +134,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Portfolio analytics API error:', error);
+    logger.error('Portfolio analytics API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

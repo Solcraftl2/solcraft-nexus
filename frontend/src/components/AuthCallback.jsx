@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React, { useEffect, useState } from 'react';
 import { AuthService } from '../services/authService';
 
@@ -19,7 +20,7 @@ const AuthCallback = () => {
         const profileResult = await AuthService.createUserProfile(user);
         
         if (!profileResult.success) {
-          console.warn('Errore creazione profilo:', profileResult.error);
+          logger.warn('Errore creazione profilo:', profileResult.error);
         }
 
         setStatus('success');
@@ -30,7 +31,7 @@ const AuthCallback = () => {
         }, 2000);
         
       } catch (error) {
-        console.error('Errore callback OAuth:', error);
+        logger.error('Errore callback OAuth:', error);
         setError(error.message);
         setStatus('error');
         

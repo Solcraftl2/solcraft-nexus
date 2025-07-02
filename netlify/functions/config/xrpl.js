@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -76,11 +77,11 @@ export async function initializeXRPL() {
     xrplClient = new Client(config.server);
     
     await xrplClient.connect();
-    console.log(`✅ Connesso a XRPL ${XRPL_CONFIG.current}: ${config.server}`);
+    logger.info(`✅ Connesso a XRPL ${XRPL_CONFIG.current}: ${config.server}`);
     
     return xrplClient;
   } catch (error) {
-    console.error('❌ Errore connessione XRPL:', error);
+    logger.error('❌ Errore connessione XRPL:', error);
     throw error;
   }
 }
@@ -101,7 +102,7 @@ export function getXRPLClient() {
 export async function disconnectXRPL() {
   if (xrplClient && xrplClient.isConnected()) {
     await xrplClient.disconnect();
-    console.log('🔌 Disconnesso da XRPL');
+    logger.info('🔌 Disconnesso da XRPL');
   }
 }
 
@@ -145,7 +146,7 @@ export async function fundTestnetAccount(address) {
     const result = await response.json();
     return result;
   } catch (error) {
-    console.error('❌ Errore funding account:', error);
+    logger.error('❌ Errore funding account:', error);
     throw error;
   }
 }
@@ -244,7 +245,7 @@ export async function sendXRPPayment(fromWallet, toAddress, amount, memo = null)
       meta: result.result.meta
     };
   } catch (error) {
-    console.error('❌ Errore invio pagamento:', error);
+    logger.error('❌ Errore invio pagamento:', error);
     return {
       success: false,
       error: error.message
@@ -279,7 +280,7 @@ export async function createTrustLine(wallet, currency, issuer, limit = '1000000
       validated: result.result.validated
     };
   } catch (error) {
-    console.error('❌ Errore creazione trust line:', error);
+    logger.error('❌ Errore creazione trust line:', error);
     return {
       success: false,
       error: error.message
@@ -315,7 +316,7 @@ export async function getAccountTransactions(address, limit = 20) {
       meta: tx.meta
     }));
   } catch (error) {
-    console.error('❌ Errore recupero transazioni:', error);
+    logger.error('❌ Errore recupero transazioni:', error);
     throw error;
   }
 }

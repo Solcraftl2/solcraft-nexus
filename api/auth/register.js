@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 import { supabase, getUserByEmail, insertUser, handleSupabaseError } from '../config/supabaseClient.js';
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
     try {
       existingUser = await getUserByEmail(email);
     } catch (error) {
-      console.error('Database error during user check:', error);
+      logger.error('Database error during user check:', error);
       return res.status(500).json({
         success: false,
         message: 'Errore di connessione al database'
@@ -75,7 +76,7 @@ export default async function handler(req, res) {
     try {
       hashedPassword = await bcrypt.hash(password, 12);
     } catch (error) {
-      console.error('Password hashing error:', error);
+      logger.error('Password hashing error:', error);
       return res.status(500).json({
         success: false,
         message: 'Errore durante la creazione dell\'account'
@@ -101,7 +102,7 @@ export default async function handler(req, res) {
     try {
       newUser = await insertUser(userData);
     } catch (error) {
-      console.error('Database error during user creation:', error);
+      logger.error('Database error during user creation:', error);
       
       // Gestione errori specifici
       if (error.message.includes('duplicate key')) {
@@ -144,7 +145,7 @@ export default async function handler(req, res) {
           created_at: new Date().toISOString()
         });
     } catch (error) {
-      console.error('Error creating initial portfolio:', error);
+      logger.error('Error creating initial portfolio:', error);
       // Non bloccare la registrazione per questo errore
     }
 
@@ -161,7 +162,7 @@ export default async function handler(req, res) {
           created_at: new Date().toISOString()
         });
     } catch (error) {
-      console.error('Error logging registration activity:', error);
+      logger.error('Error logging registration activity:', error);
       // Non bloccare la registrazione per questo errore
     }
 
@@ -184,7 +185,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error:', error);
     
     return res.status(500).json({
       success: false,

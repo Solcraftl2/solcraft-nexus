@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Client, Wallet } from 'xrpl'
 
 export default async function handler(req, res) {
@@ -192,7 +193,7 @@ export default async function handler(req, res) {
     }
     
   } catch (error) {
-    console.error('DEX operation error:', error)
+    logger.error('DEX operation error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to execute DEX operation'

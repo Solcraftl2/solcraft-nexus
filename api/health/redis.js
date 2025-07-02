@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Redis } from '@upstash/redis';
 
 export default async function handler(req, res) {
@@ -72,7 +73,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Redis health check failed:', error);
+    logger.error('Redis health check failed:', error);
     
     return res.status(500).json({
       status: 'unhealthy',

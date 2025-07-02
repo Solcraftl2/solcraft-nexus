@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -142,7 +143,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore DEX GET:', error);
+        logger.error('Errore DEX GET:', error);
         
         // Fallback a dati mock per sviluppo
         const mockData = getMockDEXData(req.query.action);
@@ -183,7 +184,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore DEX POST:', error);
+        logger.error('Errore DEX POST:', error);
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -198,7 +199,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore generale DEX:', error);
+    logger.error('Errore generale DEX:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',
@@ -243,7 +244,7 @@ async function getDEXOrderBook(baseCurrency, quoteCurrency, depth) {
     };
 
   } catch (error) {
-    console.error('Errore order book XRPL:', error);
+    logger.error('Errore order book XRPL:', error);
     throw error;
   }
 }

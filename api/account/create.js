@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import { Wallet } from 'xrpl';
 import jwt from 'jsonwebtoken';
@@ -105,7 +106,7 @@ export default async function handler(req, res) {
           accountData.status = 'funded';
         }
       } catch (error) {
-        console.error('Funding error:', error);
+        logger.error('Funding error:', error);
         fundingResult = {
           success: false,
           error: error.message
@@ -188,7 +189,7 @@ export default async function handler(req, res) {
     return res.status(201).json(response);
 
   } catch (error) {
-    console.error('Account creation error:', error);
+    logger.error('Account creation error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server durante la creazione account',

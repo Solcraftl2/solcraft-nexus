@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React from 'react';
 import web3AuthService from './web3AuthService';
 import { supabase } from './supabaseService';
@@ -51,9 +52,9 @@ export const AuthProvider = ({ children }) => {
         await handleUserLogin(userInfo, 'social', 'auto');
       }
 
-      console.log("✅ Sistema di autenticazione inizializzato");
+      logger.info("✅ Sistema di autenticazione inizializzato");
     } catch (error) {
-      console.error("❌ Errore inizializzazione auth:", error);
+      logger.error("❌ Errore inizializzazione auth:", error);
       setError("Errore inizializzazione sistema di autenticazione");
     } finally {
       setLoading(false);
@@ -68,7 +69,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      console.log(`🔐 Tentativo login sociale: ${provider}`);
+      logger.info(`🔐 Tentativo login sociale: ${provider}`);
 
       const result = await web3AuthService.loginSocial(provider);
 
@@ -79,7 +80,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error(result.error || 'Login sociale fallito');
       }
     } catch (error) {
-      console.error(`❌ Errore login ${provider}:`, error);
+      logger.error(`❌ Errore login ${provider}:`, error);
       setError(`Errore durante il login con ${provider}: ${error.message}`);
       return { success: false, error: error.message };
     } finally {
@@ -95,7 +96,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      console.log(`🔗 Tentativo connessione wallet: ${walletType}`);
+      logger.info(`🔗 Tentativo connessione wallet: ${walletType}`);
 
       const result = await web3AuthService.connectWallet();
 
@@ -106,7 +107,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error(result.error || 'Connessione wallet fallita');
       }
     } catch (error) {
-      console.error(`❌ Errore connessione ${walletType}:`, error);
+      logger.error(`❌ Errore connessione ${walletType}:`, error);
       setError(`Errore durante la connessione ${walletType}: ${error.message}`);
       return { success: false, error: error.message };
     } finally {
@@ -119,7 +120,7 @@ export const AuthProvider = ({ children }) => {
    */
   const handleUserLogin = async (userData, authMethod, provider) => {
     try {
-      console.log("👤 Gestione login utente:", userData);
+      logger.info("👤 Gestione login utente:", userData);
 
       // Crea o aggiorna utente in Supabase
       const { data: existingUser, error: fetchError } = await supabase
@@ -150,7 +151,7 @@ export const AuthProvider = ({ children }) => {
 
         if (updateError) throw updateError;
         finalUser = updatedUser;
-        console.log("✅ Utente esistente aggiornato");
+        logger.info("✅ Utente esistente aggiornato");
       } else {
         // Crea nuovo utente
         const newUserData = {
@@ -175,14 +176,14 @@ export const AuthProvider = ({ children }) => {
 
         if (createError) throw createError;
         finalUser = newUser;
-        console.log("✅ Nuovo utente creato");
+        logger.info("✅ Nuovo utente creato");
       }
 
       setUser(finalUser);
-      console.log("✅ Login completato con successo");
+      logger.info("✅ Login completato con successo");
       
     } catch (error) {
-      console.error("❌ Errore gestione login:", error);
+      logger.error("❌ Errore gestione login:", error);
       // Anche se Supabase fallisce, mantieni l'utente locale
       setUser({
         ...userData,
@@ -200,7 +201,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      console.log("🚪 Logout in corso...");
+      logger.info("🚪 Logout in corso...");
 
       // Logout da Web3Auth
       await web3AuthService.logout();
@@ -208,10 +209,10 @@ export const AuthProvider = ({ children }) => {
       // Reset stato locale
       setUser(null);
 
-      console.log("✅ Logout completato");
+      logger.info("✅ Logout completato");
       return { success: true };
     } catch (error) {
-      console.error("❌ Errore logout:", error);
+      logger.error("❌ Errore logout:", error);
       setError(`Errore durante il logout: ${error.message}`);
       return { success: false, error: error.message };
     } finally {
@@ -226,7 +227,7 @@ export const AuthProvider = ({ children }) => {
     try {
       return await web3AuthService.getAccountInfo(address);
     } catch (error) {
-      console.error("❌ Errore getAccountInfo:", error);
+      logger.error("❌ Errore getAccountInfo:", error);
       throw error;
     }
   };
@@ -238,7 +239,7 @@ export const AuthProvider = ({ children }) => {
     try {
       return await web3AuthService.signTransaction(transaction);
     } catch (error) {
-      console.error("❌ Errore signTransaction:", error);
+      logger.error("❌ Errore signTransaction:", error);
       throw error;
     }
   };
@@ -250,7 +251,7 @@ export const AuthProvider = ({ children }) => {
     try {
       return await web3AuthService.submitTransaction(transaction);
     } catch (error) {
-      console.error("❌ Errore submitTransaction:", error);
+      logger.error("❌ Errore submitTransaction:", error);
       throw error;
     }
   };

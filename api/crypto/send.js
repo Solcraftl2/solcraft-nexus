@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -139,7 +140,7 @@ export default async function handler(req, res) {
       // Simulate transaction processing
       setTimeout(() => {
         // In reality, you would update the transaction status in your database
-        console.log(`Transaction ${transactionId} confirmed`)
+        logger.info(`Transaction ${transactionId} confirmed`);
       }, 5000)
 
       return res.status(200).json({
@@ -154,7 +155,7 @@ export default async function handler(req, res) {
       })
 
     } catch (error) {
-      console.error('Send crypto error:', error)
+      logger.error('Send crypto error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server durante l\'invio'

@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Client } from 'xrpl'
 
 export default async function handler(req, res) {
@@ -126,7 +127,7 @@ export default async function handler(req, res) {
           }
         }
       } catch (depthError) {
-        console.log('Could not fetch market depth:', depthError.message)
+        logger.info('Could not fetch market depth:', depthError.message);
       }
     }
     
@@ -165,7 +166,7 @@ export default async function handler(req, res) {
     })
     
   } catch (error) {
-    console.error('Pathfinding error:', error)
+    logger.error('Pathfinding error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to find payment paths'

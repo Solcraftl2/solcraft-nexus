@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -141,7 +142,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Liquidity GET:', error);
+        logger.error('Errore Liquidity GET:', error);
         
         // Fallback a dati mock per sviluppo
         const mockData = getMockLiquidityData(req.query.action);
@@ -185,7 +186,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Liquidity POST:', error);
+        logger.error('Errore Liquidity POST:', error);
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -200,7 +201,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore generale Liquidity:', error);
+    logger.error('Errore generale Liquidity:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

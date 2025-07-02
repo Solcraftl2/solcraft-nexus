@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 // XRPL Service - Gestione transazioni e operazioni blockchain XRPL
 import { Client, Wallet, xrpToDrops, dropsToXrp } from 'xrpl';
 
@@ -26,12 +27,12 @@ class XRPLService {
       if (!this.isConnected) {
         await this.client.connect();
         this.isConnected = true;
-        console.log('✅ Connesso al network XRPL');
+        logger.info('✅ Connesso al network XRPL');
       }
       
       return { success: true };
     } catch (error) {
-      console.error('❌ Errore connessione XRPL:', error);
+      logger.error('❌ Errore connessione XRPL:', error);
       return { 
         success: false, 
         error: 'Impossibile connettersi al network XRPL' 
@@ -47,10 +48,10 @@ class XRPLService {
       if (this.client && this.isConnected) {
         await this.client.disconnect();
         this.isConnected = false;
-        console.log('✅ Disconnesso dal network XRPL');
+        logger.info('✅ Disconnesso dal network XRPL');
       }
     } catch (error) {
-      console.error('❌ Errore disconnessione XRPL:', error);
+      logger.error('❌ Errore disconnessione XRPL:', error);
     }
   }
 
@@ -81,7 +82,7 @@ class XRPLService {
         }
       };
     } catch (error) {
-      console.error('❌ Errore recupero info account:', error);
+      logger.error('❌ Errore recupero info account:', error);
       return { 
         success: false, 
         error: 'Account non trovato o errore di rete' 
@@ -118,7 +119,7 @@ class XRPLService {
         data: balances
       };
     } catch (error) {
-      console.error('❌ Errore recupero bilanci token:', error);
+      logger.error('❌ Errore recupero bilanci token:', error);
       return { 
         success: false, 
         error: 'Impossibile recuperare bilanci token' 
@@ -188,7 +189,7 @@ class XRPLService {
       }
 
     } catch (error) {
-      console.error('❌ Errore invio pagamento:', error);
+      logger.error('❌ Errore invio pagamento:', error);
       return { 
         success: false, 
         error: error.message || 'Errore durante l\'invio del pagamento' 
@@ -260,7 +261,7 @@ class XRPLService {
       }
 
     } catch (error) {
-      console.error('❌ Errore creazione token:', error);
+      logger.error('❌ Errore creazione token:', error);
       return { 
         success: false, 
         error: error.message || 'Errore durante la creazione del token' 
@@ -310,7 +311,7 @@ class XRPLService {
       }
 
     } catch (error) {
-      console.error('❌ Errore creazione Trust Line:', error);
+      logger.error('❌ Errore creazione Trust Line:', error);
       return { 
         success: false, 
         error: error.message || 'Errore durante la creazione della Trust Line' 
@@ -355,7 +356,7 @@ class XRPLService {
       };
 
     } catch (error) {
-      console.error('❌ Errore recupero cronologia:', error);
+      logger.error('❌ Errore recupero cronologia:', error);
       return { 
         success: false, 
         error: 'Impossibile recuperare la cronologia delle transazioni' 
@@ -421,7 +422,7 @@ class XRPLService {
       };
 
     } catch (error) {
-      console.error('❌ Errore recupero commissioni:', error);
+      logger.error('❌ Errore recupero commissioni:', error);
       return { 
         success: false, 
         error: 'Impossibile recuperare le commissioni di rete' 
@@ -473,7 +474,7 @@ class XRPLService {
       };
 
     } catch (error) {
-      console.error('❌ Errore monitoraggio transazione:', error);
+      logger.error('❌ Errore monitoraggio transazione:', error);
       return { 
         success: false, 
         error: 'Errore durante il monitoraggio della transazione' 

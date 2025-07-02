@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -152,7 +153,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Report generation error:', error);
+        logger.error('Report generation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la generazione del report',
@@ -184,7 +185,7 @@ async function originalHandler(req, res) {
           return res.status(200).send(reportFile.data);
 
         } catch (error) {
-          console.error('Report download error:', error);
+          logger.error('Report download error:', error);
           return res.status(500).json({
             success: false,
             error: 'Errore durante il download del report'
@@ -207,7 +208,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Reports list error:', error);
+        logger.error('Reports list error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante il recupero dei report'
@@ -221,7 +222,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Reports API error:', error);
+    logger.error('Reports API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',
@@ -670,7 +671,7 @@ function getReportTitle(reportType) {
 
 async function saveReportMetadata(report) {
   // In produzione, salvare in database
-  console.log('Report metadata saved:', report.id);
+  logger.info('Report metadata saved:', report.id);
 }
 
 async function downloadReport(reportId, userId) {

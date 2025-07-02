@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Client, Wallet } from 'xrpl'
 
 export default async function handler(req, res) {
@@ -106,7 +107,7 @@ export default async function handler(req, res) {
     })
     
   } catch (error) {
-    console.error('MPT creation error:', error)
+    logger.error('MPT creation error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create Multi-Purpose Token'

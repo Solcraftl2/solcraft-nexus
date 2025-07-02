@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
 import { Payment, convertStringToHex, xrpToDrops, dropsToXrp } from 'xrpl';
 import jwt from 'jsonwebtoken';
@@ -170,7 +171,7 @@ export default async function handler(req, res) {
             paymentTx.Paths = paths;
           }
         } catch (pathError) {
-          console.warn('Pathfinding failed, proceeding without paths:', pathError.message);
+          logger.warn('Pathfinding failed, proceeding without paths:', pathError.message);
         }
       }
 
@@ -260,7 +261,7 @@ export default async function handler(req, res) {
       return res.status(200).json(response);
 
     } catch (error) {
-      console.error('Payment sending error:', error);
+      logger.error('Payment sending error:', error);
       
       // Gestione errori specifici XRPL
       if (error.message.includes('tecUNFUNDED_PAYMENT')) {
@@ -296,7 +297,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('Payment send API error:', error);
+    logger.error('Payment send API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server durante l\'invio pagamento',

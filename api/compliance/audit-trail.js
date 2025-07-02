@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Client } from 'xrpl'
 
 export default async function handler(req, res) {
@@ -273,7 +274,7 @@ export default async function handler(req, res) {
     })
     
   } catch (error) {
-    console.error('Compliance analysis error:', error)
+    logger.error('Compliance analysis error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to generate compliance report'

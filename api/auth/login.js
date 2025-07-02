@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 import { supabase, getUserByEmail, handleSupabaseError } from '../config/supabaseClient.js';
@@ -32,7 +33,7 @@ export default async function handler(req, res) {
     try {
       user = await getUserByEmail(email);
     } catch (error) {
-      console.error('Database error during login:', error);
+      logger.error('Database error during login:', error);
       return res.status(500).json({
         success: false,
         message: 'Errore di connessione al database'
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
     try {
       isPasswordValid = await bcrypt.compare(password, user.password_hash);
     } catch (error) {
-      console.error('Password verification error:', error);
+      logger.error('Password verification error:', error);
       return res.status(500).json({
         success: false,
         message: 'Errore durante la verifica delle credenziali'
@@ -83,7 +84,7 @@ export default async function handler(req, res) {
         })
         .eq('id', user.id);
     } catch (error) {
-      console.error('Error updating last login:', error);
+      logger.error('Error updating last login:', error);
       // Non bloccare il login per questo errore
     }
 
@@ -118,7 +119,7 @@ export default async function handler(req, res) {
           created_at: new Date().toISOString()
         });
     } catch (error) {
-      console.error('Error logging user activity:', error);
+      logger.error('Error logging user activity:', error);
       // Non bloccare il login per questo errore
     }
 
@@ -140,7 +141,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     
     return res.status(500).json({
       success: false,

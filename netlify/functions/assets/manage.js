@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -61,7 +62,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -129,7 +130,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset fetch error:', error);
+        logger.error('Asset fetch error:', error);
         
         // Fallback con dati mock
         const mockAssets = generateMockAssets();
@@ -191,7 +192,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset registration error:', error);
+        logger.error('Asset registration error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la registrazione asset',
@@ -237,7 +238,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset update error:', error);
+        logger.error('Asset update error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante l\'aggiornamento asset',
@@ -279,7 +280,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset deletion error:', error);
+        logger.error('Asset deletion error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante l\'eliminazione asset',
@@ -294,7 +295,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Asset manage API error:', error);
+    logger.error('Asset manage API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

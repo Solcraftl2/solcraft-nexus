@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Arbitrage GET:', error);
+        logger.error('Errore Arbitrage GET:', error);
         
         // Fallback a dati mock per sviluppo
         const mockData = getMockArbitrageData(req.query.action, req.query.asset);
@@ -108,7 +109,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Arbitrage POST:', error);
+        logger.error('Errore Arbitrage POST:', error);
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -123,7 +124,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore generale Arbitrage:', error);
+    logger.error('Errore generale Arbitrage:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React, { useState, useEffect } from 'react';
 import { xrplService, XRPLUtils } from '../services/xrplService';
 import { CrossmarkService } from '../services/walletService';
@@ -47,7 +48,7 @@ const TransactionModal = ({ isOpen, onClose, user, transactionType = 'payment' }
       }
       
     } catch (error) {
-      console.error('Errore caricamento dati account:', error);
+      logger.error('Errore caricamento dati account:', error);
       setError('Errore nel caricamento dei dati dell\'account');
     } finally {
       setLoading(false);
@@ -134,7 +135,7 @@ const TransactionModal = ({ isOpen, onClose, user, transactionType = 'payment' }
       }
       
     } catch (error) {
-      console.error('Errore esecuzione transazione:', error);
+      logger.error('Errore esecuzione transazione:', error);
       setError(error.message || 'Errore durante l\'esecuzione della transazione');
     } finally {
       setLoading(false);

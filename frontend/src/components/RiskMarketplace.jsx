@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React, { useState, useEffect } from 'react';
 import { 
   riskCategories, 
@@ -49,7 +50,7 @@ const RiskMarketplace = ({ user, onNavigate }) => {
         });
         
       } catch (error) {
-        console.error('Failed to initialize oracle service:', error);
+        logger.error('Failed to initialize oracle service:', error);
       }
     };
 
@@ -73,7 +74,7 @@ const RiskMarketplace = ({ user, onNavigate }) => {
   // Start monitoring a specific token
   const startTokenMonitoring = (token) => {
     const handleTriggerEvent = (triggerResult) => {
-      console.log(`🚨 Trigger event for ${token.name}:`, triggerResult);
+      logger.info(`🚨 Trigger event for ${token.name}:`, triggerResult);
       
       const event = {
         id: Date.now(),

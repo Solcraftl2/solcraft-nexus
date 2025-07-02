@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 // Oracle Service for Risk Marketplace - Trigger Monitoring and Data Feeds
 
 import { oracleDataSources } from '../data/insuranceData';
@@ -12,7 +13,7 @@ class OracleService {
 
   // Initialize oracle connections
   async initialize() {
-    console.log('🔮 Oracle Service initializing...');
+    logger.info('🔮 Oracle Service initializing...');
     
     if (this.isSimulationMode) {
       this.startSimulationMode();
@@ -20,12 +21,12 @@ class OracleService {
       await this.connectToRealOracles();
     }
     
-    console.log('✅ Oracle Service initialized');
+    logger.info('✅ Oracle Service initialized');
   }
 
   // Start simulation mode for development/demo
   startSimulationMode() {
-    console.log('🎭 Starting Oracle Simulation Mode');
+    logger.info('🎭 Starting Oracle Simulation Mode');
     
     // Simulate real-time data updates
     setInterval(() => {
@@ -40,14 +41,14 @@ class OracleService {
 
   // Connect to real oracle networks (production)
   async connectToRealOracles() {
-    console.log('🌐 Connecting to real oracle networks...');
+    logger.info('🌐 Connecting to real oracle networks...');
     
     for (const oracle of oracleDataSources) {
       try {
         await this.connectToOracle(oracle);
-        console.log(`✅ Connected to ${oracle.name}`);
+        logger.info(`✅ Connected to ${oracle.name}`);
       } catch (error) {
-        console.error(`❌ Failed to connect to ${oracle.name}:`, error);
+        logger.error(`❌ Failed to connect to ${oracle.name}:`, error);
       }
     }
   }
@@ -133,7 +134,7 @@ class OracleService {
 
   // Subscribe to trigger monitoring for a specific token
   subscribeTrigger(tokenId, triggerConfig, callback) {
-    console.log(`📡 Subscribing to trigger monitoring for token: ${tokenId}`);
+    logger.info(`📡 Subscribing to trigger monitoring for token: ${tokenId}`);
     
     const subscription = {
       tokenId,
@@ -155,7 +156,7 @@ class OracleService {
 
   // Unsubscribe from trigger monitoring
   unsubscribeTrigger(tokenId) {
-    console.log(`📡 Unsubscribing from trigger monitoring for token: ${tokenId}`);
+    logger.info(`📡 Unsubscribing from trigger monitoring for token: ${tokenId}`);
     
     const subscription = this.activeSubscriptions.get(tokenId);
     if (subscription) {
@@ -181,7 +182,7 @@ class OracleService {
       subscription.lastCheck = new Date();
       
     } catch (error) {
-      console.error(`❌ Error monitoring trigger for ${tokenId}:`, error);
+      logger.error(`❌ Error monitoring trigger for ${tokenId}:`, error);
     }
   }
 
@@ -301,7 +302,7 @@ class OracleService {
         result.isTriggered = this.evaluateRegulatoryTrigger(triggerConfig, oracleData);
         break;
       default:
-        console.warn(`Unknown trigger type: ${triggerConfig.type}`);
+        logger.warn(`Unknown trigger type: ${triggerConfig.type}`);
     }
 
     return result;
@@ -357,7 +358,7 @@ class OracleService {
 
   // Handle trigger event
   handleTriggerEvent(tokenId, triggerResult) {
-    console.log(`🚨 TRIGGER EVENT for token ${tokenId}:`, triggerResult);
+    logger.info(`🚨 TRIGGER EVENT for token ${tokenId}:`, triggerResult);
     
     // Notify subscribers
     const callback = this.triggerCallbacks.get(tokenId);
@@ -387,12 +388,12 @@ class OracleService {
     };
 
     // In production, this would be stored in database
-    console.log('📝 Trigger Event Log:', logEntry);
+    logger.info('📝 Trigger Event Log:', logEntry);
   }
 
   // Simulate data updates for demo
   simulateDataUpdates() {
-    console.log('🔄 Simulating oracle data updates...');
+    logger.info('🔄 Simulating oracle data updates...');
     
     // Clear old cache entries
     this.dataCache.clear();
@@ -407,7 +408,7 @@ class OracleService {
 
   // Simulate trigger events for demo
   simulateTriggerEvents() {
-    console.log('🎲 Simulating potential trigger events...');
+    logger.info('🎲 Simulating potential trigger events...');
     
     for (const [tokenId, subscription] of this.activeSubscriptions) {
       if (subscription.isActive && Math.random() < 0.1) { // 10% chance

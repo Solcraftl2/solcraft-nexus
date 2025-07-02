@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -57,7 +58,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset fetch error:', error);
+        logger.error('Asset fetch error:', error);
         
         // Fallback con dati mock
         const mockAssets = generateMockAssets();
@@ -119,7 +120,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset registration error:', error);
+        logger.error('Asset registration error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la registrazione asset',
@@ -165,7 +166,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset update error:', error);
+        logger.error('Asset update error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante l\'aggiornamento asset',
@@ -207,7 +208,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Asset deletion error:', error);
+        logger.error('Asset deletion error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante l\'eliminazione asset',
@@ -222,7 +223,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Asset manage API error:', error);
+    logger.error('Asset manage API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

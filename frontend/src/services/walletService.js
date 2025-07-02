@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React from 'react';
 
 /**
@@ -39,10 +40,10 @@ class WalletService {
         available.push('metamask');
       }
 
-      console.log('Available wallets:', available);
+      logger.info('Available wallets:', available);
       return available;
     } catch (error) {
-      console.error('Error detecting wallets:', error);
+      logger.error('Error detecting wallets:', error);
       return [];
     }
   }
@@ -54,7 +55,7 @@ class WalletService {
    */
   async connectWallet(walletType) {
     try {
-      console.log(`Connecting to ${walletType} wallet...`);
+      logger.info(`Connecting to ${walletType} wallet...`);
 
       switch (walletType) {
         case 'crossmark':
@@ -69,7 +70,7 @@ class WalletService {
           throw new Error(`Wallet type ${walletType} not supported`);
       }
     } catch (error) {
-      console.error(`Error connecting to ${walletType}:`, error);
+      logger.error(`Error connecting to ${walletType}:`, error);
       return {
         success: false,
         error: error.message || 'Errore durante la connessione al wallet'
@@ -193,7 +194,7 @@ class WalletService {
       };
 
       // Simulazione risposta XUMM (in produzione usare XUMM API)
-      console.log('XUMM deep link payload:', payload);
+      logger.info('XUMM deep link payload:', payload);
       
       // Per ora ritorniamo un mock per testing
       return {
@@ -314,7 +315,7 @@ class WalletService {
       
       return { success: true };
     } catch (error) {
-      console.error('Error disconnecting wallet:', error);
+      logger.error('Error disconnecting wallet:', error);
       return {
         success: false,
         error: error.message || 'Errore durante la disconnessione'
@@ -364,7 +365,7 @@ class WalletService {
       try {
         callback(event, data);
       } catch (error) {
-        console.error('Error in wallet listener:', error);
+        logger.error('Error in wallet listener:', error);
       }
     });
   }
@@ -390,7 +391,7 @@ class WalletService {
           throw new Error(`Firma non supportata per ${this.connectedWallet}`);
       }
     } catch (error) {
-      console.error('Error signing message:', error);
+      logger.error('Error signing message:', error);
       throw error;
     }
   }

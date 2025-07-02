@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -69,7 +70,7 @@ class RedisService {
         // Test connessione Upstash
         await this.upstashClient.ping();
         this.isConnected = true;
-        console.log('✅ Upstash Redis connected successfully');
+        logger.info('✅ Upstash Redis connected successfully');
         return;
       }
 
@@ -92,22 +93,22 @@ class RedisService {
         });
 
         this.client.on('error', (err) => {
-          console.error('Redis Client Error:', err);
+          logger.error('Redis Client Error:', err);
           this.isConnected = false;
         });
 
         this.client.on('connect', () => {
-          console.log('✅ Redis connected successfully');
+          logger.info('✅ Redis connected successfully');
           this.isConnected = true;
         });
 
         await this.client.connect();
       } else {
-        console.warn('⚠️ No Redis configuration found, using in-memory cache');
+        logger.warn('⚠️ No Redis configuration found, using in-memory cache');
         this.isConnected = false;
       }
     } catch (error) {
-      console.error('❌ Redis initialization failed:', error);
+      logger.error('❌ Redis initialization failed:', error);
       this.isConnected = false;
     }
   }
@@ -132,7 +133,7 @@ class RedisService {
       }
       return true;
     } catch (error) {
-      console.error('Redis SET error:', error);
+      logger.error('Redis SET error:', error);
       return false;
     }
   }
@@ -149,7 +150,7 @@ class RedisService {
       
       return value ? JSON.parse(value) : null;
     } catch (error) {
-      console.error('Redis GET error:', error);
+      logger.error('Redis GET error:', error);
       return null;
     }
   }
@@ -163,7 +164,7 @@ class RedisService {
       }
       return true;
     } catch (error) {
-      console.error('Redis DEL error:', error);
+      logger.error('Redis DEL error:', error);
       return false;
     }
   }
@@ -177,7 +178,7 @@ class RedisService {
       }
       return false;
     } catch (error) {
-      console.error('Redis EXISTS error:', error);
+      logger.error('Redis EXISTS error:', error);
       return false;
     }
   }
@@ -253,7 +254,7 @@ class RedisService {
       }
       return true; // Allow if Redis not available
     } catch (error) {
-      console.error('Rate limit check error:', error);
+      logger.error('Rate limit check error:', error);
       return true; // Allow on error
     }
   }
@@ -281,9 +282,9 @@ class RedisService {
         await this.client.disconnect();
       }
       this.isConnected = false;
-      console.log('Redis disconnected');
+      logger.info('Redis disconnected');
     } catch (error) {
-      console.error('Redis disconnect error:', error);
+      logger.error('Redis disconnect error:', error);
     }
   }
 }

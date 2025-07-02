@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -65,7 +66,7 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Utility functions per operazioni comuni
 export const handleSupabaseError = (error, operation) => {
-  console.error(`Supabase error in ${operation}:`, error);
+  logger.error(`Supabase error in ${operation}:`, error);
   return {
     success: false,
     error: error.message || 'Database operation failed',

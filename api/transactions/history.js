@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 import { dropsToXrp } from 'xrpl';
@@ -122,7 +123,7 @@ export default async function handler(req, res) {
       return res.status(200).json(response);
 
     } catch (error) {
-      console.error('Transaction history fetch error:', error);
+      logger.error('Transaction history fetch error:', error);
       
       // Fallback con dati mock
       const mockHistory = generateMockTransactionHistory(walletAddress, parseInt(limit));
@@ -143,7 +144,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('Transaction history API error:', error);
+    logger.error('Transaction history API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',
@@ -169,7 +170,7 @@ async function getTransactionHistory({ client, address, limit, offset, filters }
       total: accountTxResult.result.transactions?.length || 0
     };
   } catch (error) {
-    console.error('XRPL transaction fetch error:', error);
+    logger.error('XRPL transaction fetch error:', error);
     throw error;
   }
 }

@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -58,7 +59,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('MPT fetch error:', error);
+        logger.error('MPT fetch error:', error);
         
         // Fallback con dati mock
         const mockTokens = generateMockMPTTokens();
@@ -107,7 +108,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('MPT update error:', error);
+        logger.error('MPT update error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante l\'aggiornamento del token',
@@ -161,7 +162,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('MPT operation error:', error);
+        logger.error('MPT operation error:', error);
         return res.status(500).json({
           success: false,
           error: `Errore durante l'operazione ${operation}`,
@@ -205,7 +206,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('MPT deletion error:', error);
+        logger.error('MPT deletion error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante l\'eliminazione del token',
@@ -220,7 +221,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('MPT manage API error:', error);
+    logger.error('MPT manage API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

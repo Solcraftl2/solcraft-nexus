@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -62,7 +63,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -242,7 +243,7 @@ async function originalHandler(req, res) {
             paymentTx.Paths = paths;
           }
         } catch (pathError) {
-          console.warn('Pathfinding failed, proceeding without paths:', pathError.message);
+          logger.warn('Pathfinding failed, proceeding without paths:', pathError.message);
         }
       }
 
@@ -332,7 +333,7 @@ async function originalHandler(req, res) {
       return res.status(200).json(response);
 
     } catch (error) {
-      console.error('Payment sending error:', error);
+      logger.error('Payment sending error:', error);
       
       // Gestione errori specifici XRPL
       if (error.message.includes('tecUNFUNDED_PAYMENT')) {
@@ -368,7 +369,7 @@ async function originalHandler(req, res) {
     }
 
   } catch (error) {
-    console.error('Payment send API error:', error);
+    logger.error('Payment send API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server durante l\'invio pagamento',

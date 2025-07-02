@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -61,7 +62,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -227,7 +228,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore Web3Auth:', error);
+    logger.error('Errore Web3Auth:', error);
     
     return res.status(500).json({
       success: false,

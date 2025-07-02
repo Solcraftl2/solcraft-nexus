@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -154,7 +155,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Orders fetch error:', error);
+        logger.error('Orders fetch error:', error);
         
         // Fallback con dati mock
         const mockOrders = generateMockOrders(decoded.userId);
@@ -212,7 +213,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Order creation error:', error);
+        logger.error('Order creation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la creazione dell\'ordine',
@@ -255,7 +256,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Order update error:', error);
+        logger.error('Order update error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante l\'aggiornamento dell\'ordine',
@@ -288,7 +289,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Order cancellation error:', error);
+        logger.error('Order cancellation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la cancellazione dell\'ordine',
@@ -303,7 +304,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Trading API error:', error);
+    logger.error('Trading API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

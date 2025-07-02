@@ -1,3 +1,4 @@
+import { logger } from './logger.js';
 /**
  * Sistema di logging strutturato per SolCraft Nexus
  * Sostituisce console.log con logging controllato per ambiente
@@ -40,13 +41,13 @@ const logger = {
       name: error.name
     } : null);
     
-    console.error(JSON.stringify(logEntry));
+    logger.error(JSON.stringify(logEntry););
   },
 
   warn: (message, data = null) => {
     if (getCurrentLogLevel() >= LOG_LEVELS.WARN) {
       const logEntry = formatMessage('WARN', message, data);
-      console.warn(JSON.stringify(logEntry));
+      logger.warn(JSON.stringify(logEntry););
     }
   },
 
@@ -56,9 +57,9 @@ const logger = {
       
       // In produzione, usa console.log per info
       if (process.env.NODE_ENV === 'production') {
-        console.log(JSON.stringify(logEntry));
+        logger.info(JSON.stringify(logEntry););
       } else {
-        console.log(`[INFO] ${message}`, data || '');
+        logger.info(`[INFO] ${message}`, data || '');
       }
     }
   },
@@ -66,7 +67,7 @@ const logger = {
   debug: (message, data = null) => {
     if (getCurrentLogLevel() >= LOG_LEVELS.DEBUG && process.env.NODE_ENV !== 'production') {
       const logEntry = formatMessage('DEBUG', message, data);
-      console.log(`[DEBUG] ${message}`, data || '');
+      logger.info(`[DEBUG] ${message}`, data || '');
     }
   },
 
@@ -80,7 +81,7 @@ const logger = {
       userAgent: process.env.USER_AGENT || 'unknown'
     });
     
-    console.log(JSON.stringify(auditEntry));
+    logger.info(JSON.stringify(auditEntry););
   },
 
   // Metodo per performance monitoring
@@ -92,7 +93,7 @@ const logger = {
         details
       });
       
-      console.log(JSON.stringify(perfEntry));
+      logger.info(JSON.stringify(perfEntry););
     }
   }
 };

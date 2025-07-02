@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -123,7 +124,7 @@ export default async function handler(req, res) {
       })
 
     } catch (error) {
-      console.error('Receive crypto error:', error)
+      logger.error('Receive crypto error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server durante la generazione dell\'indirizzo'
@@ -169,7 +170,7 @@ export default async function handler(req, res) {
       })
 
     } catch (error) {
-      console.error('Get addresses error:', error)
+      logger.error('Get addresses error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server'

@@ -1,5 +1,5 @@
 
-const { parse } = require('querystring');
+import { parse } from 'querystring';
 
 // Helper per compatibilità Vercel -> Netlify
 function createReqRes(event) {
@@ -45,11 +45,11 @@ function createReqRes(event) {
   return { req, res };
 }
 
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { supabase, getUserByEmail, handleSupabaseError } from '../config/supabaseClient.js';
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   const { req, res } = createReqRes(event);
   
   try {

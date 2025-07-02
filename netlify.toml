@@ -11,6 +11,7 @@
   directory = "netlify/functions"
   external_node_modules = ["@upstash/redis", "xrpl", "ioredis", "redis", "@supabase/supabase-js", "bcryptjs", "jsonwebtoken", "crypto-js", "axios"]
   included_files = ["netlify/functions/**/*"]
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"

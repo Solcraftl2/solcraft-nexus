@@ -46,6 +46,10 @@ SUPABASE_ANON_KEY=your_supabase_key
 # XRPL Configuration
 XRPL_NETWORK=mainnet
 XRPL_SERVER=wss://xrplcluster.com
+# Sentry Monitoring
+SENTRY_DSN=your_sentry_dsn
+SENTRY_TRACES_SAMPLE_RATE=0.1
+SENTRY_ENVIRONMENT=development
 ```
 
 ## 🛠️ Development
@@ -146,8 +150,8 @@ solcraft-nexus/
 ## 📊 Monitoring & Analytics
 
 - **Health Endpoints:** Real-time system monitoring
-- **Error Tracking:** Comprehensive error handling
-- **Performance Metrics:** Response time tracking
+- **Error Tracking:** Integrated with Sentry for real-time alerts
+- **Performance Metrics:** Response time tracking via Sentry traces
 - **User Analytics:** Usage statistics
 
 ## 🤝 Contributing

@@ -1,3 +1,4 @@
+const Sentry = require('./../utils/sentry.js');
 
 const { parse } = require('querystring');
 

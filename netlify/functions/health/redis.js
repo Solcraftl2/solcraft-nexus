@@ -1,3 +1,4 @@
+const Sentry = require('./../utils/sentry.js');
 const { Redis } = require('@upstash/redis');
 
 exports.handler = async (event, context) => {

@@ -1,3 +1,4 @@
+const Sentry = require('./utils/sentry.js');
 exports.handler = async (event, context) => {
   // Gestione CORS
   const headers = {

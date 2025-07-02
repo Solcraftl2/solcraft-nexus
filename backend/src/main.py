@@ -7,6 +7,8 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from src.config import Config
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 
 # Import models
 from src.models.user import db, User
@@ -26,6 +28,13 @@ from src.services.oauth_service import oauth_service
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        environment=os.getenv("SENTRY_ENVIRONMENT", "development"),
+    )
     
     # Initialize extensions
     db.init_app(app)

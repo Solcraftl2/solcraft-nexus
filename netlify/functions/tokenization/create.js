@@ -1,225 +1,300 @@
-
-const { parse } = require('querystring');
-
-// Helper per compatibilità Vercel -> Netlify
-function createReqRes(event) {
-  const req = {
-    method: event.httpMethod,
-    headers: event.headers,
-    body: event.body ? (event.headers['content-type']?.includes('application/json') ? JSON.parse(event.body) : parse(event.body)) : {},
-    query: event.queryStringParameters || {},
-    ip: event.headers['x-forwarded-for'] || event.headers['client-ip'] || '127.0.0.1'
-  };
-  
-  const res = {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-    },
-    body: '',
-    
-    status: function(code) {
-      this.statusCode = code;
-      return this;
-    },
-    
-    json: function(data) {
-      this.body = JSON.stringify(data);
-      return this;
-    },
-    
-    end: function(data) {
-      if (data) this.body = data;
-      return this;
-    },
-    
-    setHeader: function(name, value) {
-      this.headers[name] = value;
-      return this;
-    }
-  };
-  
-  return { req, res };
-}
-
+import { logger } from '../utils/logger.js';
+import { withCors } from '../utils/cors.js';
 import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
-import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
+import { supabase, insertAsset, insertToken, insertTransaction } from '../config/supabaseClient.js';
 import redisService from '../config/redis.js';
 import { rateLimitMiddleware, cacheMiddleware, initializeRedis } from '../middleware/redis.js';
 import jwt from 'jsonwebtoken';
 
-exports.handler = async (event, context) => {
-  const { req, res } = createReqRes(event);
-  
+async function createTokenization(event, context) {
   try {
-    await originalHandler(req, res);
-    
-    return {
-      statusCode: res.statusCode,
-      headers: res.headers,
-      body: res.body
-    };
-  } catch (error) {
-    console.error('Function error:', error);
-    return {
-      statusCode: 500,
-      headers: res.headers,
-      body: JSON.stringify({ 
-        success: false, 
-        error: 'Internal server error',
-        message: error.message 
-      })
-    };
-  }
-};
+    // Validazione metodo HTTP
+    if (event.httpMethod !== 'POST') {
+      logger.warn('Invalid HTTP method for tokenization', { 
+        method: event.httpMethod,
+        path: event.path 
+      });
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'Method not allowed. Use POST for tokenization.' 
+        })
+      };
+    }
 
-async function originalHandler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    // Parse del body
+    let requestData;
+    try {
+      requestData = JSON.parse(event.body || '{}');
+    } catch (error) {
+      logger.error('Invalid JSON in request body', { error: error.message });
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          error: 'Invalid JSON format'
+        })
+      };
+    }
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
-  }
+    const { assetData, userWallet, tokenSymbol, totalSupply, issuerSeed } = requestData;
+    const clientIp = event.headers['x-forwarded-for'] || event.headers['client-ip'] || '127.0.0.1';
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed. Use POST for tokenization.' 
-    })
-  }
+    logger.info('Tokenization request received', { 
+      tokenSymbol,
+      totalSupply,
+      userWalletAddress: userWallet?.address,
+      clientIp,
+      assetType: assetData?.type
+    });
 
-  try {
     // Inizializza Redis
-    await initializeRedis(req, res, () => {});
+    try {
+      await initializeRedis();
+    } catch (error) {
+      logger.error('Redis initialization failed', { error: error.message });
+      // Continua senza Redis se non disponibile
+    }
 
     // Rate limiting per operazioni di tokenizzazione (max 10 per ora)
-    const rateLimitKey = `tokenization:${req.ip}`;
-    const rateLimitAllowed = await redisService.checkRateLimit(rateLimitKey, 10, 3600);
-    
-    if (!rateLimitAllowed) {
-      return res.status(429).json({
-        success: false,
-        error: 'Rate limit exceeded. Maximum 10 tokenizations per hour.',
-        retry_after: 3600
+    const rateLimitKey = `tokenization:${clientIp}`;
+    try {
+      const rateLimitAllowed = await redisService.checkRateLimit(rateLimitKey, 10, 3600);
+      
+      if (!rateLimitAllowed) {
+        logger.warn('Rate limit exceeded for tokenization', { 
+          clientIp,
+          rateLimitKey 
+        });
+        return {
+          statusCode: 429,
+          body: JSON.stringify({
+            success: false,
+            error: 'Rate limit exceeded. Maximum 10 tokenizations per hour.',
+            retry_after: 3600
+          })
+        };
+      }
+    } catch (error) {
+      logger.warn('Rate limiting check failed, proceeding without limit', { 
+        error: error.message 
       });
     }
 
     // Verifica autenticazione
-    const authHeader = req.headers.authorization;
+    const authHeader = event.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Token di autenticazione richiesto'
-      });
+      logger.warn('Missing or invalid authorization header');
+      return {
+        statusCode: 401,
+        body: JSON.stringify({
+          success: false,
+          error: 'Token di autenticazione richiesto'
+        })
+      };
     }
 
     const token = authHeader.substring(7);
     let decodedToken;
     
     try {
-      decodedToken = jwt.verify(token, process.env.JWT_SECRET || 'solcraft-nexus-xrpl-secure-2025');
-    } catch (jwtError) {
-      return res.status(401).json({
-        success: false,
-        error: 'Token di autenticazione non valido'
+      const JWT_SECRET = process.env.JWT_SECRET;
+      if (!JWT_SECRET) {
+        logger.error('JWT_SECRET not configured');
+        return {
+          statusCode: 500,
+          body: JSON.stringify({
+            success: false,
+            error: 'Errore di configurazione del server'
+          })
+        };
+      }
+      
+      decodedToken = jwt.verify(token, JWT_SECRET);
+      logger.debug('JWT token verified successfully', { 
+        userId: decodedToken.userId,
+        email: decodedToken.email 
       });
+    } catch (jwtError) {
+      logger.warn('Invalid JWT token', { error: jwtError.message });
+      return {
+        statusCode: 401,
+        body: JSON.stringify({
+          success: false,
+          error: 'Token di autenticazione non valido'
+        })
+      };
     }
-
-    const { assetData, userWallet, tokenSymbol, totalSupply, issuerSeed } = req.body;
 
     // Validazione input
     if (!assetData || !userWallet || !tokenSymbol || !totalSupply) {
-      return res.status(400).json({
-        success: false,
-        error: 'Dati richiesti mancanti: assetData, userWallet, tokenSymbol, totalSupply'
+      logger.warn('Missing required fields for tokenization', {
+        hasAssetData: !!assetData,
+        hasUserWallet: !!userWallet,
+        hasTokenSymbol: !!tokenSymbol,
+        hasTotalSupply: !!totalSupply
       });
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          error: 'Dati richiesti mancanti: assetData, userWallet, tokenSymbol, totalSupply'
+        })
+      };
     }
 
     // Validazione tokenSymbol
     if (tokenSymbol.length < 3 || tokenSymbol.length > 20) {
-      return res.status(400).json({
-        success: false,
-        error: 'Token symbol deve essere tra 3 e 20 caratteri'
+      logger.warn('Invalid token symbol length', { 
+        tokenSymbol, 
+        length: tokenSymbol.length 
       });
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          error: 'Token symbol deve essere tra 3 e 20 caratteri'
+        })
+      };
     }
 
     // Validazione totalSupply
     if (totalSupply <= 0 || totalSupply > 100000000000) {
-      return res.status(400).json({
-        success: false,
-        error: 'Total supply deve essere tra 1 e 100,000,000,000'
-      });
+      logger.warn('Invalid total supply', { totalSupply });
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          error: 'Total supply deve essere tra 1 e 100,000,000,000'
+        })
+      };
     }
 
     // Cache check per tokenSymbol duplicato
     const existingTokenKey = `token_exists:${tokenSymbol}`;
-    const existingToken = await redisService.get(existingTokenKey);
-    
-    if (existingToken) {
-      return res.status(409).json({
-        success: false,
-        error: 'Token symbol già esistente',
-        existing_token: existingToken
+    try {
+      const existingToken = await redisService.get(existingTokenKey);
+      
+      if (existingToken) {
+        logger.warn('Token symbol already exists (cached)', { tokenSymbol });
+        return {
+          statusCode: 409,
+          body: JSON.stringify({
+            success: false,
+            error: 'Token symbol già esistente',
+            existing_token: existingToken
+          })
+        };
+      }
+    } catch (error) {
+      logger.warn('Cache check failed, proceeding with database check', { 
+        error: error.message 
       });
     }
 
     // Controllo duplicati nel database
-    const { data: existingTokens } = await supabase
-      .from('tokens')
-      .select('symbol')
-      .eq('symbol', tokenSymbol)
-      .limit(1);
+    try {
+      const { data: existingTokens } = await supabase
+        .from('tokens')
+        .select('symbol')
+        .eq('symbol', tokenSymbol)
+        .limit(1);
 
-    if (existingTokens && existingTokens.length > 0) {
-      // Cache il risultato per evitare query future
-      await redisService.set(existingTokenKey, { symbol: tokenSymbol, exists: true }, 3600);
-      
-      return res.status(409).json({
-        success: false,
-        error: 'Token symbol già esistente nel database'
+      if (existingTokens && existingTokens.length > 0) {
+        logger.warn('Token symbol already exists in database', { tokenSymbol });
+        
+        // Cache il risultato per evitare query future
+        try {
+          await redisService.set(existingTokenKey, { symbol: tokenSymbol, exists: true }, 3600);
+        } catch (cacheError) {
+          logger.warn('Failed to cache token existence', { error: cacheError.message });
+        }
+        
+        return {
+          statusCode: 409,
+          body: JSON.stringify({
+            success: false,
+            error: 'Token symbol già esistente nel database'
+          })
+        };
+      }
+    } catch (error) {
+      logger.error('Database check for existing token failed', { 
+        error: error.message,
+        tokenSymbol 
       });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          error: 'Errore durante la verifica del token'
+        })
+      };
     }
-
-    // Inizializzazione XRPL
-    await initializeXRPL();
-    const client = getXRPLClient();
-
-    // Creazione wallet issuer
-    const issuerWallet = issuerSeed ? 
-      walletFromSeed(issuerSeed) : 
-      walletFromSeed(process.env.ISSUER_SEED || 'sEdTM1uX8pu2do5XvTnutH6HsouMaM2');
-
-    console.log('🏦 Issuer wallet address:', issuerWallet.address);
-    console.log('👤 User wallet address:', userWallet.address);
 
     // Cache key per questa operazione di tokenizzazione
     const operationKey = `tokenization_op:${tokenSymbol}:${userWallet.address}`;
     
     // Controllo se operazione già in corso
-    const existingOperation = await redisService.get(operationKey);
-    if (existingOperation) {
-      return res.status(409).json({
-        success: false,
-        error: 'Tokenization already in progress for this asset',
-        operation_id: existingOperation.operation_id
+    try {
+      const existingOperation = await redisService.get(operationKey);
+      if (existingOperation) {
+        logger.warn('Tokenization already in progress', { 
+          tokenSymbol,
+          userWalletAddress: userWallet.address,
+          operationId: existingOperation.operation_id
+        });
+        return {
+          statusCode: 409,
+          body: JSON.stringify({
+            success: false,
+            error: 'Tokenization already in progress for this asset',
+            operation_id: existingOperation.operation_id
+          })
+        };
+      }
+    } catch (error) {
+      logger.warn('Failed to check existing operation, proceeding', { 
+        error: error.message 
       });
     }
 
     // Registra operazione in corso
     const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    await redisService.set(operationKey, { 
-      operation_id: operationId, 
-      status: 'in_progress',
-      started_at: new Date().toISOString()
-    }, 1800); // 30 minuti TTL
+    try {
+      await redisService.set(operationKey, { 
+        operation_id: operationId, 
+        status: 'in_progress',
+        started_at: new Date().toISOString()
+      }, 1800); // 30 minuti TTL
+    } catch (error) {
+      logger.warn('Failed to register operation in progress', { error: error.message });
+    }
 
     try {
+      // Inizializzazione XRPL
+      logger.info('Initializing XRPL connection', { operationId });
+      await initializeXRPL();
+      const client = getXRPLClient();
+
+      // Creazione wallet issuer
+      const issuerWallet = issuerSeed ? 
+        walletFromSeed(issuerSeed) : 
+        walletFromSeed(process.env.ISSUER_SEED || 'sEdTM1uX8pu2do5XvTnutH6HsouMaM2');
+
+      logger.info('Wallet addresses configured', { 
+        issuerAddress: issuerWallet.address,
+        userAddress: userWallet.address,
+        operationId
+      });
+
       // Step 1: Creazione TrustLine REALE su XRPL
-      console.log('🔗 Creating TrustLine on XRPL...');
+      logger.info('Creating TrustLine on XRPL', { 
+        tokenSymbol,
+        totalSupply,
+        operationId 
+      });
       
       const trustLineResult = await createTrustLine(
         userWallet,
@@ -232,7 +307,10 @@ async function originalHandler(req, res) {
         throw new Error('TrustLine creation failed - no transaction hash received');
       }
 
-      console.log('✅ TrustLine created successfully:', trustLineResult.hash);
+      logger.info('TrustLine created successfully', { 
+        transactionHash: trustLineResult.hash,
+        operationId 
+      });
 
       // Step 2: Verifica transazione su ledger
       const txInfo = await client.request({
@@ -243,6 +321,11 @@ async function originalHandler(req, res) {
       if (txInfo.result.meta.TransactionResult !== 'tesSUCCESS') {
         throw new Error(`TrustLine transaction failed: ${txInfo.result.meta.TransactionResult}`);
       }
+
+      logger.info('TrustLine transaction verified on ledger', { 
+        ledgerIndex: txInfo.result.ledger_index,
+        operationId 
+      });
 
       // Step 3: Salvataggio Asset nel database
       const assetRecord = {
@@ -258,7 +341,10 @@ async function originalHandler(req, res) {
       };
 
       const savedAsset = await insertAsset(assetRecord);
-      console.log('💾 Asset saved to database:', savedAsset.id);
+      logger.info('Asset saved to database', { 
+        assetId: savedAsset.id,
+        operationId 
+      });
 
       // Step 4: Salvataggio Token nel database
       const tokenRecord = {
@@ -276,7 +362,10 @@ async function originalHandler(req, res) {
       };
 
       const savedToken = await insertToken(tokenRecord);
-      console.log('🪙 Token saved to database:', savedToken.id);
+      logger.info('Token saved to database', { 
+        tokenId: savedToken.id,
+        operationId 
+      });
 
       // Step 5: Salvataggio Transazione
       const transactionRecord = {
@@ -295,7 +384,10 @@ async function originalHandler(req, res) {
       };
 
       const savedTransaction = await insertTransaction(transactionRecord);
-      console.log('📝 Transaction saved to database:', savedTransaction.id);
+      logger.info('Transaction saved to database', { 
+        transactionId: savedTransaction.id,
+        operationId 
+      });
 
       // Step 6: Cache dei risultati
       const tokenizationResult = {
@@ -319,47 +411,100 @@ async function originalHandler(req, res) {
       };
 
       // Cache il token per evitare duplicati futuri
-      await redisService.set(existingTokenKey, { 
-        symbol: tokenSymbol, 
-        exists: true, 
-        token_id: savedToken.id 
-      }, 3600 * 24); // 24 ore
+      try {
+        await redisService.set(existingTokenKey, { 
+          symbol: tokenSymbol, 
+          exists: true, 
+          token_id: savedToken.id 
+        }, 3600 * 24); // 24 ore
 
-      // Cache il risultato della tokenizzazione
-      await redisService.set(`tokenization_result:${operationId}`, tokenizationResult, 3600 * 24);
+        // Cache il risultato della tokenizzazione
+        await redisService.set(`tokenization_result:${operationId}`, tokenizationResult, 3600 * 24);
 
-      // Cache i dati del token per accesso rapido
-      await redisService.cacheTokenPrice(tokenSymbol, assetData.value / totalSupply, 3600);
+        // Cache i dati del token per accesso rapido
+        await redisService.cacheTokenPrice(tokenSymbol, assetData.value / totalSupply, 3600);
+      } catch (cacheError) {
+        logger.warn('Failed to cache tokenization results', { 
+          error: cacheError.message,
+          operationId 
+        });
+      }
 
       // Rimuovi operazione in corso
-      await redisService.del(operationKey);
+      try {
+        await redisService.del(operationKey);
+      } catch (error) {
+        logger.warn('Failed to remove operation key', { error: error.message });
+      }
 
-      console.log('🎉 Tokenization completed successfully!');
+      logger.info('Tokenization completed successfully', { 
+        tokenSymbol,
+        assetId: savedAsset.id,
+        tokenId: savedToken.id,
+        operationId 
+      });
 
-      return res.status(200).json(tokenizationResult);
+      return {
+        statusCode: 200,
+        body: JSON.stringify(tokenizationResult)
+      };
 
     } catch (operationError) {
+      logger.error('Tokenization operation failed', { 
+        error: operationError.message,
+        stack: operationError.stack,
+        operationId,
+        tokenSymbol
+      });
+
       // Rimuovi operazione in corso in caso di errore
-      await redisService.del(operationKey);
+      try {
+        await redisService.del(operationKey);
+      } catch (error) {
+        logger.warn('Failed to remove operation key after error', { 
+          error: error.message 
+        });
+      }
       
       // Cache dell'errore per evitare retry immediati
-      await redisService.set(`tokenization_error:${operationId}`, {
-        error: operationError.message,
-        timestamp: new Date().toISOString()
-      }, 300); // 5 minuti
+      try {
+        await redisService.set(`tokenization_error:${operationId}`, {
+          error: operationError.message,
+          timestamp: new Date().toISOString()
+        }, 300); // 5 minuti
+      } catch (error) {
+        logger.warn('Failed to cache error', { error: error.message });
+      }
 
-      throw operationError;
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          error: 'Errore durante la tokenizzazione',
+          details: operationError.message,
+          operation_id: operationId,
+          timestamp: new Date().toISOString()
+        })
+      };
     }
 
   } catch (error) {
-    console.error('❌ Tokenization error:', error);
-    
-    return res.status(500).json({
-      success: false,
-      error: 'Errore durante la tokenizzazione',
-      details: error.message,
-      timestamp: new Date().toISOString()
+    logger.error('Tokenization error', { 
+      error: error.message,
+      stack: error.stack,
+      type: error.constructor.name
     });
+    
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        success: false,
+        error: 'Errore interno del server durante la tokenizzazione',
+        timestamp: new Date().toISOString()
+      })
+    };
   }
 }
+
+export const handler = withCors(createTokenization);
 

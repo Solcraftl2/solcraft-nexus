@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, walletFromSeed, createTrustLine } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import redisService from '../config/redis.js';
@@ -121,8 +122,8 @@ export default async function handler(req, res) {
       walletFromSeed(issuerSeed) : 
       walletFromSeed(process.env.ISSUER_SEED || 'sEdTM1uX8pu2do5XvTnutH6HsouMaM2');
 
-    console.log('🏦 Issuer wallet address:', issuerWallet.address);
-    console.log('👤 User wallet address:', userWallet.address);
+    logger.info('🏦 Issuer wallet address:', issuerWallet.address);
+    logger.info('👤 User wallet address:', userWallet.address);
 
     // Cache key per questa operazione di tokenizzazione
     const operationKey = `tokenization_op:${tokenSymbol}:${userWallet.address}`;
@@ -147,7 +148,7 @@ export default async function handler(req, res) {
 
     try {
       // Step 1: Creazione TrustLine REALE su XRPL
-      console.log('🔗 Creating TrustLine on XRPL...');
+      logger.info('🔗 Creating TrustLine on XRPL...');
       
       const trustLineResult = await createTrustLine(
         userWallet,
@@ -160,7 +161,7 @@ export default async function handler(req, res) {
         throw new Error('TrustLine creation failed - no transaction hash received');
       }
 
-      console.log('✅ TrustLine created successfully:', trustLineResult.hash);
+      logger.info('✅ TrustLine created successfully:', trustLineResult.hash);
 
       // Step 2: Verifica transazione su ledger
       const txInfo = await client.request({
@@ -186,7 +187,7 @@ export default async function handler(req, res) {
       };
 
       const savedAsset = await insertAsset(assetRecord);
-      console.log('💾 Asset saved to database:', savedAsset.id);
+      logger.info('💾 Asset saved to database:', savedAsset.id);
 
       // Step 4: Salvataggio Token nel database
       const tokenRecord = {
@@ -204,7 +205,7 @@ export default async function handler(req, res) {
       };
 
       const savedToken = await insertToken(tokenRecord);
-      console.log('🪙 Token saved to database:', savedToken.id);
+      logger.info('🪙 Token saved to database:', savedToken.id);
 
       // Step 5: Salvataggio Transazione
       const transactionRecord = {
@@ -223,7 +224,7 @@ export default async function handler(req, res) {
       };
 
       const savedTransaction = await insertTransaction(transactionRecord);
-      console.log('📝 Transaction saved to database:', savedTransaction.id);
+      logger.info('📝 Transaction saved to database:', savedTransaction.id);
 
       // Step 6: Cache dei risultati
       const tokenizationResult = {
@@ -262,7 +263,7 @@ export default async function handler(req, res) {
       // Rimuovi operazione in corso
       await redisService.del(operationKey);
 
-      console.log('🎉 Tokenization completed successfully!');
+      logger.info('🎉 Tokenization completed successfully!');
 
       return res.status(200).json(tokenizationResult);
 
@@ -280,7 +281,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('❌ Tokenization error:', error);
+    logger.error('❌ Tokenization error:', error);
     
     return res.status(500).json({
       success: false,

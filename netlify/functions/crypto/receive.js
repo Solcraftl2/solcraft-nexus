@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -57,7 +58,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -195,7 +196,7 @@ async function originalHandler(req, res) {
       })
 
     } catch (error) {
-      console.error('Receive crypto error:', error)
+      logger.error('Receive crypto error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server durante la generazione dell\'indirizzo'
@@ -241,7 +242,7 @@ async function originalHandler(req, res) {
       })
 
     } catch (error) {
-      console.error('Get addresses error:', error)
+      logger.error('Get addresses error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server'

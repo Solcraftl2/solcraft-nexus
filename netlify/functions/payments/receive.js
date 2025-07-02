@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -61,7 +62,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -209,7 +210,7 @@ async function originalHandler(req, res) {
         return res.status(200).json(response);
 
       } catch (error) {
-        console.error('Payment request generation error:', error);
+        logger.error('Payment request generation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la generazione richiesta pagamento',
@@ -310,7 +311,7 @@ async function originalHandler(req, res) {
         }
 
       } catch (error) {
-        console.error('Payment verification error:', error);
+        logger.error('Payment verification error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la verifica pagamento',
@@ -325,7 +326,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Payment receive API error:', error);
+    logger.error('Payment receive API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',
@@ -457,7 +458,7 @@ async function verifySpecificTransaction(client, txHash, expectedDestination, ex
     
     return { found: false };
   } catch (error) {
-    console.error('Transaction verification error:', error);
+    logger.error('Transaction verification error:', error);
     return { found: false, error: error.message };
   }
 }
@@ -485,7 +486,7 @@ async function searchRecentPayments(client, address, destinationTag, paymentRequ
 
     return mockPayment;
   } catch (error) {
-    console.error('Payment search error:', error);
+    logger.error('Payment search error:', error);
     return { found: false, error: error.message };
   }
 }

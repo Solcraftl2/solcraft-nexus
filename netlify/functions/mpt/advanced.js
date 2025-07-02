@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -76,7 +77,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -123,7 +124,7 @@ async function originalHandler(req, res) {
         return res.status(400).json({ error: 'Invalid action' })
     }
   } catch (error) {
-    console.error('MPT API Error:', error)
+    logger.error('MPT API Error:', error);
     return res.status(500).json({ 
       error: 'Internal server error',
       details: error.message 

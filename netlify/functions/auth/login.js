@@ -1,121 +1,101 @@
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { supabase, getUserByEmail } from '../config/supabaseClient.js';
+import { withCors } from '../utils/cors.js';
+import logger, { handleApiError, measurePerformance } from '../utils/logger.js';
 
-const { parse } = require('querystring');
-
-// Helper per compatibilità Vercel -> Netlify
-function createReqRes(event) {
-  const req = {
-    method: event.httpMethod,
-    headers: event.headers,
-    body: event.body ? (event.headers['content-type']?.includes('application/json') ? JSON.parse(event.body) : parse(event.body)) : {},
-    query: event.queryStringParameters || {},
-    ip: event.headers['x-forwarded-for'] || event.headers['client-ip'] || '127.0.0.1'
-  };
+/**
+ * Funzione di login per SolCraft Nexus
+ * Gestisce autenticazione utenti con email/password
+ */
+const loginHandler = async (event, context) => {
+  const perf = measurePerformance('user_login');
   
-  const res = {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-    },
-    body: '',
-    
-    status: function(code) {
-      this.statusCode = code;
-      return this;
-    },
-    
-    json: function(data) {
-      this.body = JSON.stringify(data);
-      return this;
-    },
-    
-    end: function(data) {
-      if (data) this.body = data;
-      return this;
-    },
-    
-    setHeader: function(name, value) {
-      this.headers[name] = value;
-      return this;
+  try {
+    // Validazione metodo HTTP
+    if (event.httpMethod !== 'POST') {
+      logger.warn('Invalid HTTP method for login', { method: event.httpMethod });
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'Metodo non consentito' 
+        })
+      };
     }
-  };
-  
-  return { req, res };
-}
 
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-import { supabase, getUserByEmail, handleSupabaseError } from '../config/supabaseClient.js';
+    // Parsing del body
+    let body;
+    try {
+      body = JSON.parse(event.body || '{}');
+    } catch (error) {
+      logger.error('Invalid JSON in request body', error);
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          error: 'Formato richiesta non valido'
+        })
+      };
+    }
 
-exports.handler = async (event, context) => {
-  const { req, res } = createReqRes(event);
-  
-  try {
-    await originalHandler(req, res);
-    
-    return {
-      statusCode: res.statusCode,
-      headers: res.headers,
-      body: res.body
-    };
-  } catch (error) {
-    console.error('Function error:', error);
-    return {
-      statusCode: 500,
-      headers: res.headers,
-      body: JSON.stringify({ 
-        success: false, 
-        error: 'Internal server error',
-        message: error.message 
-      })
-    };
-  }
-};
-
-async function originalHandler(req, res) {
-  // Gestione CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  try {
-    const { email, password } = req.body;
+    const { email, password } = body;
 
     // Validazione input
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email e password sono obbligatori'
+      logger.warn('Missing credentials in login attempt', { 
+        email: email ? 'provided' : 'missing',
+        password: password ? 'provided' : 'missing'
       });
+      
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          message: 'Email e password sono obbligatori'
+        })
+      };
     }
 
-    // Cerca l'utente nel database Supabase
+    // Validazione formato email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      logger.warn('Invalid email format in login attempt', { email });
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          message: 'Formato email non valido'
+        })
+      };
+    }
+
+    logger.info('Login attempt started', { email });
+
+    // Cerca l'utente nel database
     let user;
     try {
       user = await getUserByEmail(email);
     } catch (error) {
-      console.error('Database error during login:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Errore di connessione al database'
-      });
+      logger.error('Database error during user lookup', error);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          message: 'Errore di connessione al database'
+        })
+      };
     }
     
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Credenziali non valide'
-      });
+      logger.warn('Login attempt with non-existent email', { email });
+      return {
+        statusCode: 401,
+        body: JSON.stringify({
+          success: false,
+          message: 'Credenziali non valide'
+        })
+      };
     }
 
     // Verifica la password
@@ -123,29 +103,49 @@ async function originalHandler(req, res) {
     try {
       isPasswordValid = await bcrypt.compare(password, user.password_hash);
     } catch (error) {
-      console.error('Password verification error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Errore durante la verifica delle credenziali'
-      });
+      logger.error('Password verification error', error);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          message: 'Errore durante la verifica delle credenziali'
+        })
+      };
     }
     
     if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Credenziali non valide'
+      logger.warn('Login attempt with invalid password', { 
+        email, 
+        userId: user.id 
       });
+      
+      return {
+        statusCode: 401,
+        body: JSON.stringify({
+          success: false,
+          message: 'Credenziali non valide'
+        })
+      };
     }
 
     // Verifica se l'account è attivo
     if (user.status !== 'active') {
-      return res.status(403).json({
-        success: false,
-        message: 'Account non attivo. Contatta il supporto.'
+      logger.warn('Login attempt with inactive account', { 
+        email, 
+        userId: user.id, 
+        status: user.status 
       });
+      
+      return {
+        statusCode: 403,
+        body: JSON.stringify({
+          success: false,
+          message: 'Account non attivo. Contatta il supporto.'
+        })
+      };
     }
 
-    // Aggiorna last_login
+    // Aggiorna statistiche di login
     try {
       await supabase
         .from('users')
@@ -155,12 +155,23 @@ async function originalHandler(req, res) {
         })
         .eq('id', user.id);
     } catch (error) {
-      console.error('Error updating last login:', error);
+      logger.error('Error updating login statistics', error);
       // Non bloccare il login per questo errore
     }
 
     // Genera JWT token
-    const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      logger.error('JWT_SECRET not configured');
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          message: 'Errore di configurazione del server'
+        })
+      };
+    }
+
     const token = jwt.sign(
       {
         userId: user.id,
@@ -174,10 +185,14 @@ async function originalHandler(req, res) {
       { expiresIn: '7d' }
     );
 
-    // Rimuovi la password dalla risposta
-    const { password_hash, ...userWithoutPassword } = user;
+    // Log audit del login
+    logger.audit('login_success', user.id, {
+      email: user.email,
+      ip: event.headers['x-forwarded-for'] || 'unknown',
+      userAgent: event.headers['user-agent'] || 'unknown'
+    });
 
-    // Registra il login per audit
+    // Registra attività utente
     try {
       await supabase
         .from('user_activities')
@@ -185,40 +200,53 @@ async function originalHandler(req, res) {
           user_id: user.id,
           activity_type: 'login',
           description: 'User logged in successfully',
-          ip_address: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
-          user_agent: req.headers['user-agent'],
+          ip_address: event.headers['x-forwarded-for'] || 'unknown',
+          user_agent: event.headers['user-agent'] || 'unknown',
           created_at: new Date().toISOString()
         });
     } catch (error) {
-      console.error('Error logging user activity:', error);
+      logger.error('Error logging user activity', error);
       // Non bloccare il login per questo errore
     }
 
-    return res.status(200).json({
-      success: true,
-      message: 'Login completato con successo',
-      token: token,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        role: user.role || 'user',
-        walletAddress: user.wallet_address,
-        isVerified: user.is_verified,
-        createdAt: user.created_at,
-        lastLogin: new Date().toISOString()
-      }
+    const duration = perf.end({ userId: user.id });
+    logger.info('Login completed successfully', { 
+      email, 
+      userId: user.id, 
+      duration: `${duration}ms` 
     });
 
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: true,
+        message: 'Login completato con successo',
+        token: token,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          role: user.role || 'user',
+          walletAddress: user.wallet_address,
+          isVerified: user.is_verified,
+          createdAt: user.created_at,
+          lastLogin: new Date().toISOString()
+        }
+      })
+    };
+
   } catch (error) {
-    console.error('Login error:', error);
+    perf.end();
+    logger.error('Unexpected error in login function', error);
     
-    return res.status(500).json({
-      success: false,
-      message: 'Errore interno del server',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return {
+      statusCode: 500,
+      body: JSON.stringify(handleApiError(error, 'login'))
+    };
   }
-}
+};
+
+// Esporta la funzione con CORS wrapper
+export const handler = withCors(loginHandler);
 

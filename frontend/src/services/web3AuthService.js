@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import { Web3Auth } from "@web3auth/modal";
 import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
 
@@ -56,10 +57,10 @@ class Web3AuthService {
       await this.web3auth.initModal();
       this.isInitialized = true;
       
-      console.log("✅ Web3Auth inizializzato con successo");
+      logger.info("✅ Web3Auth inizializzato con successo");
       return true;
     } catch (error) {
-      console.error("❌ Errore inizializzazione Web3Auth:", error);
+      logger.error("❌ Errore inizializzazione Web3Auth:", error);
       throw error;
     }
   }
@@ -73,7 +74,7 @@ class Web3AuthService {
         await this.initialize();
       }
 
-      console.log(`🔐 Tentativo login con ${provider}...`);
+      logger.info(`🔐 Tentativo login con ${provider}...`);
       
       const web3authProvider = await this.web3auth.connect();
       
@@ -81,7 +82,7 @@ class Web3AuthService {
         this.provider = web3authProvider;
         const userInfo = await this.getUserInfo();
         
-        console.log("✅ Login sociale completato:", userInfo);
+        logger.info("✅ Login sociale completato:", userInfo);
         
         return {
           success: true,
@@ -100,7 +101,7 @@ class Web3AuthService {
       
       throw new Error("Login fallito");
     } catch (error) {
-      console.error(`❌ Errore login ${provider}:`, error);
+      logger.error(`❌ Errore login ${provider}:`, error);
       return {
         success: false,
         error: error.message
@@ -117,7 +118,7 @@ class Web3AuthService {
         await this.initialize();
       }
 
-      console.log("🔗 Connessione wallet XRPL...");
+      logger.info("🔗 Connessione wallet XRPL...");
       
       const web3authProvider = await this.web3auth.connect();
       
@@ -135,7 +136,7 @@ class Web3AuthService {
           // Ottieni informazioni account
           const accountInfo = await this.getAccountInfo(address);
           
-          console.log("✅ Wallet XRPL connesso:", address);
+          logger.info("✅ Wallet XRPL connesso:", address);
           
           return {
             success: true,
@@ -154,7 +155,7 @@ class Web3AuthService {
       
       throw new Error("Connessione wallet fallita");
     } catch (error) {
-      console.error("❌ Errore connessione wallet:", error);
+      logger.error("❌ Errore connessione wallet:", error);
       return {
         success: false,
         error: error.message
@@ -173,7 +174,7 @@ class Web3AuthService {
       
       return await this.web3auth.getUserInfo();
     } catch (error) {
-      console.error("❌ Errore getUserInfo:", error);
+      logger.error("❌ Errore getUserInfo:", error);
       throw error;
     }
   }
@@ -203,7 +204,7 @@ class Web3AuthService {
         sequence: accountInfo?.account_data?.Sequence,
       };
     } catch (error) {
-      console.error("❌ Errore getAccountInfo:", error);
+      logger.error("❌ Errore getAccountInfo:", error);
       return {
         address,
         balance: "0",
@@ -221,17 +222,17 @@ class Web3AuthService {
         throw new Error("Provider non disponibile");
       }
 
-      console.log("✍️ Firma transazione XRPL...");
+      logger.info("✍️ Firma transazione XRPL...");
       
       const signedTx = await this.provider.request({
         method: "xrpl_signTransaction",
         params: { transaction },
       });
 
-      console.log("✅ Transazione firmata:", signedTx);
+      logger.info("✅ Transazione firmata:", signedTx);
       return signedTx;
     } catch (error) {
-      console.error("❌ Errore firma transazione:", error);
+      logger.error("❌ Errore firma transazione:", error);
       throw error;
     }
   }
@@ -245,17 +246,17 @@ class Web3AuthService {
         throw new Error("Provider non disponibile");
       }
 
-      console.log("📤 Invio transazione XRPL...");
+      logger.info("📤 Invio transazione XRPL...");
       
       const result = await this.provider.request({
         method: "xrpl_submitTransaction",
         params: { transaction },
       });
 
-      console.log("✅ Transazione inviata:", result);
+      logger.info("✅ Transazione inviata:", result);
       return result;
     } catch (error) {
-      console.error("❌ Errore invio transazione:", error);
+      logger.error("❌ Errore invio transazione:", error);
       throw error;
     }
   }
@@ -268,11 +269,11 @@ class Web3AuthService {
       if (this.web3auth) {
         await this.web3auth.logout();
         this.provider = null;
-        console.log("✅ Logout completato");
+        logger.info("✅ Logout completato");
         return true;
       }
     } catch (error) {
-      console.error("❌ Errore logout:", error);
+      logger.error("❌ Errore logout:", error);
       throw error;
     }
   }

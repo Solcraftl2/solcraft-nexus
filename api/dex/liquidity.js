@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
@@ -69,7 +70,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Liquidity GET:', error);
+        logger.error('Errore Liquidity GET:', error);
         
         // Fallback a dati mock per sviluppo
         const mockData = getMockLiquidityData(req.query.action);
@@ -113,7 +114,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Liquidity POST:', error);
+        logger.error('Errore Liquidity POST:', error);
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -128,7 +129,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore generale Liquidity:', error);
+    logger.error('Errore generale Liquidity:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

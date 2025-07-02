@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -61,7 +62,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -161,7 +162,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Trust lines fetch error:', error);
+        logger.error('Trust lines fetch error:', error);
         
         // Fallback con dati mock se XRPL non disponibile
         const mockTrustLines = [
@@ -282,7 +283,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Trust line creation error:', error);
+        logger.error('Trust line creation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la creazione della trust line',
@@ -323,7 +324,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Trust line removal error:', error);
+        logger.error('Trust line removal error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la rimozione della trust line',
@@ -338,7 +339,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Trust lines API error:', error);
+    logger.error('Trust lines API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

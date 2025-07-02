@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 exports.handler = async (event, context) => {
   // Gestione CORS
   const headers = {
@@ -59,7 +60,7 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Tokenization Test Error:', error);
+    logger.error('Tokenization Test Error:', error);
     
     return {
       statusCode: 500,

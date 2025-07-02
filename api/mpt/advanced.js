@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 // SolCraft Nexus - Multi-Purpose Tokens API
 // Implementazione completa basata su studio XRPL approfondito
 
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid action' })
     }
   } catch (error) {
-    console.error('MPT API Error:', error)
+    logger.error('MPT API Error:', error);
     return res.status(500).json({ 
       error: 'Internal server error',
       details: error.message 

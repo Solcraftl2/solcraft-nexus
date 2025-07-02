@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
 import { supabase, insertAsset, insertToken, insertTransaction, handleSupabaseError } from '../config/supabaseClient.js';
 import jwt from 'jsonwebtoken';
@@ -130,10 +131,10 @@ export default async function handler(req, res) {
       };
 
       savedAsset = await insertAsset(assetData);
-      console.log('MPT Asset saved to database:', savedAsset.id);
+      logger.info('MPT Asset saved to database:', savedAsset.id);
 
     } catch (error) {
-      console.error('Error saving MPT asset to database:', error);
+      logger.error('Error saving MPT asset to database:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore durante il salvataggio dell\'asset MPT nel database',
@@ -156,7 +157,7 @@ export default async function handler(req, res) {
       };
 
     } catch (error) {
-      console.error('MPT creation error:', error);
+      logger.error('MPT creation error:', error);
       mptCreationResult = {
         success: false,
         error: error.message
@@ -204,10 +205,10 @@ export default async function handler(req, res) {
       };
 
       savedToken = await insertToken(tokenData);
-      console.log('MPT Token saved to database:', savedToken.id);
+      logger.info('MPT Token saved to database:', savedToken.id);
 
     } catch (error) {
-      console.error('Error saving MPT token to database:', error);
+      logger.error('Error saving MPT token to database:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore durante il salvataggio del token MPT nel database',
@@ -245,10 +246,10 @@ export default async function handler(req, res) {
         };
 
         const savedTransaction = await insertTransaction(transactionData);
-        console.log('MPT Transaction saved to database:', savedTransaction.id);
+        logger.info('MPT Transaction saved to database:', savedTransaction.id);
 
       } catch (error) {
-        console.error('Error saving MPT transaction to database:', error);
+        logger.error('Error saving MPT transaction to database:', error);
         // Non bloccare la risposta per errori di transazione
       }
     }
@@ -307,7 +308,7 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-      console.error('Error updating user portfolio with MPT:', error);
+      logger.error('Error updating user portfolio with MPT:', error);
     }
 
     // Registra attività utente
@@ -327,7 +328,7 @@ export default async function handler(req, res) {
           created_at: createdAt
         });
     } catch (error) {
-      console.error('Error logging MPT creation activity:', error);
+      logger.error('Error logging MPT creation activity:', error);
     }
 
     // Genera documenti di compliance
@@ -398,7 +399,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('MPT creation error:', error);
+    logger.error('MPT creation error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server durante la creazione MPT',

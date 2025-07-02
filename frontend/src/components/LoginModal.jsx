@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React, { useState } from 'react';
 import { useAuth } from '../services/authService.jsx';
 
@@ -21,17 +22,17 @@ const LoginModal = ({ isOpen, onClose }) => {
       setLocalLoading(true);
       clearError();
 
-      console.log(`🔐 Login con ${provider}...`);
+      logger.info(`🔐 Login con ${provider}...`);
       const result = await loginSocial(provider);
 
       if (result.success) {
-        console.log("✅ Login sociale completato");
+        logger.info("✅ Login sociale completato");
         onClose();
       } else {
-        console.error("❌ Login sociale fallito:", result.error);
+        logger.error("❌ Login sociale fallito:", result.error);
       }
     } catch (error) {
-      console.error("❌ Errore login sociale:", error);
+      logger.error("❌ Errore login sociale:", error);
     } finally {
       setLocalLoading(false);
     }
@@ -45,17 +46,17 @@ const LoginModal = ({ isOpen, onClose }) => {
       setLocalLoading(true);
       clearError();
 
-      console.log(`🔗 Connessione ${walletType}...`);
+      logger.info(`🔗 Connessione ${walletType}...`);
       const result = await connectWallet(walletType);
 
       if (result.success) {
-        console.log("✅ Wallet connesso");
+        logger.info("✅ Wallet connesso");
         onClose();
       } else {
-        console.error("❌ Connessione wallet fallita:", result.error);
+        logger.error("❌ Connessione wallet fallita:", result.error);
       }
     } catch (error) {
-      console.error("❌ Errore connessione wallet:", error);
+      logger.error("❌ Errore connessione wallet:", error);
     } finally {
       setLocalLoading(false);
     }

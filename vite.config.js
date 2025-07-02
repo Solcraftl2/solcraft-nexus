@@ -7,13 +7,23 @@ export default defineConfig({
   root: './',
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "./frontend/src"),
     },
   },
   build: {
     outDir: './dist',
     rollupOptions: {
-      external: ['@upstash/redis', 'xrpl', 'ioredis', 'redis']
+      external: [
+        '@upstash/redis', 
+        'xrpl', 
+        'ioredis', 
+        'redis',
+        'bcryptjs',
+        'jsonwebtoken',
+        '@supabase/supabase-js',
+        'crypto-js',
+        'axios'
+      ]
     }
   },
   server: {

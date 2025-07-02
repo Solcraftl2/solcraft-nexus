@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
               client_id: process.env.GITHUB_CLIENT_ID || 'demo-client-id',
               client_secret: process.env.GITHUB_CLIENT_SECRET || 'demo-client-secret',
               code: code,
-              redirect_uri: process.env.GITHUB_REDIRECT_URI || 'https://solcraft-nexus-platform.vercel.app/auth/github/callback'
+              redirect_uri: process.env.GITHUB_REDIRECT_URI || 'https://solcraft-nexus-production.netlify.app/auth/github/callback'
             })
           });
 
@@ -47,13 +48,13 @@ export default async function handler(req, res) {
             if (tokenData.access_token) {
               finalAccessToken = tokenData.access_token;
             } else {
-              console.error('No access token in response:', tokenData);
+              logger.error('No access token in response:', tokenData);
             }
           } else {
-            console.error('Token exchange failed:', await tokenResponse.text());
+            logger.error('Token exchange failed:', await tokenResponse.text(););
           }
         } catch (error) {
-          console.error('Token exchange error:', error);
+          logger.error('Token exchange error:', error);
         }
       }
 
@@ -92,7 +93,7 @@ export default async function handler(req, res) {
                   }
                 }
               } catch (emailError) {
-                console.error('GitHub email fetch error:', emailError);
+                logger.error('GitHub email fetch error:', emailError);
               }
             }
 
@@ -120,14 +121,14 @@ export default async function handler(req, res) {
                 githubUser.organizations = orgs.length;
               }
             } catch (statsError) {
-              console.error('GitHub stats fetch error:', statsError);
+              logger.error('GitHub stats fetch error:', statsError);
             }
 
           } else {
-            console.error('GitHub user API error:', userResponse.status, await userResponse.text());
+            logger.error('GitHub user API error:', userResponse.status, await userResponse.text(););
           }
         } catch (error) {
-          console.error('GitHub API error:', error);
+          logger.error('GitHub API error:', error);
         }
       }
 
@@ -228,7 +229,7 @@ export default async function handler(req, res) {
       });
 
     } catch (error) {
-      console.error('GitHub OAuth error:', error);
+      logger.error('GitHub OAuth error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server durante l\'autenticazione GitHub',

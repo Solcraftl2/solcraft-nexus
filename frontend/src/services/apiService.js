@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 // Servizio API per integrazione con backend
 import authService from './authService.js';
 
@@ -32,7 +33,7 @@ class ApiService {
 
       return data;
     } catch (error) {
-      console.error('API Error:', error);
+      logger.error('API Error:', error);
       throw error;
     }
   }

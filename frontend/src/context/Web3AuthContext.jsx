@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Web3Auth } from '@web3auth/modal';
 import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from '@web3auth/base';
@@ -40,7 +41,7 @@ export const Web3AuthProvider = ({ children }) => {
           },
           uiConfig: {
             appName: "SolCraft Nexus",
-            appUrl: "https://solcraft-nexus-tokenize-v1.vercel.app",
+            appUrl: "https://solcraft-nexus-production.netlify.app",
             theme: {
               primary: "#3b82f6",
             },
@@ -60,7 +61,7 @@ export const Web3AuthProvider = ({ children }) => {
             uxMode: "popup",
             whiteLabel: {
               appName: "SolCraft Nexus",
-              appUrl: "https://solcraft-nexus-tokenize-v1.vercel.app",
+              appUrl: "https://solcraft-nexus-production.netlify.app",
               logoLight: "https://web3auth.io/images/web3authlog.png",
               logoDark: "https://web3auth.io/images/web3authlogodark.png",
               defaultLanguage: "en",
@@ -85,7 +86,7 @@ export const Web3AuthProvider = ({ children }) => {
           setUserInfo(user);
         }
       } catch (error) {
-        console.error("Web3Auth initialization error:", error);
+        logger.error("Web3Auth initialization error:", error);
       } finally {
         setLoading(false);
       }
@@ -96,7 +97,7 @@ export const Web3AuthProvider = ({ children }) => {
 
   const login = async (loginProvider = "google") => {
     if (!web3auth) {
-      console.log("Web3Auth not initialized yet");
+      logger.info("Web3Auth not initialized yet");
       return;
     }
     
@@ -113,14 +114,14 @@ export const Web3AuthProvider = ({ children }) => {
         userInfo: user
       };
     } catch (error) {
-      console.error("Login error:", error);
+      logger.error("Login error:", error);
       throw error;
     }
   };
 
   const logout = async () => {
     if (!web3auth) {
-      console.log("Web3Auth not initialized yet");
+      logger.info("Web3Auth not initialized yet");
       return;
     }
     
@@ -130,14 +131,14 @@ export const Web3AuthProvider = ({ children }) => {
       setLoggedIn(false);
       setUserInfo(null);
     } catch (error) {
-      console.error("Logout error:", error);
+      logger.error("Logout error:", error);
       throw error;
     }
   };
 
   const getAccounts = async () => {
     if (!provider) {
-      console.log("Provider not initialized yet");
+      logger.info("Provider not initialized yet");
       return [];
     }
     
@@ -147,14 +148,14 @@ export const Web3AuthProvider = ({ children }) => {
       });
       return accounts;
     } catch (error) {
-      console.error("Get accounts error:", error);
+      logger.error("Get accounts error:", error);
       return [];
     }
   };
 
   const getBalance = async () => {
     if (!provider) {
-      console.log("Provider not initialized yet");
+      logger.info("Provider not initialized yet");
       return "0";
     }
     
@@ -170,14 +171,14 @@ export const Web3AuthProvider = ({ children }) => {
       // Convert from wei to ETH
       return (parseInt(balance, 16) / Math.pow(10, 18)).toFixed(4);
     } catch (error) {
-      console.error("Get balance error:", error);
+      logger.error("Get balance error:", error);
       return "0";
     }
   };
 
   const signMessage = async (message) => {
     if (!provider) {
-      console.log("Provider not initialized yet");
+      logger.info("Provider not initialized yet");
       return;
     }
     
@@ -192,7 +193,7 @@ export const Web3AuthProvider = ({ children }) => {
       
       return signature;
     } catch (error) {
-      console.error("Sign message error:", error);
+      logger.error("Sign message error:", error);
       throw error;
     }
   };

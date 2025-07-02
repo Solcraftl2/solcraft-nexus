@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -139,7 +140,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Portfolio analytics error:', error);
+        logger.error('Portfolio analytics error:', error);
         
         // Fallback con analytics mock
         const mockAnalytics = generateMockAnalytics(analysisType, timeframe);
@@ -190,7 +191,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Custom report generation error:', error);
+        logger.error('Custom report generation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la generazione del report',
@@ -205,7 +206,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Portfolio analytics API error:', error);
+    logger.error('Portfolio analytics API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

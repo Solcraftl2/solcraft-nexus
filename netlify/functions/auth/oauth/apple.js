@@ -1,3 +1,4 @@
+import { logger } from '../../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -117,7 +118,7 @@ async function originalHandler(req, res) {
           // Verifica audience (dovrebbe essere il tuo client ID)
           const expectedAudience = process.env.APPLE_CLIENT_ID || 'com.solcraft.nexus';
           if (payload.aud !== expectedAudience) {
-            console.warn('Audience mismatch:', payload.aud, 'expected:', expectedAudience);
+            logger.warn('Audience mismatch:', payload.aud, 'expected:', expectedAudience);
           }
 
           verifiedClaims = payload;
@@ -137,7 +138,7 @@ async function originalHandler(req, res) {
           }
 
         } catch (error) {
-          console.error('Apple ID token verification error:', error);
+          logger.error('Apple ID token verification error:', error);
         }
       }
 
@@ -161,7 +162,7 @@ async function originalHandler(req, res) {
             appleUser.lastName = user.name.lastName;
           }
         } catch (error) {
-          console.error('Apple authorization code exchange error:', error);
+          logger.error('Apple authorization code exchange error:', error);
         }
       }
 
@@ -273,7 +274,7 @@ async function originalHandler(req, res) {
       });
 
     } catch (error) {
-      console.error('Apple OAuth error:', error);
+      logger.error('Apple OAuth error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server durante l\'autenticazione Apple',

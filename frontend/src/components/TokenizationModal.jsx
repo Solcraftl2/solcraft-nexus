@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React, { useState } from 'react';
 import { tokenizationService } from '../services/xrplTokenizationService';
 
@@ -76,10 +77,10 @@ const TokenizationModal = ({ isOpen, onClose, onSuccess }) => {
             };
 
             // Chiamata al servizio di tokenizzazione REALE
-            console.log('🚀 Avvio tokenizzazione REALE su XRPL...');
+            logger.info('🚀 Avvio tokenizzazione REALE su XRPL...');
             const tokenResult = await tokenizationService.createRealEstateToken(assetData);
 
-            console.log('✅ Token creato con successo:', tokenResult);
+            logger.info('✅ Token creato con successo:', tokenResult);
             
             setStep(4); // Success
             
@@ -89,7 +90,7 @@ const TokenizationModal = ({ isOpen, onClose, onSuccess }) => {
             }
 
         } catch (error) {
-            console.error('❌ Errore tokenizzazione:', error);
+            logger.error('❌ Errore tokenizzazione:', error);
             setError(`Tokenizzazione fallita: ${error.message}`);
             setStep(2); // Torna alla conferma
         } finally {

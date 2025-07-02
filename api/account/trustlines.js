@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
 import { TrustSet, convertStringToHex } from 'xrpl';
 import jwt from 'jsonwebtoken';
@@ -89,7 +90,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Trust lines fetch error:', error);
+        logger.error('Trust lines fetch error:', error);
         
         // Fallback con dati mock se XRPL non disponibile
         const mockTrustLines = [
@@ -210,7 +211,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Trust line creation error:', error);
+        logger.error('Trust line creation error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la creazione della trust line',
@@ -251,7 +252,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Trust line removal error:', error);
+        logger.error('Trust line removal error:', error);
         return res.status(500).json({
           success: false,
           error: 'Errore durante la rimozione della trust line',
@@ -266,7 +267,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Trust lines API error:', error);
+    logger.error('Trust lines API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

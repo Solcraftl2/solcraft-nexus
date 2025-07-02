@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Client, Wallet } from 'xrpl'
 
 export default async function handler(req, res) {
@@ -77,7 +78,7 @@ export default async function handler(req, res) {
     
     if (requiresAuth) {
       // In a real implementation, you would check if the sender is authorized
-      console.log('Destination requires authorization - implement authorization check')
+      logger.info('Destination requires authorization - implement authorization check');
     }
     
     // Prepare Payment Transaction for MPT
@@ -136,7 +137,7 @@ export default async function handler(req, res) {
     })
     
   } catch (error) {
-    console.error('MPT transfer error:', error)
+    logger.error('MPT transfer error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to transfer Multi-Purpose Token'

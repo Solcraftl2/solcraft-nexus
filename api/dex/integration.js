@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 
@@ -70,7 +71,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore DEX GET:', error);
+        logger.error('Errore DEX GET:', error);
         
         // Fallback a dati mock per sviluppo
         const mockData = getMockDEXData(req.query.action);
@@ -111,7 +112,7 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore DEX POST:', error);
+        logger.error('Errore DEX POST:', error);
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -126,7 +127,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore generale DEX:', error);
+    logger.error('Errore generale DEX:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',
@@ -171,7 +172,7 @@ async function getDEXOrderBook(baseCurrency, quoteCurrency, depth) {
     };
 
   } catch (error) {
-    console.error('Errore order book XRPL:', error);
+    logger.error('Errore order book XRPL:', error);
     throw error;
   }
 }

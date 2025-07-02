@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { getXRPLClient, initializeXRPL, getAccountInfo } from '../config/xrpl.js';
 import jwt from 'jsonwebtoken';
 import { dropsToXrp } from 'xrpl';
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
       return res.status(200).json(response);
 
     } catch (error) {
-      console.error('Dashboard data fetch error:', error);
+      logger.error('Dashboard data fetch error:', error);
       
       // Fallback con dati mock completi
       const mockDashboard = generateMockDashboardData(decoded.userId, timeframe);
@@ -93,7 +94,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('Dashboard overview API error:', error);
+    logger.error('Dashboard overview API error:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

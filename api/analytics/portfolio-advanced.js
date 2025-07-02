@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Client } from 'xrpl'
 
 export default async function handler(req, res) {
@@ -228,7 +229,7 @@ export default async function handler(req, res) {
     })
     
   } catch (error) {
-    console.error('Portfolio analytics error:', error)
+    logger.error('Portfolio analytics error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to analyze portfolio'

@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 // SolCraft Nexus - User Management API
 // Integrazione XRPL + Supabase basata su studio approfondito
 
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid action' })
     }
   } catch (error) {
-    console.error('User API Error:', error)
+    logger.error('User API Error:', error);
     return res.status(500).json({ 
       error: 'Internal server error',
       details: error.message 

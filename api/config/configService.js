@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 // Servizio di configurazione sicuro per produzione
 // Sostituisce il file .env.production rimosso per motivi di sicurezza
 
@@ -116,7 +117,7 @@ class ConfigService {
 
     // Validazione JWT Secret (minimo 32 caratteri)
     if (this.config.security.jwtSecret && this.config.security.jwtSecret.length < 32) {
-      console.warn('⚠️ JWT_SECRET should be at least 32 characters long for security');
+      logger.warn('⚠️ JWT_SECRET should be at least 32 characters long for security');
     }
   }
 

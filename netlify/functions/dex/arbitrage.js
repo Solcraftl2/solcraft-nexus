@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 
 const { parse } = require('querystring');
 
@@ -60,7 +61,7 @@ exports.handler = async (event, context) => {
       body: res.body
     };
   } catch (error) {
-    console.error('Function error:', error);
+    logger.error('Function error:', error);
     return {
       statusCode: 500,
       headers: res.headers,
@@ -119,7 +120,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Arbitrage GET:', error);
+        logger.error('Errore Arbitrage GET:', error);
         
         // Fallback a dati mock per sviluppo
         const mockData = getMockArbitrageData(req.query.action, req.query.asset);
@@ -180,7 +181,7 @@ async function originalHandler(req, res) {
         });
 
       } catch (error) {
-        console.error('Errore Arbitrage POST:', error);
+        logger.error('Errore Arbitrage POST:', error);
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -195,7 +196,7 @@ async function originalHandler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore generale Arbitrage:', error);
+    logger.error('Errore generale Arbitrage:', error);
     return res.status(500).json({
       success: false,
       error: 'Errore interno del server',

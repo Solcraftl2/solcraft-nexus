@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../services/authService';
 
@@ -8,7 +9,7 @@ const Dashboard = ({ user }) => {
     try {
       await logout();
     } catch (error) {
-      console.error('Error during logout:', error);
+      logger.error('Error during logout:', error);
     }
   };
 

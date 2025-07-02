@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
           // Verifica audience (dovrebbe essere il tuo client ID)
           const expectedAudience = process.env.APPLE_CLIENT_ID || 'com.solcraft.nexus';
           if (payload.aud !== expectedAudience) {
-            console.warn('Audience mismatch:', payload.aud, 'expected:', expectedAudience);
+            logger.warn('Audience mismatch:', payload.aud, 'expected:', expectedAudience);
           }
 
           verifiedClaims = payload;
@@ -65,7 +66,7 @@ export default async function handler(req, res) {
           }
 
         } catch (error) {
-          console.error('Apple ID token verification error:', error);
+          logger.error('Apple ID token verification error:', error);
         }
       }
 
@@ -89,7 +90,7 @@ export default async function handler(req, res) {
             appleUser.lastName = user.name.lastName;
           }
         } catch (error) {
-          console.error('Apple authorization code exchange error:', error);
+          logger.error('Apple authorization code exchange error:', error);
         }
       }
 
@@ -201,7 +202,7 @@ export default async function handler(req, res) {
       });
 
     } catch (error) {
-      console.error('Apple OAuth error:', error);
+      logger.error('Apple OAuth error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server durante l\'autenticazione Apple',

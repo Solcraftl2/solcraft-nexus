@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -434,7 +435,7 @@ export default async function handler(req, res) {
       })
 
     } catch (error) {
-      console.error('Marketplace list error:', error)
+      logger.error('Marketplace list error:', error);
       return res.status(500).json({
         success: false,
         error: 'Errore interno del server'

@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 /**
  * XRPL Real Tokenization Service
  * Implementazione REALE per tokenizzazione asset su XRPL usando Multi-Purpose Token (MPT)
@@ -26,18 +27,18 @@ class XRPLTokenizationService {
             if (!this.isConnected) {
                 await this.client.connect();
                 this.isConnected = true;
-                console.log('✅ Connesso a XRPL network');
+                logger.info('✅ Connesso a XRPL network');
             }
             
             // Inizializza wallet issuer se configurato
             if (this.issuerSecret) {
                 this.issuerWallet = Wallet.fromSeed(this.issuerSecret);
-                console.log('✅ Issuer wallet inizializzato:', this.issuerWallet.address);
+                logger.info('✅ Issuer wallet inizializzato:', this.issuerWallet.address);
             }
             
             return true;
         } catch (error) {
-            console.error('❌ Errore connessione XRPL:', error);
+            logger.error('❌ Errore connessione XRPL:', error);
             throw new Error(`Connessione XRPL fallita: ${error.message}`);
         }
     }
@@ -50,10 +51,10 @@ class XRPLTokenizationService {
             if (this.isConnected) {
                 await this.client.disconnect();
                 this.isConnected = false;
-                console.log('✅ Disconnesso da XRPL network');
+                logger.info('✅ Disconnesso da XRPL network');
             }
         } catch (error) {
-            console.error('❌ Errore disconnessione XRPL:', error);
+            logger.error('❌ Errore disconnessione XRPL:', error);
         }
     }
 
@@ -90,7 +91,7 @@ class XRPLTokenizationService {
             const signed = this.issuerWallet.sign(prepared);
 
             // Invio transazione REALE su XRPL
-            console.log('🚀 Invio transazione MPT su XRPL...');
+            logger.info('🚀 Invio transazione MPT su XRPL...');
             const result = await this.client.submitAndWait(signed.tx_blob);
 
             if (result.result.meta.TransactionResult === 'tesSUCCESS') {
@@ -109,14 +110,14 @@ class XRPLTokenizationService {
                     ledgerIndex: result.result.ledger_index
                 };
 
-                console.log('✅ Token MPT creato con successo:', mptIssuanceId);
+                logger.info('✅ Token MPT creato con successo:', mptIssuanceId);
                 return tokenRecord;
             } else {
                 throw new Error(`Transazione fallita: ${result.result.meta.TransactionResult}`);
             }
 
         } catch (error) {
-            console.error('❌ Errore creazione token reale:', error);
+            logger.error('❌ Errore creazione token reale:', error);
             throw new Error(`Tokenizzazione fallita: ${error.message}`);
         }
     }
@@ -197,7 +198,7 @@ class XRPLTokenizationService {
             
             throw new Error('MPT Issuance ID non trovato nella transazione');
         } catch (error) {
-            console.error('❌ Errore estrazione MPT ID:', error);
+            logger.error('❌ Errore estrazione MPT ID:', error);
             throw error;
         }
     }
@@ -251,7 +252,7 @@ class XRPLTokenizationService {
             const result = await this.client.submitAndWait(signed.tx_blob);
 
             if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-                console.log('✅ Token MPT inviati con successo');
+                logger.info('✅ Token MPT inviati con successo');
                 return {
                     success: true,
                     transactionHash: result.result.hash,
@@ -263,7 +264,7 @@ class XRPLTokenizationService {
             }
 
         } catch (error) {
-            console.error('❌ Errore invio token:', error);
+            logger.error('❌ Errore invio token:', error);
             throw error;
         }
     }
@@ -290,7 +291,7 @@ class XRPLTokenizationService {
                         const decodedHex = Buffer.from(mptData.MPTokenMetadata, 'hex').toString('utf8');
                         metadata = JSON.parse(decodedHex);
                     } catch (e) {
-                        console.warn('⚠️ Impossibile decodificare metadata:', e);
+                        logger.warn('⚠️ Impossibile decodificare metadata:', e);
                     }
                 }
 
@@ -309,7 +310,7 @@ class XRPLTokenizationService {
             }
 
         } catch (error) {
-            console.error('❌ Errore recupero info MPT:', error);
+            logger.error('❌ Errore recupero info MPT:', error);
             throw error;
         }
     }
@@ -340,7 +341,7 @@ class XRPLTokenizationService {
                         const fullInfo = await this.getMPTInfo(token.index);
                         return fullInfo;
                     } catch (error) {
-                        console.warn('⚠️ Errore processing token:', token.index, error);
+                        logger.warn('⚠️ Errore processing token:', token.index, error);
                         return null;
                     }
                 })
@@ -349,7 +350,7 @@ class XRPLTokenizationService {
             return processedTokens.filter(token => token !== null);
 
         } catch (error) {
-            console.error('❌ Errore recupero MPT issuer:', error);
+            logger.error('❌ Errore recupero MPT issuer:', error);
             throw error;
         }
     }

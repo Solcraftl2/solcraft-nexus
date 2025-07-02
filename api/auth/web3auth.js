@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';
@@ -155,7 +156,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Errore Web3Auth:', error);
+    logger.error('Errore Web3Auth:', error);
     
     return res.status(500).json({
       success: false,

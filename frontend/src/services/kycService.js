@@ -1,3 +1,4 @@
+import { logger } from '../../../netlify/functions/utils/logger.js';
 // Servizio per gestire il processo KYC (Know Your Customer)
 import { supabase } from './supabaseService';
 
@@ -51,7 +52,7 @@ export class KYCService {
         levelInfo: this.KYC_LEVELS[data.kyc_level || 0]
       };
     } catch (error) {
-      console.error('Errore recupero stato KYC:', error);
+      logger.error('Errore recupero stato KYC:', error);
       return { success: false, error: error.message };
     }
   }
@@ -85,7 +86,7 @@ export class KYCService {
 
       return { success: true };
     } catch (error) {
-      console.error('Errore avvio KYC:', error);
+      logger.error('Errore avvio KYC:', error);
       return { success: false, error: error.message };
     }
   }
@@ -133,7 +134,7 @@ export class KYCService {
 
       return { success: true, document: data };
     } catch (error) {
-      console.error('Errore upload documento:', error);
+      logger.error('Errore upload documento:', error);
       return { success: false, error: error.message };
     }
   }
@@ -165,7 +166,7 @@ export class KYCService {
 
       return { success: true, status };
     } catch (error) {
-      console.error('Errore verifica automatica:', error);
+      logger.error('Errore verifica automatica:', error);
       return { success: false, error: error.message };
     }
   }
@@ -232,7 +233,7 @@ export class KYCService {
 
       return { success: true, newLevel };
     } catch (error) {
-      console.error('Errore controllo upgrade livello:', error);
+      logger.error('Errore controllo upgrade livello:', error);
       return { success: false, error: error.message };
     }
   }
@@ -257,11 +258,11 @@ export class KYCService {
       if (error) throw error;
 
       // In produzione: inviare SMS con OTP
-      console.log(`SMS OTP per ${phoneNumber}: ${otp}`);
+      logger.info(`SMS OTP per ${phoneNumber}: ${otp}`);
 
       return { success: true, message: 'OTP inviato via SMS' };
     } catch (error) {
-      console.error('Errore verifica telefono:', error);
+      logger.error('Errore verifica telefono:', error);
       return { success: false, error: error.message };
     }
   }
@@ -303,7 +304,7 @@ export class KYCService {
 
       return { success: true };
     } catch (error) {
-      console.error('Errore conferma OTP:', error);
+      logger.error('Errore conferma OTP:', error);
       return { success: false, error: error.message };
     }
   }
@@ -322,7 +323,7 @@ export class KYCService {
           user_agent: navigator.userAgent
         });
     } catch (error) {
-      console.error('Errore creazione audit record:', error);
+      logger.error('Errore creazione audit record:', error);
     }
   }
 
@@ -336,7 +337,7 @@ export class KYCService {
       if (error) throw error;
       return { success: true, url: data.signedUrl };
     } catch (error) {
-      console.error('Errore generazione URL documento:', error);
+      logger.error('Errore generazione URL documento:', error);
       return { success: false, error: error.message };
     }
   }
@@ -368,7 +369,7 @@ export class KYCService {
         }
       };
     } catch (error) {
-      console.error('Errore recupero statistiche KYC:', error);
+      logger.error('Errore recupero statistiche KYC:', error);
       return { success: false, error: error.message };
     }
   }

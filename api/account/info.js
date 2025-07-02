@@ -1,3 +1,4 @@
+import { logger } from '../../netlify/functions/utils/logger.js';
 import { Client } from 'xrpl'
 
 export default async function handler(req, res) {
@@ -115,7 +116,7 @@ export default async function handler(req, res) {
     })
     
   } catch (error) {
-    console.error('Account info error:', error)
+    logger.error('Account info error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch account information'

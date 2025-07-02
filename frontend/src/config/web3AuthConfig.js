@@ -18,13 +18,13 @@ export const web3AuthContextConfig = {
     },
     uiConfig: {
       appName: "SolCraft Nexus",
-      appUrl: "https://solcraft-nexus-tokenize-v1.vercel.app",
+      appUrl: "https://solcraft-nexus-production.netlify.app",
       theme: {
         primary: "#3b82f6",
       },
       mode: "light",
-      logoLight: "https://solcraft-nexus-tokenize-v1.vercel.app/favicon.ico",
-      logoDark: "https://solcraft-nexus-tokenize-v1.vercel.app/favicon.ico",
+      logoLight: "https://solcraft-nexus-production.netlify.app/favicon.ico",
+      logoDark: "https://solcraft-nexus-production.netlify.app/favicon.ico",
       defaultLanguage: "en",
       loginGridCol: 3,
       primaryButton: "externalLogin",

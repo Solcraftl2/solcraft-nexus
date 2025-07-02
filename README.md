@@ -82,7 +82,7 @@ npm run preview
 # Test Netlify Functions locally
 npx netlify dev
 
-# Run tests
+# Run unit tests with Vitest
 npm test
 ```
 
@@ -103,6 +103,7 @@ solcraft-nexus/
 │       ├── tokenization/   # Tokenization APIs
 │       ├── health/         # Health check APIs
 │       └── assets/         # Asset management APIs
+├── tests/                  # Unit tests
 ├── netlify.toml            # Netlify configuration
 ├── package.json            # Dependencies & scripts
 └── README.md              # This file

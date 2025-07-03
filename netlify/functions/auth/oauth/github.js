@@ -123,7 +123,7 @@ async function originalHandler(req, res) {
               logger.error('No access token in response:', tokenData);
             }
           } else {
-            logger.error('Token exchange failed:', await tokenResponse.text(););
+            logger.error('Token exchange failed:', await tokenResponse.text());
           }
         } catch (error) {
           logger.error('Token exchange error:', error);
@@ -197,7 +197,7 @@ async function originalHandler(req, res) {
             }
 
           } else {
-            logger.error('GitHub user API error:', userResponse.status, await userResponse.text(););
+            logger.error('GitHub user API error:', userResponse.status, await userResponse.text());
           }
         } catch (error) {
           logger.error('GitHub API error:', error);

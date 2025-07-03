@@ -71,7 +71,7 @@ async function testRedisConnection() {
     logger.info('✅ Redis SET successful:', testKey);
     
     const retrievedValue = await redis.get(testKey);
-    logger.info('✅ Redis GET result:', JSON.parse(retrievedValue););
+    logger.info('✅ Redis GET result:', JSON.parse(retrievedValue));
     
     // Test delete
     await redis.del(testKey);
@@ -122,8 +122,8 @@ async function testRedisConfig() {
   
   logger.info('📋 Redis Configuration:');
   logger.info('- REST URL:', config.url);
-  logger.info('- Token:', config.token.substring(0, 20); + '...');
-  logger.info('- Redis URL:', config.redis_url.substring(0, 50); + '...');
+  logger.info('- Token:', config.token.substring(0, 20) + '...');
+  logger.info('- Redis URL:', config.redis_url.substring(0, 50) + '...');
   
   return config;
 }

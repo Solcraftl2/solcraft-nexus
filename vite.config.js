@@ -4,14 +4,14 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  root: './',
+  root: './frontend',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./frontend/src"),
     },
   },
   build: {
-    outDir: './dist',
+    outDir: '../dist',
     rollupOptions: {
       external: [
         '@upstash/redis', 

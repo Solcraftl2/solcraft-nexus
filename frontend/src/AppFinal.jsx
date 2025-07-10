@@ -68,8 +68,8 @@ function AppFinal() {
             element={
               isAuthenticated ? 
                 <DashboardXRPL 
-                  user={connectedWallet} 
-                  onLogout={handleLogout} 
+                  walletData={connectedWallet} 
+                  onDisconnect={handleLogout} 
                 /> : 
                 <Navigate to="/" replace />
             } 

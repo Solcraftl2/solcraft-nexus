@@ -1,236 +1,221 @@
-import { logger } from '../../../netlify/functions/utils/logger.js';
-// Servizio API per integrazione con backend
-import authService from './authService.js';
+// API Service per comunicazione con backend XRPL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 class ApiService {
   constructor() {
-    this.baseUrl = 'http://localhost:5000/api/v1';
+    this.baseURL = API_BASE_URL;
+    this.token = localStorage.getItem('authToken');
   }
 
-  // Metodo generico per chiamate API
-  async apiCall(endpoint, options = {}) {
+  // Metodo per impostare il token di autenticazione
+  setAuthToken(token) {
+    this.token = token;
+    if (token) {
+      localStorage.setItem('authToken', token);
+    } else {
+      localStorage.removeItem('authToken');
+    }
+  }
+
+  // Metodo per fare richieste HTTP
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    // Aggiungi token di autenticazione se disponibile
+    if (this.token) {
+      config.headers.Authorization = `Bearer ${this.token}`;
+    }
+
     try {
-      const url = `${this.baseUrl}${endpoint}`;
-      const config = {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        ...options
-      };
-
-      // Aggiungi token di autenticazione se disponibile
-      if (authService.isLoggedIn()) {
-        config.headers.Authorization = `Bearer ${authService.getAuthToken()}`;
-      }
-
       const response = await fetch(url, config);
-      const data = await response.json();
-
+      
       if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      return data;
+      return await response.json();
     } catch (error) {
-      logger.error('API Error:', error);
+      console.error('API Request failed:', error);
       throw error;
     }
   }
 
-  // === WALLET API ===
-  
-  // Crea wallet
-  async createWallet(walletData) {
-    return this.apiCall('/wallet/create', {
+  // Metodi GET
+  async get(endpoint) {
+    return this.request(endpoint, { method: 'GET' });
+  }
+
+  // Metodi POST
+  async post(endpoint, data) {
+    return this.request(endpoint, {
       method: 'POST',
-      body: JSON.stringify(walletData)
+      body: JSON.stringify(data),
     });
   }
 
-  // Ottieni wallet utente
-  async getUserWallets() {
-    return this.apiCall('/wallet/list');
-  }
-
-  // Ottieni balance wallet
-  async getWalletBalance(walletAddress) {
-    return this.apiCall(`/wallet/balance/${walletAddress}`);
-  }
-
-  // === CRYPTO API ===
-  
-  // Invia crypto
-  async sendCrypto(transactionData) {
-    return this.apiCall('/crypto/send', {
-      method: 'POST',
-      body: JSON.stringify(transactionData)
-    });
-  }
-
-  // Ricevi crypto (genera indirizzo)
-  async generateReceiveAddress(currency) {
-    return this.apiCall('/crypto/receive', {
-      method: 'POST',
-      body: JSON.stringify({ currency })
-    });
-  }
-
-  // Storico transazioni
-  async getTransactionHistory(page = 1, limit = 20) {
-    return this.apiCall(`/crypto/transactions?page=${page}&limit=${limit}`);
-  }
-
-  // === ASSET API ===
-  
-  // Crea nuovo asset
-  async createAsset(assetData) {
-    return this.apiCall('/assets/create', {
-      method: 'POST',
-      body: JSON.stringify(assetData)
-    });
-  }
-
-  // Lista asset utente
-  async getUserAssets() {
-    return this.apiCall('/assets/my-assets');
-  }
-
-  // Dettagli asset
-  async getAssetDetails(assetId) {
-    return this.apiCall(`/assets/${assetId}`);
-  }
-
-  // Aggiorna asset
-  async updateAsset(assetId, updateData) {
-    return this.apiCall(`/assets/${assetId}`, {
+  // Metodi PUT
+  async put(endpoint, data) {
+    return this.request(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(updateData)
+      body: JSON.stringify(data),
     });
   }
 
-  // === TOKENIZATION API ===
-  
-  // Tokenizza asset
-  async tokenizeAsset(tokenizationData) {
-    return this.apiCall('/tokens/create', {
-      method: 'POST',
-      body: JSON.stringify(tokenizationData)
+  // Metodi DELETE
+  async delete(endpoint) {
+    return this.request(endpoint, { method: 'DELETE' });
+  }
+
+  // === XRPL API Methods ===
+
+  // Health check
+  async healthCheck() {
+    return this.get('/health');
+  }
+
+  // Wallet operations
+  async generateWallet() {
+    return this.post('/api/xrpl/wallet/generate');
+  }
+
+  async importWallet(seed) {
+    return this.post('/api/xrpl/wallet/import', { seed });
+  }
+
+  async getWalletInfo(address) {
+    return this.get(`/api/xrpl/wallet/info/${address}`);
+  }
+
+  async getWalletBalance(address) {
+    return this.get(`/api/xrpl/wallet/balance/${address}`);
+  }
+
+  async subscribeToWallet(address) {
+    return this.post('/api/xrpl/wallet/subscribe', { address });
+  }
+
+  // Transaction operations
+  async sendXRP(fromAddress, toAddress, amount, seed) {
+    return this.post('/api/xrpl/transaction/send', {
+      fromAddress,
+      toAddress,
+      amount,
+      seed
     });
   }
 
-  // Lista token
-  async getTokens() {
-    return this.apiCall('/tokens/list');
+  async getTransactionHistory(address, limit = 20) {
+    return this.get(`/api/xrpl/transaction/history/${address}?limit=${limit}`);
   }
 
-  // Dettagli token
-  async getTokenDetails(tokenId) {
-    return this.apiCall(`/tokens/${tokenId}`);
+  async getTransactionDetails(txHash) {
+    return this.get(`/api/xrpl/transaction/${txHash}`);
   }
 
-  // Transfer token
-  async transferToken(transferData) {
-    return this.apiCall('/tokens/transfer', {
-      method: 'POST',
-      body: JSON.stringify(transferData)
+  // Token operations
+  async createToken(tokenData) {
+    return this.post('/api/xrpl/token/create', tokenData);
+  }
+
+  async getTokens(address) {
+    return this.get(`/api/xrpl/token/list/${address}`);
+  }
+
+  async transferToken(fromAddress, toAddress, currency, amount, issuer, seed) {
+    return this.post('/api/xrpl/token/transfer', {
+      fromAddress,
+      toAddress,
+      currency,
+      amount,
+      issuer,
+      seed
     });
   }
 
-  // === PORTFOLIO API ===
-  
-  // Ottieni portfolio
-  async getPortfolio() {
-    return this.apiCall('/portfolio');
-  }
-
-  // Statistiche portfolio
-  async getPortfolioStats() {
-    return this.apiCall('/portfolio/stats');
-  }
-
-  // === MARKETPLACE API ===
-  
-  // Lista asset marketplace
-  async getMarketplaceAssets(filters = {}) {
-    const queryParams = new URLSearchParams(filters).toString();
-    return this.apiCall(`/marketplace/assets?${queryParams}`);
-  }
-
-  // Compra asset
-  async buyAsset(assetId, quantity) {
-    return this.apiCall('/marketplace/buy', {
-      method: 'POST',
-      body: JSON.stringify({ asset_id: assetId, quantity })
+  // Authentication
+  async loginWithWallet(address, signature) {
+    const response = await this.post('/api/auth/wallet-login', {
+      address,
+      signature
     });
+    
+    if (response.token) {
+      this.setAuthToken(response.token);
+    }
+    
+    return response;
   }
 
-  // Vendi asset
-  async sellAsset(assetId, quantity, price) {
-    return this.apiCall('/marketplace/sell', {
-      method: 'POST',
-      body: JSON.stringify({ asset_id: assetId, quantity, price })
-    });
+  async logout() {
+    this.setAuthToken(null);
+    return this.post('/api/auth/logout');
   }
 
-  // === USER API ===
-  
-  // Profilo utente
+  async getCurrentUser() {
+    return this.get('/api/auth/me');
+  }
+
+  // User operations
   async getUserProfile() {
-    return this.apiCall('/user/profile');
+    return this.get('/api/user/profile');
   }
 
-  // Aggiorna profilo
   async updateUserProfile(profileData) {
-    return this.apiCall('/user/profile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData)
-    });
+    return this.put('/api/user/profile', profileData);
   }
 
-  // === SECURITY API ===
-  
-  // Abilita 2FA
-  async enable2FA() {
-    return this.apiCall('/security/2fa/enable', {
-      method: 'POST'
-    });
+  async getUserWallets() {
+    return this.get('/api/user/wallets');
   }
 
-  // Verifica 2FA
-  async verify2FA(code) {
-    return this.apiCall('/security/2fa/verify', {
-      method: 'POST',
-      body: JSON.stringify({ code })
-    });
+  async addUserWallet(walletData) {
+    return this.post('/api/user/wallets', walletData);
   }
 
-  // === NOTIFICATIONS API ===
-  
-  // Ottieni notifiche
-  async getNotifications() {
-    return this.apiCall('/notifications');
+  // Asset tokenization
+  async tokenizeAsset(assetData) {
+    return this.post('/api/assets/tokenize', assetData);
   }
 
-  // Segna notifica come letta
-  async markNotificationRead(notificationId) {
-    return this.apiCall(`/notifications/${notificationId}/read`, {
-      method: 'PUT'
-    });
+  async getUserAssets() {
+    return this.get('/api/assets/user');
   }
 
-  // === ANALYTICS API ===
-  
-  // Dati dashboard
+  async getAssetDetails(assetId) {
+    return this.get(`/api/assets/${assetId}`);
+  }
+
+  async updateAsset(assetId, updateData) {
+    return this.put(`/api/assets/${assetId}`, updateData);
+  }
+
+  // Market data
+  async getMarketData() {
+    return this.get('/api/market/data');
+  }
+
+  async getXRPPrice() {
+    return this.get('/api/market/xrp-price');
+  }
+
+  // Analytics
   async getDashboardData() {
-    return this.apiCall('/analytics/dashboard');
+    return this.get('/api/analytics/dashboard');
   }
 
-  // Performance asset
-  async getAssetPerformance(assetId, period = '30d') {
-    return this.apiCall(`/analytics/asset/${assetId}/performance?period=${period}`);
+  async getPortfolioSummary() {
+    return this.get('/api/analytics/portfolio');
   }
 }
 
+// Esporta un'istanza singleton
 export default new ApiService();
 

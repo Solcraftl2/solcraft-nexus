@@ -1,271 +1,250 @@
 import React, { useState, useEffect } from 'react';
-import xrplService from '../services/xrplService';
+import apiService from '../services/apiService';
 
 const WalletConnectModal = ({ isOpen, onClose, onConnect }) => {
   const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('');
-  const [xrplConnected, setXrplConnected] = useState(false);
+  const [error, setError] = useState('');
+  const [walletData, setWalletData] = useState(null);
 
-  if (!isOpen) return null;
-
-  // Connetti a XRPL quando il modal si apre
+  // Reset state quando il modal si apre/chiude
   useEffect(() => {
-    if (isOpen && !xrplConnected) {
-      connectToXRPL();
+    if (!isOpen) {
+      setIsConnecting(false);
+      setError('');
+      setWalletData(null);
     }
   }, [isOpen]);
 
-  const connectToXRPL = async () => {
-    try {
-      setConnectionStatus('Connecting to XRPL network...');
-      await xrplService.connect('testnet');
-      setXrplConnected(true);
-      setConnectionStatus('Connected to XRPL Testnet');
-    } catch (error) {
-      setConnectionStatus(`Connection failed: ${error.message}`);
-      console.error('XRPL connection error:', error);
-    }
-  };
-
-  const wallets = [
-    {
-      name: 'XUMM',
-      icon: '🔷',
-      description: 'XRPL native wallet with advanced features',
-      type: 'xrpl',
-      available: true
-    },
-    {
-      name: 'Crossmark',
-      icon: '✖️',
-      description: 'Browser extension wallet for XRPL',
-      type: 'xrpl',
-      available: typeof window !== 'undefined' && window.crossmark
-    },
-    {
-      name: 'Generate XRPL Wallet',
-      icon: '🆕',
-      description: 'Create new XRPL wallet for testing',
-      type: 'generate',
-      available: xrplConnected
-    },
-    {
-      name: 'Import XRPL Wallet',
-      icon: '📥',
-      description: 'Import existing XRPL wallet from seed',
-      type: 'import',
-      available: xrplConnected
-    }
-  ];
-
-  const handleWalletConnect = async (wallet) => {
-    if (!xrplConnected) {
-      alert('Please wait for XRPL connection to complete');
-      return;
-    }
-
+  const handleWalletConnect = async (walletType) => {
     setIsConnecting(true);
-    setConnectionStatus(`Connecting to ${wallet.name}...`);
+    setError('');
 
     try {
-      let walletData = null;
-
-      switch (wallet.type) {
+      let result;
+      
+      switch (walletType) {
         case 'generate':
-          setConnectionStatus('Generating new XRPL wallet...');
-          const fundResult = await xrplService.fundTestnetAccount();
-          walletData = {
-            type: 'xrpl',
-            name: 'Generated XRPL Wallet',
-            address: fundResult.wallet.address,
-            seed: fundResult.wallet.seed,
-            balance: fundResult.balance,
-            network: 'testnet'
-          };
+          result = await apiService.generateWallet();
           break;
-
+          
         case 'import':
-          const seed = prompt('Enter your XRPL wallet seed:');
+          const seed = prompt('Inserisci il seed del tuo wallet XRPL:');
           if (!seed) {
             setIsConnecting(false);
             return;
           }
-          setConnectionStatus('Importing XRPL wallet...');
-          const importedWallet = xrplService.importWallet(seed);
-          const balance = await xrplService.getBalance(importedWallet.address);
-          walletData = {
-            type: 'xrpl',
-            name: 'Imported XRPL Wallet',
-            address: importedWallet.address,
-            seed: seed,
-            balance: balance,
-            network: 'testnet'
-          };
+          result = await apiService.importWallet(seed);
           break;
-
-        case 'xrpl':
-          if (wallet.name === 'Crossmark' && window.crossmark) {
-            setConnectionStatus('Connecting to Crossmark...');
-            try {
-              const response = await window.crossmark.signInAndWait();
-              if (response) {
-                walletData = {
-                  type: 'crossmark',
-                  name: 'Crossmark Wallet',
-                  address: response.response.account,
-                  network: 'mainnet'
-                };
-              }
-            } catch (error) {
-              throw new Error('Crossmark connection failed');
-            }
-          } else {
-            // Per XUMM e altri, usa demo mode per ora
-            walletData = {
-              type: 'demo',
-              name: wallet.name,
-              address: 'rDemo' + Math.random().toString(36).substr(2, 9),
-              network: 'testnet'
-            };
-          }
+          
+        case 'xumm':
+        case 'crossmark':
+          // Per ora simuliamo la connessione con wallet esterni
+          // In futuro si integreranno le SDK specifiche
+          result = await apiService.generateWallet();
+          result.walletType = walletType;
           break;
-
+          
         case 'demo':
-          walletData = {
-            type: 'demo',
-            name: 'Demo Wallet',
-            address: 'rDemo' + Math.random().toString(36).substr(2, 9),
-            network: 'testnet'
+          // Modalità demo con wallet predefinito
+          result = {
+            address: 'rDemo1234567890123456789012345678901',
+            publicKey: 'demo_public_key',
+            balance: '1250.75',
+            walletType: 'demo',
+            isDemo: true
           };
           break;
-
+          
         default:
-          throw new Error('Unsupported wallet type');
+          throw new Error('Tipo di wallet non supportato');
       }
 
-      if (walletData) {
-        setConnectionStatus('Connection successful!');
-        setTimeout(() => {
-          onConnect(walletData);
-          setIsConnecting(false);
-        }, 1000);
+      // Ottieni informazioni aggiuntive del wallet se non è demo
+      if (!result.isDemo) {
+        try {
+          const walletInfo = await apiService.getWalletInfo(result.address);
+          const balanceInfo = await apiService.getWalletBalance(result.address);
+          
+          result = {
+            ...result,
+            ...walletInfo,
+            balance: balanceInfo.balance || '0'
+          };
+        } catch (infoError) {
+          console.warn('Errore nel recupero info wallet:', infoError);
+          // Continua comunque con i dati base
+        }
       }
-    } catch (error) {
-      setConnectionStatus(`Connection failed: ${error.message}`);
+
+      setWalletData(result);
+      
+      // Simula un breve delay per UX
       setTimeout(() => {
+        onConnect(result);
         setIsConnecting(false);
-      }, 2000);
+      }, 1500);
+
+    } catch (err) {
+      console.error('Errore connessione wallet:', err);
+      setError(err.message || 'Errore durante la connessione del wallet');
+      setIsConnecting(false);
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-8 relative">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          disabled={isConnecting}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 relative">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H3m2 0h4M9 7h6m-6 4h6m-6 4h6" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect Your XRPL Wallet</h2>
-          <p className="text-gray-600">
-            Choose your preferred wallet to access SolCraft Nexus
-          </p>
-        </div>
-
-        {/* Connection Status */}
-        {connectionStatus && (
-          <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center">
-              {isConnecting && (
-                <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mr-2"></div>
-              )}
-              <span className="text-blue-800 text-sm">{connectionStatus}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Wallet options */}
-        <div className="space-y-3 mb-6">
-          {wallets.map((wallet, index) => (
-            <button
-              key={index}
-              onClick={() => handleWalletConnect(wallet)}
-              disabled={!wallet.available || isConnecting}
-              className={`w-full p-4 border-2 rounded-xl transition-all duration-200 text-left group ${
-                wallet.available && !isConnecting
-                  ? 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                  : 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
-              }`}
-            >
-              <div className="flex items-center space-x-4">
-                <div className="text-2xl">{wallet.icon}</div>
-                <div className="flex-1">
-                  <div className={`font-semibold transition-colors ${
-                    wallet.available && !isConnecting
-                      ? 'text-gray-900 group-hover:text-blue-600'
-                      : 'text-gray-500'
-                  }`}>
-                    {wallet.name}
-                    {!wallet.available && wallet.type === 'xrpl' && wallet.name === 'Crossmark' && (
-                      <span className="text-xs text-red-500 ml-2">(Not installed)</span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {wallet.description}
-                  </div>
-                </div>
-                <svg className={`w-5 h-5 transition-colors ${
-                  wallet.available && !isConnecting
-                    ? 'text-gray-400 group-hover:text-blue-500'
-                    : 'text-gray-300'
-                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* Demo option */}
-        <div className="border-t border-gray-200 pt-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Connetti Wallet</h2>
           <button
-            onClick={() => handleWalletConnect({ name: 'Demo', type: 'demo' })}
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl"
             disabled={isConnecting}
-            className="w-full p-4 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded-xl transition-colors text-center"
           >
-            <div className="font-semibold text-gray-700">Continue with Demo</div>
-            <div className="text-sm text-gray-500">Explore the platform without connecting a wallet</div>
+            ×
           </button>
         </div>
 
-        {/* Security notice */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <svg className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            <div>
-              <div className="text-sm font-medium text-blue-900">Secure XRPL Connection</div>
-              <div className="text-xs text-blue-700">
-                Your wallet connection is encrypted and secure. We never store your private keys.
-                {xrplConnected && <span className="block mt-1">✅ Connected to XRPL Testnet</span>}
-              </div>
-            </div>
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
           </div>
-        </div>
+        )}
+
+        {/* Loading State */}
+        {isConnecting && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">
+              {walletData ? 'Finalizzazione connessione...' : 'Connessione in corso...'}
+            </p>
+            {walletData && (
+              <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>Wallet connesso:</strong><br />
+                  {walletData.address}
+                </p>
+                <p className="text-sm text-green-600 mt-2">
+                  Bilancio: {walletData.balance} XRP
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Wallet Options */}
+        {!isConnecting && (
+          <div className="space-y-3">
+            {/* Secure Connection Header */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-medium mb-2">
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                Connessione Sicura
+              </div>
+              <p className="text-gray-600 text-sm">
+                Scegli il tuo metodo di connessione preferito
+              </p>
+            </div>
+
+            {/* XUMM Wallet */}
+            <button
+              onClick={() => handleWalletConnect('xumm')}
+              className="w-full flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                  <span className="text-white font-bold text-sm">XU</span>
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900">XUMM</div>
+                  <div className="text-sm text-gray-500">Wallet mobile sicuro</div>
+                </div>
+              </div>
+              <div className="text-blue-600 group-hover:translate-x-1 transition-transform">→</div>
+            </button>
+
+            {/* Crossmark */}
+            <button
+              onClick={() => handleWalletConnect('crossmark')}
+              className="w-full flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all group"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center mr-3">
+                  <span className="text-white font-bold text-sm">CM</span>
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900">Crossmark</div>
+                  <div className="text-sm text-gray-500">Estensione browser</div>
+                </div>
+              </div>
+              <div className="text-purple-600 group-hover:translate-x-1 transition-transform">→</div>
+            </button>
+
+            {/* Generate New Wallet */}
+            <button
+              onClick={() => handleWalletConnect('generate')}
+              className="w-full flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all group"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center mr-3">
+                  <span className="text-white font-bold text-sm">+</span>
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900">Genera Nuovo</div>
+                  <div className="text-sm text-gray-500">Crea wallet XRPL</div>
+                </div>
+              </div>
+              <div className="text-green-600 group-hover:translate-x-1 transition-transform">→</div>
+            </button>
+
+            {/* Import Wallet */}
+            <button
+              onClick={() => handleWalletConnect('import')}
+              className="w-full flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition-all group"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center mr-3">
+                  <span className="text-white font-bold text-sm">↑</span>
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900">Importa Wallet</div>
+                  <div className="text-sm text-gray-500">Usa seed esistente</div>
+                </div>
+              </div>
+              <div className="text-orange-600 group-hover:translate-x-1 transition-transform">→</div>
+            </button>
+
+            {/* Demo Mode */}
+            <button
+              onClick={() => handleWalletConnect('demo')}
+              className="w-full flex items-center justify-between p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-gray-500 hover:bg-gray-50 transition-all group"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center mr-3">
+                  <span className="text-white font-bold text-sm">◉</span>
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900">Modalità Demo</div>
+                  <div className="text-sm text-gray-500">Esplora senza wallet</div>
+                </div>
+              </div>
+              <div className="text-gray-600 group-hover:translate-x-1 transition-transform">→</div>
+            </button>
+          </div>
+        )}
+
+        {/* Footer */}
+        {!isConnecting && (
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-500">
+              Le tue chiavi private rimangono sempre sicure e private
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

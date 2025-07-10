@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import HomepagePerfect from './components/HomepagePerfect';
-import DashboardVercelStyle from './components/DashboardVercelStyle';
+import DashboardXRPL from './components/DashboardXRPL';
 import WalletConnectModal from './components/WalletConnectModal';
 
 /**
@@ -17,12 +17,12 @@ function AppFinal() {
     setShowWalletModal(true);
   };
 
-  const handleWalletConnect = (walletName) => {
+  const handleWalletConnect = (walletData) => {
     setIsConnecting(true);
     
     // Simula processo di connessione
     setTimeout(() => {
-      setConnectedWallet(walletName);
+      setConnectedWallet(walletData);
       setIsAuthenticated(true);
       setShowWalletModal(false);
       setIsConnecting(false);
@@ -45,7 +45,7 @@ function AppFinal() {
     <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
       <div className="text-center">
         <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Connecting to {connectedWallet}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Connecting to {connectedWallet?.name || 'Wallet'}</h2>
         <p className="text-gray-600">Please confirm the connection in your wallet...</p>
       </div>
     </div>
@@ -67,8 +67,8 @@ function AppFinal() {
             path="/dashboard" 
             element={
               isAuthenticated ? 
-                <DashboardVercelStyle 
-                  user={{ wallet: connectedWallet }} 
+                <DashboardXRPL 
+                  user={connectedWallet} 
                   onLogout={handleLogout} 
                 /> : 
                 <Navigate to="/" replace />

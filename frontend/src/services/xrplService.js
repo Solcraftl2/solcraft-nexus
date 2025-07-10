@@ -1,42 +1,51 @@
-import { logger } from '../../../netlify/functions/utils/logger.js';
-// XRPL Service - Gestione transazioni e operazioni blockchain XRPL
-import { Client, Wallet, xrpToDrops, dropsToXrp } from 'xrpl';
+import { Client, Wallet, dropsToXrp, xrpToDrops } from 'xrpl';
 
 /**
- * Servizio per gestire transazioni XRPL reali
- * Fornisce metodi per connessione, pagamenti, tokenizzazione e trading
+ * XRPLService - Servizio per gestire tutte le operazioni XRPL
+ * Gestisce connessioni, wallet, transazioni e query del ledger
  */
 class XRPLService {
   constructor() {
     this.client = null;
     this.isConnected = false;
-    this.network = 'wss://xrplcluster.com/'; // Mainnet
-    // this.network = 'wss://s.altnet.rippletest.net:51233'; // Testnet per sviluppo
+    this.network = 'testnet'; // 'testnet' o 'mainnet'
+    this.servers = {
+      testnet: 'wss://s.altnet.rippletest.net:51233',
+      mainnet: 'wss://xrplcluster.com/'
+    };
+    this.currentWallet = null;
+    this.eventListeners = new Map();
   }
 
   /**
    * Connessione al network XRPL
-   * @returns {Promise<Object>} Risultato della connessione
    */
-  async connect() {
+  async connect(network = 'testnet') {
     try {
-      if (!this.client) {
-        this.client = new Client(this.network);
-      }
+      this.network = network;
+      const serverUrl = this.servers[network];
       
-      if (!this.isConnected) {
-        await this.client.connect();
-        this.isConnected = true;
-        logger.info('✅ Connesso al network XRPL');
+      if (!serverUrl) {
+        throw new Error(`Network non supportato: ${network}`);
       }
+
+      this.client = new Client(serverUrl);
+      await this.client.connect();
+      this.isConnected = true;
+
+      console.log(`✅ Connesso a XRPL ${network}: ${serverUrl}`);
       
-      return { success: true };
-    } catch (error) {
-      logger.error('❌ Errore connessione XRPL:', error);
-      return { 
-        success: false, 
-        error: 'Impossibile connettersi al network XRPL' 
+      // Setup event listeners
+      this.setupEventListeners();
+      
+      return {
+        success: true,
+        network: this.network,
+        server: serverUrl
       };
+    } catch (error) {
+      console.error('❌ Errore connessione XRPL:', error);
+      throw new Error(`Connessione fallita: ${error.message}`);
     }
   }
 
@@ -48,116 +57,156 @@ class XRPLService {
       if (this.client && this.isConnected) {
         await this.client.disconnect();
         this.isConnected = false;
-        logger.info('✅ Disconnesso dal network XRPL');
+        this.client = null;
+        console.log('✅ Disconnesso da XRPL');
       }
     } catch (error) {
-      logger.error('❌ Errore disconnessione XRPL:', error);
+      console.error('❌ Errore disconnessione:', error);
+    }
+  }
+
+  /**
+   * Verifica connessione
+   */
+  checkConnection() {
+    if (!this.client || !this.isConnected) {
+      throw new Error('Non connesso a XRPL. Chiamare connect() prima.');
+    }
+  }
+
+  /**
+   * Creazione nuovo wallet
+   */
+  generateWallet() {
+    try {
+      const wallet = Wallet.generate();
+      console.log('✅ Nuovo wallet generato:', wallet.address);
+      
+      return {
+        address: wallet.address,
+        seed: wallet.seed,
+        publicKey: wallet.publicKey,
+        privateKey: wallet.privateKey
+      };
+    } catch (error) {
+      console.error('❌ Errore generazione wallet:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Importa wallet da seed
+   */
+  importWallet(seed) {
+    try {
+      const wallet = Wallet.fromSeed(seed);
+      this.currentWallet = wallet;
+      console.log('✅ Wallet importato:', wallet.address);
+      
+      return {
+        address: wallet.address,
+        publicKey: wallet.publicKey
+      };
+    } catch (error) {
+      console.error('❌ Errore import wallet:', error);
+      throw new Error(`Import fallito: ${error.message}`);
+    }
+  }
+
+  /**
+   * Finanziamento account su Testnet
+   */
+  async fundTestnetAccount(wallet = null) {
+    try {
+      this.checkConnection();
+      
+      if (this.network !== 'testnet') {
+        throw new Error('Funding disponibile solo su Testnet');
+      }
+
+      const fundResult = await this.client.fundWallet(wallet);
+      console.log('✅ Account finanziato:', fundResult);
+      
+      return {
+        wallet: {
+          address: fundResult.wallet.address,
+          seed: fundResult.wallet.seed
+        },
+        balance: fundResult.balance
+      };
+    } catch (error) {
+      console.error('❌ Errore funding account:', error);
+      throw error;
     }
   }
 
   /**
    * Ottieni informazioni account
-   * @param {string} address - Indirizzo del wallet
-   * @returns {Promise<Object>} Informazioni dell'account
    */
   async getAccountInfo(address) {
     try {
-      await this.connect();
+      this.checkConnection();
       
-      const accountInfo = await this.client.request({
+      const response = await this.client.request({
         command: 'account_info',
         account: address,
         ledger_index: 'validated'
       });
 
+      const accountData = response.result.account_data;
+      
       return {
-        success: true,
-        data: {
-          address: address,
-          balance: dropsToXrp(accountInfo.result.account_data.Balance),
-          sequence: accountInfo.result.account_data.Sequence,
-          ownerCount: accountInfo.result.account_data.OwnerCount,
-          reserve: accountInfo.result.account_data.Reserve || 10,
-          flags: accountInfo.result.account_data.Flags
-        }
+        address: accountData.Account,
+        balance: dropsToXrp(accountData.Balance),
+        sequence: accountData.Sequence,
+        ownerCount: accountData.OwnerCount,
+        previousTxnID: accountData.PreviousTxnID,
+        flags: accountData.Flags
       };
     } catch (error) {
-      logger.error('❌ Errore recupero info account:', error);
-      return { 
-        success: false, 
-        error: 'Account non trovato o errore di rete' 
-      };
+      console.error('❌ Errore get account info:', error);
+      if (error.data?.error === 'actNotFound') {
+        throw new Error('Account non trovato o non attivato');
+      }
+      throw error;
     }
   }
 
   /**
-   * Ottieni bilancio token
-   * @param {string} address - Indirizzo del wallet
-   * @returns {Promise<Object>} Bilanci dei token
+   * Ottieni bilancio account
    */
-  async getTokenBalances(address) {
+  async getBalance(address) {
     try {
-      await this.connect();
-      
-      const lines = await this.client.request({
-        command: 'account_lines',
-        account: address,
-        ledger_index: 'validated'
-      });
-
-      const balances = lines.result.lines.map(line => ({
-        currency: line.currency,
-        issuer: line.account,
-        balance: parseFloat(line.balance),
-        limit: parseFloat(line.limit),
-        quality_in: line.quality_in,
-        quality_out: line.quality_out
-      }));
-
-      return {
-        success: true,
-        data: balances
-      };
+      const accountInfo = await this.getAccountInfo(address);
+      return parseFloat(accountInfo.balance);
     } catch (error) {
-      logger.error('❌ Errore recupero bilanci token:', error);
-      return { 
-        success: false, 
-        error: 'Impossibile recuperare bilanci token' 
-      };
+      console.error('❌ Errore get balance:', error);
+      return 0;
     }
   }
 
   /**
    * Invia pagamento XRP
-   * @param {Object} fromWallet - Wallet mittente
-   * @param {string} toAddress - Indirizzo destinatario
-   * @param {number} amount - Importo in XRP
-   * @param {string} memo - Memo opzionale
-   * @returns {Promise<Object>} Risultato della transazione
    */
-  async sendXRPPayment(fromWallet, toAddress, amount, memo = '') {
+  async sendXRP(fromWallet, toAddress, amount, memo = null) {
     try {
-      await this.connect();
-
-      // Valida parametri
-      if (!fromWallet || !toAddress || !amount) {
-        throw new Error('Parametri mancanti per il pagamento');
+      this.checkConnection();
+      
+      if (!fromWallet || !fromWallet.seed) {
+        throw new Error('Wallet mittente non valido');
       }
 
-      if (amount <= 0) {
-        throw new Error('Importo deve essere maggiore di zero');
-      }
+      const wallet = Wallet.fromSeed(fromWallet.seed);
+      const amountInDrops = xrpToDrops(amount.toString());
 
-      // Prepara transazione
       const payment = {
         TransactionType: 'Payment',
-        Account: fromWallet.address,
+        Account: wallet.address,
         Destination: toAddress,
-        Amount: xrpToDrops(amount.toString()),
-        Fee: '12' // Fee standard in drops
+        Amount: amountInDrops
       };
 
-      // Aggiungi memo se presente
+      // Aggiungi memo se fornito
       if (memo) {
         payment.Memos = [{
           Memo: {
@@ -166,170 +215,169 @@ class XRPLService {
         }];
       }
 
-      // Firma e invia transazione
+      // Prepara e invia transazione
       const prepared = await this.client.autofill(payment);
-      const signed = fromWallet.sign(prepared);
+      const signed = wallet.sign(prepared);
       const result = await this.client.submitAndWait(signed.tx_blob);
 
-      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-        return {
-          success: true,
-          data: {
-            hash: result.result.hash,
-            ledgerIndex: result.result.ledger_index,
-            fee: dropsToXrp(result.result.Fee),
-            amount: amount,
-            from: fromWallet.address,
-            to: toAddress,
-            memo: memo
-          }
-        };
-      } else {
-        throw new Error(`Transazione fallita: ${result.result.meta.TransactionResult}`);
-      }
+      console.log('✅ Pagamento inviato:', result);
 
+      return {
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
+        hash: result.result.hash,
+        fee: dropsToXrp(result.result.Fee),
+        result: result.result.meta.TransactionResult
+      };
     } catch (error) {
-      logger.error('❌ Errore invio pagamento:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Errore durante l\'invio del pagamento' 
-      };
-    }
-  }
-
-  /**
-   * Crea token personalizzato
-   * @param {Object} issuerWallet - Wallet emittente
-   * @param {string} currencyCode - Codice valuta (3 caratteri)
-   * @param {number} totalSupply - Fornitura totale
-   * @param {string} memo - Memo opzionale
-   * @returns {Promise<Object>} Risultato della creazione
-   */
-  async createToken(issuerWallet, currencyCode, totalSupply, memo = '') {
-    try {
-      await this.connect();
-
-      // Valida parametri
-      if (!issuerWallet || !currencyCode || !totalSupply) {
-        throw new Error('Parametri mancanti per la creazione del token');
-      }
-
-      if (currencyCode.length !== 3) {
-        throw new Error('Il codice valuta deve essere di 3 caratteri');
-      }
-
-      // Prepara transazione per creare token
-      const payment = {
-        TransactionType: 'Payment',
-        Account: issuerWallet.address,
-        Destination: issuerWallet.address, // Self-payment per creare token
-        Amount: {
-          currency: currencyCode,
-          value: totalSupply.toString(),
-          issuer: issuerWallet.address
-        },
-        Fee: '12'
-      };
-
-      // Aggiungi memo se presente
-      if (memo) {
-        payment.Memos = [{
-          Memo: {
-            MemoData: Buffer.from(memo, 'utf8').toString('hex').toUpperCase()
-          }
-        }];
-      }
-
-      // Firma e invia transazione
-      const prepared = await this.client.autofill(payment);
-      const signed = issuerWallet.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob);
-
-      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-        return {
-          success: true,
-          data: {
-            hash: result.result.hash,
-            currency: currencyCode,
-            issuer: issuerWallet.address,
-            totalSupply: totalSupply,
-            ledgerIndex: result.result.ledger_index
-          }
-        };
-      } else {
-        throw new Error(`Creazione token fallita: ${result.result.meta.TransactionResult}`);
-      }
-
-    } catch (error) {
-      logger.error('❌ Errore creazione token:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Errore durante la creazione del token' 
-      };
+      console.error('❌ Errore invio pagamento:', error);
+      throw error;
     }
   }
 
   /**
    * Crea Trust Line per token
-   * @param {Object} wallet - Wallet che crea la trust line
-   * @param {string} currency - Codice valuta
-   * @param {string} issuer - Indirizzo emittente
-   * @param {string} limit - Limite di fiducia
-   * @returns {Promise<Object>} Risultato della creazione
    */
-  async createTrustLine(wallet, currency, issuer, limit = '1000000000') {
+  async createTrustLine(wallet, tokenCode, issuerAddress, limit = '1000000') {
     try {
-      await this.connect();
+      this.checkConnection();
+      
+      const walletObj = Wallet.fromSeed(wallet.seed);
 
       const trustSet = {
         TransactionType: 'TrustSet',
-        Account: wallet.address,
+        Account: walletObj.address,
         LimitAmount: {
-          currency: currency,
-          issuer: issuer,
+          currency: tokenCode,
+          issuer: issuerAddress,
           value: limit
-        },
-        Fee: '12'
+        }
       };
 
       const prepared = await this.client.autofill(trustSet);
-      const signed = wallet.sign(prepared);
+      const signed = walletObj.sign(prepared);
       const result = await this.client.submitAndWait(signed.tx_blob);
 
-      if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-        return {
-          success: true,
-          data: {
-            hash: result.result.hash,
-            currency: currency,
-            issuer: issuer,
-            limit: limit
-          }
-        };
-      } else {
-        throw new Error(`Trust Line fallita: ${result.result.meta.TransactionResult}`);
-      }
+      console.log('✅ Trust Line creata:', result);
 
-    } catch (error) {
-      logger.error('❌ Errore creazione Trust Line:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Errore durante la creazione della Trust Line' 
+      return {
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
+        hash: result.result.hash,
+        tokenCode,
+        issuerAddress,
+        limit
       };
+    } catch (error) {
+      console.error('❌ Errore creazione Trust Line:', error);
+      throw error;
     }
   }
 
   /**
-   * Ottieni cronologia transazioni
-   * @param {string} address - Indirizzo del wallet
-   * @param {number} limit - Numero massimo di transazioni
-   * @returns {Promise<Object>} Cronologia transazioni
+   * Emetti token personalizzato
+   */
+  async issueToken(issuerWallet, holderAddress, tokenCode, amount) {
+    try {
+      this.checkConnection();
+      
+      const wallet = Wallet.fromSeed(issuerWallet.seed);
+
+      const payment = {
+        TransactionType: 'Payment',
+        Account: wallet.address,
+        Destination: holderAddress,
+        Amount: {
+          currency: tokenCode,
+          issuer: wallet.address,
+          value: amount.toString()
+        }
+      };
+
+      const prepared = await this.client.autofill(payment);
+      const signed = wallet.sign(prepared);
+      const result = await this.client.submitAndWait(signed.tx_blob);
+
+      console.log('✅ Token emesso:', result);
+
+      return {
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
+        hash: result.result.hash,
+        tokenCode,
+        amount,
+        issuer: wallet.address,
+        holder: holderAddress
+      };
+    } catch (error) {
+      console.error('❌ Errore emissione token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Crea ordine DEX
+   */
+  async createDEXOrder(wallet, takerGets, takerPays, expiration = null) {
+    try {
+      this.checkConnection();
+      
+      const walletObj = Wallet.fromSeed(wallet.seed);
+
+      const offer = {
+        TransactionType: 'OfferCreate',
+        Account: walletObj.address,
+        TakerGets: takerGets,
+        TakerPays: takerPays
+      };
+
+      if (expiration) {
+        offer.Expiration = expiration;
+      }
+
+      const prepared = await this.client.autofill(offer);
+      const signed = walletObj.sign(prepared);
+      const result = await this.client.submitAndWait(signed.tx_blob);
+
+      console.log('✅ Ordine DEX creato:', result);
+
+      return {
+        success: result.result.meta.TransactionResult === 'tesSUCCESS',
+        hash: result.result.hash,
+        offerSequence: result.result.Sequence
+      };
+    } catch (error) {
+      console.error('❌ Errore creazione ordine DEX:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ottieni Order Book DEX
+   */
+  async getOrderBook(takerGets, takerPays, limit = 20) {
+    try {
+      this.checkConnection();
+      
+      const response = await this.client.request({
+        command: 'book_offers',
+        taker_gets: takerGets,
+        taker_pays: takerPays,
+        limit: limit
+      });
+
+      return response.result.offers || [];
+    } catch (error) {
+      console.error('❌ Errore get order book:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ottieni storico transazioni
    */
   async getTransactionHistory(address, limit = 20) {
     try {
-      await this.connect();
-
-      const transactions = await this.client.request({
+      this.checkConnection();
+      
+      const response = await this.client.request({
         command: 'account_tx',
         account: address,
         limit: limit,
@@ -337,212 +385,130 @@ class XRPLService {
         ledger_index_max: -1
       });
 
-      const history = transactions.result.transactions.map(tx => ({
-        hash: tx.tx.hash,
-        type: tx.tx.TransactionType,
-        date: new Date((tx.tx.date + 946684800) * 1000), // Ripple epoch to Unix
-        ledgerIndex: tx.tx.ledger_index,
-        fee: dropsToXrp(tx.tx.Fee),
-        account: tx.tx.Account,
-        destination: tx.tx.Destination,
-        amount: tx.tx.Amount,
-        result: tx.meta.TransactionResult,
-        validated: tx.validated
-      }));
-
-      return {
-        success: true,
-        data: history
-      };
-
+      return response.result.transactions || [];
     } catch (error) {
-      logger.error('❌ Errore recupero cronologia:', error);
-      return { 
-        success: false, 
-        error: 'Impossibile recuperare la cronologia delle transazioni' 
-      };
+      console.error('❌ Errore get transaction history:', error);
+      throw error;
     }
   }
 
   /**
-   * Valida indirizzo XRPL
-   * @param {string} address - Indirizzo da validare
-   * @returns {boolean} True se valido
+   * Setup event listeners per ledger updates
+   */
+  setupEventListeners() {
+    if (!this.client) return;
+
+    // Sottoscrivi a ledger close events
+    this.client.request({
+      command: 'subscribe',
+      streams: ['ledger']
+    });
+
+    // Listener per nuovi ledger
+    this.client.on('ledgerClosed', (ledger) => {
+      console.log(`📊 Nuovo Ledger #${ledger.ledger_index} - ${ledger.txn_count} transazioni`);
+      this.notifyListeners('ledgerClosed', ledger);
+    });
+
+    // Listener per transazioni
+    this.client.on('transaction', (tx) => {
+      console.log('📝 Nuova transazione:', tx);
+      this.notifyListeners('transaction', tx);
+    });
+  }
+
+  /**
+   * Aggiungi listener personalizzato
+   */
+  addEventListener(event, callback) {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, []);
+    }
+    this.eventListeners.get(event).push(callback);
+  }
+
+  /**
+   * Rimuovi listener
+   */
+  removeEventListener(event, callback) {
+    if (this.eventListeners.has(event)) {
+      const listeners = this.eventListeners.get(event);
+      const index = listeners.indexOf(callback);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  }
+
+  /**
+   * Notifica listeners
+   */
+  notifyListeners(event, data) {
+    if (this.eventListeners.has(event)) {
+      this.eventListeners.get(event).forEach(callback => {
+        try {
+          callback(data);
+        } catch (error) {
+          console.error(`❌ Errore in listener ${event}:`, error);
+        }
+      });
+    }
+  }
+
+  /**
+   * Ottieni info network corrente
+   */
+  getNetworkInfo() {
+    return {
+      network: this.network,
+      server: this.servers[this.network],
+      isConnected: this.isConnected,
+      currentWallet: this.currentWallet?.address || null
+    };
+  }
+
+  /**
+   * Validazione indirizzo XRPL
    */
   isValidAddress(address) {
     try {
-      // Controllo formato base
-      if (!address || typeof address !== 'string') {
-        return false;
-      }
-
-      // Controllo lunghezza e caratteri
-      if (address.length < 25 || address.length > 34) {
-        return false;
-      }
-
-      // Controllo che inizi con 'r'
-      if (!address.startsWith('r')) {
-        return false;
-      }
-
-      // Controllo caratteri validi (base58)
-      const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
+      // Verifica formato base
+      if (!address || typeof address !== 'string') return false;
+      if (address.length < 25 || address.length > 34) return false;
+      if (!address.startsWith('r')) return false;
+      
+      // Verifica caratteri validi (base58)
+      const base58Regex = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
       return base58Regex.test(address);
-
     } catch (error) {
       return false;
     }
   }
 
   /**
-   * Calcola commissioni di rete
-   * @returns {Promise<Object>} Commissioni di rete
+   * Formatta importo XRP
    */
-  async getNetworkFees() {
-    try {
-      await this.connect();
-
-      const fees = await this.client.request({
-        command: 'server_info'
-      });
-
-      const baseFee = fees.result.info.validated_ledger.base_fee_xrp;
-      const reserveBase = fees.result.info.validated_ledger.reserve_base_xrp;
-      const reserveInc = fees.result.info.validated_ledger.reserve_inc_xrp;
-
-      return {
-        success: true,
-        data: {
-          baseFee: baseFee,
-          reserveBase: reserveBase,
-          reserveIncrement: reserveInc,
-          recommendedFee: baseFee * 1.2 // 20% sopra la fee base
-        }
-      };
-
-    } catch (error) {
-      logger.error('❌ Errore recupero commissioni:', error);
-      return { 
-        success: false, 
-        error: 'Impossibile recuperare le commissioni di rete' 
-      };
-    }
+  formatXRP(amount) {
+    return `${parseFloat(amount).toFixed(6)} XRP`;
   }
 
   /**
-   * Monitora transazione
-   * @param {string} hash - Hash della transazione
-   * @param {number} timeout - Timeout in millisecondi
-   * @returns {Promise<Object>} Stato della transazione
+   * Converti drops a XRP
    */
-  async waitForTransaction(hash, timeout = 30000) {
-    try {
-      await this.connect();
+  dropsToXrp(drops) {
+    return dropsToXrp(drops);
+  }
 
-      const startTime = Date.now();
-      
-      while (Date.now() - startTime < timeout) {
-        try {
-          const tx = await this.client.request({
-            command: 'tx',
-            transaction: hash
-          });
-
-          if (tx.result.validated) {
-            return {
-              success: true,
-              data: {
-                hash: hash,
-                validated: true,
-                result: tx.result.meta.TransactionResult,
-                ledgerIndex: tx.result.ledger_index
-              }
-            };
-          }
-        } catch (error) {
-          // Transazione non ancora validata, continua a controllare
-        }
-
-        // Aspetta 1 secondo prima del prossimo controllo
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-
-      return {
-        success: false,
-        error: 'Timeout: transazione non validata entro il tempo limite'
-      };
-
-    } catch (error) {
-      logger.error('❌ Errore monitoraggio transazione:', error);
-      return { 
-        success: false, 
-        error: 'Errore durante il monitoraggio della transazione' 
-      };
-    }
+  /**
+   * Converti XRP a drops
+   */
+  xrpToDrops(xrp) {
+    return xrpToDrops(xrp);
   }
 }
 
-/**
- * Utility functions per XRPL
- */
-export const XRPLUtils = {
-  /**
-   * Converti XRP in drops
-   * @param {number|string} xrp - Importo in XRP
-   * @returns {string} Importo in drops
-   */
-  xrpToDrops: (xrp) => {
-    return (parseFloat(xrp) * 1000000).toString();
-  },
+// Istanza singleton
+const xrplService = new XRPLService();
 
-  /**
-   * Converti drops in XRP
-   * @param {number|string} drops - Importo in drops
-   * @returns {string} Importo in XRP
-   */
-  dropsToXrp: (drops) => {
-    return (parseInt(drops) / 1000000).toString();
-  },
-
-  /**
-   * Formatta importo per display
-   * @param {number|string} amount - Importo
-   * @param {string} currency - Valuta
-   * @returns {string} Importo formattato
-   */
-  formatAmount: (amount, currency = 'XRP') => {
-    if (currency === 'XRP') {
-      return `${parseFloat(amount).toFixed(6)} XRP`;
-    } else {
-      return `${parseFloat(amount).toFixed(2)} ${currency}`;
-    }
-  },
-
-  /**
-   * Genera codice valuta da nome asset
-   * @param {string} assetName - Nome dell'asset
-   * @returns {string} Codice valuta (3 caratteri)
-   */
-  generateCurrencyCode: (assetName) => {
-    // Prende le prime 3 lettere maiuscole
-    return assetName.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
-  },
-
-  /**
-   * Calcola valore in USD (mock - in produzione usare API di prezzo)
-   * @param {number|string} xrpAmount - Importo in XRP
-   * @param {number} xrpPrice - Prezzo XRP in USD
-   * @returns {string} Valore in USD
-   */
-  calculateUSDValue: (xrpAmount, xrpPrice = 0.50) => {
-    return (parseFloat(xrpAmount) * xrpPrice).toFixed(2);
-  }
-};
-
-// Istanza singleton del servizio
-export const xrplService = new XRPLService();
-
-// Export default per compatibilità
 export default xrplService;
 

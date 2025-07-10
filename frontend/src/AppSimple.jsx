@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import WelcomePageImproved from './components/WelcomePageImproved';
-import DashboardImproved from './components/DashboardImproved';
+import DashboardSimple from './components/DashboardSimple';
 
 /**
- * App Component - Applicazione principale SolCraft Nexus
- * Gestisce routing e stato dell'autenticazione
+ * AppSimple - Versione semplificata per testare il design
  */
-function App() {
+function AppSimple() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -24,10 +23,12 @@ function App() {
     setIsAuthenticated(false);
   };
 
-  // Dashboard migliorato
-  const Dashboard = () => <DashboardImproved user={null} />;
+  // Dashboard semplificato senza dipendenze esterne
+  const Dashboard = () => {
+    return <DashboardSimple user={null} onLogout={handleLogout} />;
+  };
 
-  // Modal di login semplificato per ora
+  // Modal di login semplificato
   const LoginModal = () => (
     showLoginModal && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -82,5 +83,5 @@ function App() {
   );
 }
 
-export default App;
+export default AppSimple;
 

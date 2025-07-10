@@ -1,6 +1,7 @@
 const { Client, Wallet, dropsToXrp, xrpToDrops } = require('xrpl');
 const EventEmitter = require('events');
 const DatabaseService = require('./DatabaseService');
+const RedisService = require('./RedisService');
 
 /**
  * XRPLService - Servizio backend completo per XRPL
@@ -76,13 +77,46 @@ class XRPLService extends EventEmitter {
   setupEventListeners() {
     if (!this.client) return;
 
-    this.client.on('ledgerClosed', (ledger) => {
+    this.client.on('ledgerClosed', async (ledger) => {
       console.log(`📊 Nuovo Ledger #${ledger.ledger_index} - ${ledger.txn_count} transazioni`);
+      
+      // Cache ledger data in Redis
+      if (RedisService.isConnected()) {
+        await RedisService.cacheLedgerData(ledger.ledger_index, ledger, 60);
+        
+        // Publish real-time update
+        await RedisService.publishUpdate('ledger_updates', {
+          type: 'ledger_closed',
+          data: ledger
+        });
+      }
+      
       this.emit('ledgerClosed', ledger);
     });
 
     this.client.on('transaction', async (tx) => {
       console.log('📝 Nuova transazione:', tx.transaction.hash);
+      
+      // Publish real-time transaction update
+      if (RedisService.isConnected()) {
+        await RedisService.publishUpdate('transaction_updates', {
+          type: 'new_transaction',
+          data: tx
+        });
+        
+        // Queue event for affected wallets
+        const affectedAddresses = this.extractAffectedAddresses(tx);
+        for (const address of affectedAddresses) {
+          await RedisService.queueEvent(address, {
+            type: 'transaction',
+            data: tx
+          });
+          
+          // Invalidate wallet balance cache
+          await RedisService.redis.del(`wallet:balance:${address}`);
+        }
+      }
+      
       this.emit('transaction', tx);
       
       // Save transaction to database
@@ -596,6 +630,37 @@ class XRPLService extends EventEmitter {
 
   xrpToDrops(xrp) {
     return xrpToDrops(xrp);
+  }
+
+  /**
+   * Estrae gli indirizzi coinvolti in una transazione
+   */
+  extractAffectedAddresses(tx) {
+    const addresses = new Set();
+    const transaction = tx.transaction || tx;
+    
+    if (transaction.Account) {
+      addresses.add(transaction.Account);
+    }
+    
+    if (transaction.Destination) {
+      addresses.add(transaction.Destination);
+    }
+    
+    // Check for other affected addresses in metadata
+    if (tx.meta && tx.meta.AffectedNodes) {
+      for (const node of tx.meta.AffectedNodes) {
+        const nodeData = node.ModifiedNode || node.CreatedNode || node.DeletedNode;
+        if (nodeData && nodeData.FinalFields && nodeData.FinalFields.Account) {
+          addresses.add(nodeData.FinalFields.Account);
+        }
+        if (nodeData && nodeData.NewFields && nodeData.NewFields.Account) {
+          addresses.add(nodeData.NewFields.Account);
+        }
+      }
+    }
+    
+    return Array.from(addresses);
   }
 
   getNetworkInfo() {

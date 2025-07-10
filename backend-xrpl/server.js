@@ -16,6 +16,7 @@ const xrplRoutes = require('./routes/xrpl');
 // Import services
 const XRPLService = require('./services/XRPLService');
 const DatabaseService = require('./services/DatabaseService');
+const RedisService = require('./services/RedisService');
 
 // Load environment variables
 dotenv.config();
@@ -40,7 +41,8 @@ app.get('/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     xrpl_connected: XRPLService.isConnected(),
-    database_connected: DatabaseService.isConnected()
+    database_connected: DatabaseService.isConnected(),
+    redis_connected: RedisService.isConnected()
   });
 });
 
@@ -173,6 +175,14 @@ async function startServer() {
   try {
     console.log('🚀 Starting SolCraft Nexus XRPL Backend...');
 
+    // Initialize Redis connection
+    try {
+      await RedisService.connect();
+      console.log('✅ Redis connected');
+    } catch (error) {
+      console.log('⚠️  Redis not available - caching disabled');
+    }
+
     // Initialize database connection
     const dbResult = await DatabaseService.initialize();
     if (dbResult.success) {
@@ -206,6 +216,9 @@ process.on('SIGTERM', async () => {
   // Close WebSocket server
   wss.close();
   
+  // Disconnect from Redis
+  await RedisService.disconnect();
+  
   // Disconnect from XRPL
   await XRPLService.disconnect();
   
@@ -224,6 +237,9 @@ process.on('SIGINT', async () => {
   
   // Close WebSocket server
   wss.close();
+  
+  // Disconnect from Redis
+  await RedisService.disconnect();
   
   // Disconnect from XRPL
   await XRPLService.disconnect();

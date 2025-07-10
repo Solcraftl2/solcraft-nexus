@@ -1,94 +1,55 @@
 const express = require('express');
 const router = express.Router();
 const XRPLService = require('../services/XRPLService');
-const DatabaseService = require('../services/DatabaseService');
+const RedisService = require('../services/RedisService');
 
 /**
- * GET /api/wallet/:address/info
- * Ottieni informazioni complete wallet
+ * GET /api/wallet/balance/:address
+ * Ottieni bilancio wallet con caching Redis
  */
-router.get('/:address/info', async (req, res) => {
+router.get('/balance/:address', async (req, res) => {
   try {
     const { address } = req.params;
     
-    if (!XRPLService.isValidAddress(address)) {
-      return res.status(400).json({
+    // Rate limiting check
+    const rateLimitKey = `${req.ip}:wallet_balance`;
+    const rateLimitOk = await RedisService.checkRateLimit(rateLimitKey, 60, 60); // 60 requests per minute
+    
+    if (!rateLimitOk) {
+      return res.status(429).json({
         success: false,
-        error: 'Indirizzo wallet non valido',
+        error: 'Rate limit exceeded. Try again later.',
         timestamp: new Date().toISOString()
       });
     }
     
-    // Ottieni info da XRPL
+    // Check cache first
+    const cachedBalance = await RedisService.getCachedWalletBalance(address);
+    if (cachedBalance) {
+      return res.json({
+        success: true,
+        data: {
+          ...cachedBalance,
+          cached: true
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Get fresh data from XRPL
     const accountInfo = await XRPLService.getAccountInfo(address);
     
-    // Ottieni statistiche dal database
-    const stats = await DatabaseService.getWalletStats(address);
-    
-    // Ottieni token e trust lines
-    const [tokens, trustLines] = await Promise.all([
-      DatabaseService.getTokens(address),
-      DatabaseService.getTrustLines(address)
-    ]);
-    
-    const walletInfo = {
-      ...accountInfo,
-      stats,
-      tokens,
-      trustLines
-    };
-    
-    res.json({
-      success: true,
-      data: walletInfo,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('Errore info wallet:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-/**
- * GET /api/wallet/:address/balance
- * Ottieni bilancio dettagliato
- */
-router.get('/:address/balance', async (req, res) => {
-  try {
-    const { address } = req.params;
-    
-    if (!XRPLService.isValidAddress(address)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Indirizzo wallet non valido',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    const balance = await XRPLService.getBalance(address);
-    
-    // TODO: Implementare bilanci token personalizzati
-    const tokenBalances = [];
+    // Cache the result
+    await RedisService.cacheWalletBalance(address, accountInfo, 30); // Cache for 30 seconds
     
     res.json({
       success: true,
       data: {
-        address,
-        xrp: {
-          balance,
-          formatted: XRPLService.formatXRP(balance)
-        },
-        tokens: tokenBalances,
-        lastUpdated: new Date().toISOString()
+        ...accountInfo,
+        cached: false
       },
       timestamp: new Date().toISOString()
     });
-    
   } catch (error) {
     console.error('Errore bilancio wallet:', error);
     res.status(500).json({
@@ -100,71 +61,56 @@ router.get('/:address/balance', async (req, res) => {
 });
 
 /**
- * GET /api/wallet/:address/transactions
- * Ottieni transazioni wallet
+ * GET /api/wallet/transactions/:address
+ * Ottieni transazioni wallet con caching
  */
-router.get('/:address/transactions', async (req, res) => {
+router.get('/transactions/:address', async (req, res) => {
   try {
     const { address } = req.params;
-    const { limit = 20, offset = 0 } = req.query;
+    const { limit = 20, marker } = req.query;
     
-    if (!XRPLService.isValidAddress(address)) {
-      return res.status(400).json({
+    // Rate limiting
+    const rateLimitKey = `${req.ip}:wallet_transactions`;
+    const rateLimitOk = await RedisService.checkRateLimit(rateLimitKey, 30, 60);
+    
+    if (!rateLimitOk) {
+      return res.status(429).json({
         success: false,
-        error: 'Indirizzo wallet non valido',
+        error: 'Rate limit exceeded. Try again later.',
         timestamp: new Date().toISOString()
       });
     }
     
-    // Ottieni da database (più veloce)
-    const dbTransactions = await DatabaseService.getTransactions(address, parseInt(limit));
+    // Create cache key with parameters
+    const cacheKey = `transactions:${address}:${limit}:${marker || 'none'}`;
+    const cached = await RedisService.redis.get(cacheKey);
     
-    // Se non ci sono abbastanza transazioni nel DB, ottieni da XRPL
-    let xrplTransactions = [];
-    if (dbTransactions.length < parseInt(limit)) {
-      try {
-        xrplTransactions = await XRPLService.getTransactionHistory(address, parseInt(limit));
-      } catch (error) {
-        console.warn('Errore recupero transazioni XRPL:', error.message);
-      }
+    if (cached) {
+      const cachedData = JSON.parse(cached);
+      return res.json({
+        success: true,
+        data: {
+          ...cachedData,
+          cached: true
+        },
+        timestamp: new Date().toISOString()
+      });
     }
     
-    // Combina e deduplica
-    const allTransactions = [...dbTransactions];
-    const existingHashes = new Set(dbTransactions.map(tx => tx.hash));
+    // Get fresh data
+    const transactions = await XRPLService.getAccountTransactions(address, { limit, marker });
     
-    for (const tx of xrplTransactions) {
-      const hash = tx.transaction?.hash || tx.hash;
-      if (hash && !existingHashes.has(hash)) {
-        allTransactions.push(tx);
-      }
-    }
-    
-    // Ordina per timestamp
-    allTransactions.sort((a, b) => {
-      const timeA = new Date(a.timestamp || a.transaction?.date || 0);
-      const timeB = new Date(b.timestamp || b.transaction?.date || 0);
-      return timeB - timeA;
-    });
-    
-    // Applica limit e offset
-    const paginatedTransactions = allTransactions
-      .slice(parseInt(offset))
-      .slice(0, parseInt(limit));
+    // Cache for 60 seconds
+    await RedisService.redis.setex(cacheKey, 60, JSON.stringify(transactions));
     
     res.json({
       success: true,
       data: {
-        address,
-        transactions: paginatedTransactions,
-        count: paginatedTransactions.length,
-        total: allTransactions.length,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        ...transactions,
+        cached: false
       },
       timestamp: new Date().toISOString()
     });
-    
   } catch (error) {
     console.error('Errore transazioni wallet:', error);
     res.status(500).json({
@@ -176,110 +122,131 @@ router.get('/:address/transactions', async (req, res) => {
 });
 
 /**
- * POST /api/wallet/:address/subscribe
- * Sottoscrivi aggiornamenti wallet
+ * POST /api/wallet/session
+ * Crea sessione utente
  */
-router.post('/:address/subscribe', async (req, res) => {
+router.post('/session', async (req, res) => {
   try {
-    const { address } = req.params;
+    const { walletAddress, signature, message } = req.body;
     
-    if (!XRPLService.isValidAddress(address)) {
+    if (!walletAddress || !signature || !message) {
       return res.status(400).json({
         success: false,
-        error: 'Indirizzo wallet non valido',
+        error: 'Wallet address, signature e message sono richiesti',
         timestamp: new Date().toISOString()
       });
     }
     
-    const result = await XRPLService.subscribeToAccount(address);
-    
-    res.json({
-      success: true,
-      data: result,
-      message: 'Sottoscrizione attivata per aggiornamenti real-time',
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('Errore sottoscrizione wallet:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-/**
- * DELETE /api/wallet/:address/subscribe
- * Rimuovi sottoscrizione wallet
- */
-router.delete('/:address/subscribe', async (req, res) => {
-  try {
-    const { address } = req.params;
-    
-    if (!XRPLService.isValidAddress(address)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Indirizzo wallet non valido',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    const result = await XRPLService.unsubscribeFromAccount(address);
-    
-    res.json({
-      success: true,
-      data: result,
-      message: 'Sottoscrizione rimossa',
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('Errore rimozione sottoscrizione:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-/**
- * GET /api/wallet/:address/stats
- * Ottieni statistiche wallet
- */
-router.get('/:address/stats', async (req, res) => {
-  try {
-    const { address } = req.params;
-    
-    if (!XRPLService.isValidAddress(address)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Indirizzo wallet non valido',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    const stats = await DatabaseService.getWalletStats(address);
-    
-    // Aggiungi bilancio corrente
-    const balance = await XRPLService.getBalance(address);
-    
-    const walletStats = {
-      ...stats,
-      currentBalance: balance,
-      formattedBalance: XRPLService.formatXRP(balance)
+    // Verify signature (simplified - in production use proper verification)
+    const sessionData = {
+      walletAddress,
+      loginTime: new Date().toISOString(),
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
     };
     
+    // Store session in Redis
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await RedisService.storeSession(sessionId, sessionData, 3600); // 1 hour
+    
+    // Track active wallet
+    await RedisService.trackActiveWallet(walletAddress);
+    
     res.json({
       success: true,
-      data: walletStats,
+      data: {
+        sessionId,
+        walletAddress,
+        expiresIn: 3600
+      },
       timestamp: new Date().toISOString()
     });
-    
   } catch (error) {
-    console.error('Errore statistiche wallet:', error);
+    console.error('Errore creazione sessione:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/wallet/session/:sessionId
+ * Ottieni sessione utente
+ */
+router.get('/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    const sessionData = await RedisService.getSession(sessionId);
+    
+    if (!sessionData) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sessione non trovata o scaduta',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: sessionData,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Errore recupero sessione:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * DELETE /api/wallet/session/:sessionId
+ * Elimina sessione utente
+ */
+router.delete('/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    await RedisService.deleteSession(sessionId);
+    
+    res.json({
+      success: true,
+      message: 'Sessione eliminata',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Errore eliminazione sessione:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/wallet/active
+ * Ottieni wallet attivi
+ */
+router.get('/active', async (req, res) => {
+  try {
+    const activeWallets = await RedisService.getActiveWallets();
+    
+    res.json({
+      success: true,
+      data: {
+        count: activeWallets.length,
+        wallets: activeWallets
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Errore wallet attivi:', error);
     res.status(500).json({
       success: false,
       error: error.message,

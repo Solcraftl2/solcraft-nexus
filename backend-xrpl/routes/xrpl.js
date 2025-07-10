@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const XRPLService = require('../services/XRPLService');
 const DatabaseService = require('../services/DatabaseService');
+const RedisService = require('../services/RedisService');
 
 /**
  * GET /api/xrpl/status

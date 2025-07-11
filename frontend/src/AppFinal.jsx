@@ -1,55 +1,65 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import HomepagePerfect from './components/HomepagePerfect';
-import DashboardXRPL from './components/DashboardXRPL';
-import WalletConnectModal from './components/WalletConnectModal';
+import DashboardEnterprise from './components/DashboardEnterprise';
+import WalletConnectionReal from './components/WalletConnectionReal';
 
 /**
- * AppFinal - Versione finale con design Dione Protocol + Dashboard Vercel
+ * App principale SolCraft Nexus con componenti enterprise
  */
 function AppFinal() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [walletData, setWalletData] = useState(null);
   const [showWalletModal, setShowWalletModal] = useState(false);
-  const [connectedWallet, setConnectedWallet] = useState(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleOpenPortal = () => {
-    setShowWalletModal(true);
-  };
-
-  const handleWalletConnect = (walletData) => {
-    setIsConnecting(true);
+  const handleWalletConnect = (wallet) => {
+    setIsLoading(true);
+    setWalletData(wallet);
     
-    // Simula processo di connessione
+    // Simula caricamento dati wallet
     setTimeout(() => {
-      setConnectedWallet(walletData);
       setIsAuthenticated(true);
       setShowWalletModal(false);
-      setIsConnecting(false);
+      setIsLoading(false);
     }, 2000);
   };
 
-  const handleLogout = () => {
+  const handleDisconnect = () => {
     setIsAuthenticated(false);
-    setConnectedWallet(null);
+    setWalletData(null);
   };
 
-  const handleCloseModal = () => {
-    if (!isConnecting) {
-      setShowWalletModal(false);
-    }
+  const openWalletModal = () => {
+    setShowWalletModal(true);
   };
 
-  // Loading screen durante connessione
-  const LoadingScreen = () => (
-    <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Connecting to {connectedWallet?.name || 'Wallet'}</h2>
-        <p className="text-gray-600">Please confirm the connection in your wallet...</p>
+  // Loading screen durante connessione wallet
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <h2 className="text-2xl font-bold text-white mb-2">Connessione in corso...</h2>
+          <p className="text-blue-200">
+            Connettendo a {walletData?.name || 'wallet'} e caricando i dati XRPL
+          </p>
+          <div className="mt-6 bg-white bg-opacity-10 rounded-lg p-4 max-w-md mx-auto">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm">✓</span>
+              </div>
+              <span className="text-white">Wallet connesso</span>
+            </div>
+            <div className="flex items-center space-x-3 mt-2">
+              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-white">Caricamento dati blockchain...</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <BrowserRouter>
@@ -60,33 +70,31 @@ function AppFinal() {
             element={
               isAuthenticated ? 
                 <Navigate to="/dashboard" replace /> : 
-                <HomepagePerfect onOpenPortal={handleOpenPortal} />
+                <HomepagePerfect onOpenPortal={openWalletModal} />
             } 
           />
           <Route 
             path="/dashboard" 
             element={
               isAuthenticated ? 
-                <DashboardXRPL 
-                  walletData={connectedWallet} 
-                  onDisconnect={handleLogout} 
+                <DashboardEnterprise 
+                  walletData={walletData} 
+                  onDisconnect={handleDisconnect} 
                 /> : 
                 <Navigate to="/" replace />
             } 
           />
-          {/* Redirect per altre route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
-        {/* Wallet Connect Modal */}
-        <WalletConnectModal
-          isOpen={showWalletModal}
-          onClose={handleCloseModal}
-          onConnect={handleWalletConnect}
-        />
-
-        {/* Loading Screen */}
-        {isConnecting && <LoadingScreen />}
+        {/* Wallet Connection Modal */}
+        {showWalletModal && (
+          <WalletConnectionReal
+            isOpen={showWalletModal}
+            onClose={() => setShowWalletModal(false)}
+            onConnect={handleWalletConnect}
+          />
+        )}
       </div>
     </BrowserRouter>
   );

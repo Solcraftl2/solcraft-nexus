@@ -12,16 +12,27 @@ class RedisService extends EventEmitter {
     this.subscriber = null;
     this.publisher = null;
     this.isConnectedFlag = false;
-    this.config = {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: process.env.REDIS_PORT || 6379,
-      password: process.env.REDIS_PASSWORD || null,
-      retryDelayOnFailover: 100,
-      maxRetriesPerRequest: 3,
-      lazyConnect: true
-    };
     
-    // Database mappings
+    // Configurazione Redis - supporta sia URL che configurazione separata
+    console.log('🔍 Debug REDIS_URL:', process.env.REDIS_URL);
+    if (process.env.REDIS_URL) {
+      // Usa REDIS_URL per Upstash o altri servizi cloud
+      this.config = process.env.REDIS_URL;
+      console.log('🔗 Usando REDIS_URL:', this.config);
+    } else {
+      // Configurazione tradizionale per Redis locale
+      this.config = {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: process.env.REDIS_PORT || 6379,
+        password: process.env.REDIS_PASSWORD || null,
+        retryDelayOnFailover: 100,
+        maxRetriesPerRequest: 3,
+        lazyConnect: true
+      };
+      console.log('🔗 Usando configurazione locale:', this.config);
+    }
+    
+    // Database mappings (solo per Redis tradizionale)
     this.databases = {
       CACHE: 0,      // Cache dati XRPL
       SESSIONS: 1,   // Sessioni utente
@@ -36,23 +47,42 @@ class RedisService extends EventEmitter {
    */
   async connect() {
     try {
+      // Configurazione per connessione
+      let connectionConfig;
+      
+      if (typeof this.config === 'string') {
+        // REDIS_URL (Upstash o altri servizi cloud)
+        connectionConfig = this.config;
+        console.log('🔗 Connessione Redis via URL:', this.config.substring(0, 30) + '...');
+      } else {
+        // Configurazione tradizionale
+        connectionConfig = {
+          ...this.config,
+          db: this.databases.CACHE
+        };
+        console.log('🔗 Connessione Redis locale:', this.config.host + ':' + this.config.port);
+      }
+
       // Main Redis connection
-      this.redis = new Redis({
-        ...this.config,
-        db: this.databases.CACHE
-      });
+      this.redis = new Redis(connectionConfig);
 
-      // Subscriber per Pub/Sub
-      this.subscriber = new Redis({
-        ...this.config,
-        db: this.databases.QUEUE
-      });
+      // Per Upstash, usiamo la stessa connessione per subscriber e publisher
+      if (typeof this.config === 'string') {
+        this.subscriber = new Redis(this.config);
+        this.publisher = new Redis(this.config);
+      } else {
+        // Subscriber per Pub/Sub (Redis tradizionale)
+        this.subscriber = new Redis({
+          ...this.config,
+          db: this.databases.QUEUE
+        });
 
-      // Publisher per Pub/Sub
-      this.publisher = new Redis({
-        ...this.config,
-        db: this.databases.QUEUE
-      });
+        // Publisher per Pub/Sub (Redis tradizionale)
+        this.publisher = new Redis({
+          ...this.config,
+          db: this.databases.QUEUE
+        });
+      }
 
       // Setup event listeners
       this.setupEventListeners();
@@ -61,11 +91,11 @@ class RedisService extends EventEmitter {
       await this.redis.ping();
       this.isConnectedFlag = true;
 
-      console.log('✅ Redis connesso:', {
-        host: this.config.host,
-        port: this.config.port,
-        databases: Object.keys(this.databases).length
-      });
+      const connectionInfo = typeof this.config === 'string' 
+        ? { url: this.config.substring(0, 30) + '...', type: 'cloud' }
+        : { host: this.config.host, port: this.config.port, databases: Object.keys(this.databases).length };
+
+      console.log('✅ Redis connesso:', connectionInfo);
 
       this.emit('connected');
       return true;
@@ -510,6 +540,6 @@ class RedisService extends EventEmitter {
   }
 }
 
-// Export singleton instance
-module.exports = new RedisService();
+// Export class instead of singleton instance
+module.exports = RedisService;
 

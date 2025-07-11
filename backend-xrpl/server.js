@@ -16,10 +16,13 @@ const xrplRoutes = require('./routes/xrpl');
 // Import services
 const XRPLService = require('./services/XRPLService');
 const DatabaseService = require('./services/DatabaseService');
-const RedisService = require('./services/RedisService');
+const RedisServiceClass = require('./services/RedisService');
 
 // Load environment variables
 dotenv.config();
+
+// Create Redis service instance after loading env variables
+const RedisService = new RedisServiceClass();
 
 const app = express();
 const server = createServer(app);

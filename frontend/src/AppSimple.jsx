@@ -1,85 +1,45 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import WelcomePageImproved from './components/WelcomePageImproved';
-import DashboardSimple from './components/DashboardSimple';
+import React from 'react';
 
 /**
- * AppSimple - Versione semplificata per testare il design
+ * App semplificata per test
  */
 function AppSimple() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-
-  const handleLoginClick = () => {
-    setShowLoginModal(true);
-  };
-
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
-    setShowLoginModal(false);
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-  };
-
-  // Dashboard semplificato senza dipendenze esterne
-  const Dashboard = () => {
-    return <DashboardSimple user={null} onLogout={handleLogout} />;
-  };
-
-  // Modal di login semplificato
-  const LoginModal = () => (
-    showLoginModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-8 rounded-lg max-w-md w-full mx-4">
-          <h2 className="text-2xl font-bold mb-6">Accedi a SolCraft Nexus</h2>
-          <p className="text-gray-600 mb-6">
-            Autenticazione Web3Auth in fase di implementazione...
-          </p>
-          <div className="flex space-x-4">
-            <button
-              onClick={handleLoginSuccess}
-              className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
-            >
-              Login Demo
-            </button>
-            <button
-              onClick={() => setShowLoginModal(false)}
-              className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400"
-            >
-              Annulla
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  );
-
   return (
-    <BrowserRouter>
-      <div className="App">
-        <Routes>
-          <Route 
-            path="/" 
-            element={
-              isAuthenticated ? 
-                <Navigate to="/dashboard" replace /> : 
-                <WelcomePageImproved onLoginClick={handleLoginClick} />
-            } 
-          />
-          <Route 
-            path="/dashboard" 
-            element={
-              isAuthenticated ? 
-                <Dashboard /> : 
-                <Navigate to="/" replace />
-            } 
-          />
-        </Routes>
-        <LoginModal />
+    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+      <h1 style={{ color: '#333', marginBottom: '20px' }}>
+        🚀 SolCraft Nexus - Test App
+      </h1>
+      
+      <div style={{ 
+        background: '#f0f8ff', 
+        padding: '20px', 
+        borderRadius: '8px',
+        marginBottom: '20px'
+      }}>
+        <h2>✅ React App Funzionante!</h2>
+        <p>Se vedi questo messaggio, React si sta caricando correttamente.</p>
       </div>
-    </BrowserRouter>
+
+      <button 
+        onClick={() => alert('Test button funziona!')}
+        style={{
+          background: '#007bff',
+          color: 'white',
+          padding: '10px 20px',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: 'pointer',
+          fontSize: '16px'
+        }}
+      >
+        🧪 Test Button
+      </button>
+
+      <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
+        <p>Timestamp: {new Date().toLocaleString()}</p>
+        <p>User Agent: {navigator.userAgent.substring(0, 50)}...</p>
+      </div>
+    </div>
   );
 }
 

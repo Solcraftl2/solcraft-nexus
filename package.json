@@ -4,13 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "netlify:dev": "netlify dev",
-    "netlify:build": "npm run build && netlify build",
-    "netlify:deploy": "netlify deploy --prod"
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm install && npm run build",
+    "lint": "cd frontend && npm run lint",
+    "preview": "cd frontend && npm run preview",
+    "vercel:dev": "vercel dev",
+    "vercel:build": "npm run build",
+    "vercel:deploy": "vercel --prod"
   },
   "dependencies": {
     "@crossmarkio/sdk": "^0.4.0",

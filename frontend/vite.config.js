@@ -9,13 +9,17 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "crypto": "crypto-browserify",
+      "stream": "stream-browserify",
+      "buffer": "buffer"
     },
   },
   define: {
     global: 'globalThis',
+    'process.env': {}
   },
   optimizeDeps: {
-    include: ['xrpl']
+    include: ['xrpl', 'crypto-browserify', 'stream-browserify', 'buffer']
   },
   build: {
     outDir: 'dist',
@@ -23,10 +27,27 @@ export default defineConfig({
     rollupOptions: {
       external: [],
       output: {
-        globals: {}
+        globals: {},
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          crypto: ['crypto-browserify', 'stream-browserify', 'buffer'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-tabs']
+        }
       }
+    },
+    chunkSizeWarningLimit: 1000,
+    commonjsOptions: {
+      transformMixedEsModules: true
     }
   },
-  base: '/'
+  base: '/',
+  server: {
+    port: 3000,
+    host: true
+  },
+  preview: {
+    port: 3000,
+    host: true
+  }
 })
 

@@ -1,4 +1,4 @@
-import { logger } from '../../netlify/functions/utils/logger.js';
+import { logger } from '../utils/logger.js';
 // SolCraft Nexus - User Management API
 // Integrazione XRPL + Supabase basata su studio approfondito
 

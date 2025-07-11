@@ -1,4 +1,4 @@
-import { logger } from '../../netlify/functions/utils/logger.js';
+import { logger } from '../utils/logger.js';
 // Servizio di configurazione sicuro per produzione
 // Sostituisce il file .env.production rimosso per motivi di sicurezza
 

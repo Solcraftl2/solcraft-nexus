@@ -1,4 +1,4 @@
-import { logger } from '../../netlify/functions/utils/logger.js';
+import { logger } from '../utils/logger.js';
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'solcraft-nexus-secret-key-2025';

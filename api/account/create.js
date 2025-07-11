@@ -1,4 +1,4 @@
-import { logger } from '../../netlify/functions/utils/logger.js';
+import { logger } from '../utils/logger.js';
 import { getXRPLClient, initializeXRPL, walletFromSeed } from '../config/xrpl.js';
 import { Wallet } from 'xrpl';
 import jwt from 'jsonwebtoken';

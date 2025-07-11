@@ -1,4 +1,4 @@
-import { logger } from '../../../netlify/functions/utils/logger.js';
+import { logger } from '../../utils/logger.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 

@@ -1,0 +1,29 @@
+{
+  "name": "solcraft-nexus-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "SolCraft Nexus API Serverless Functions for Vercel",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.2",
+    "@upstash/redis": "^1.35.0",
+    "bcryptjs": "^3.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "xrpl": "^4.3.0",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.5.0"
+  },
+  "keywords": [
+    "blockchain",
+    "xrpl",
+    "tokenization",
+    "serverless",
+    "vercel"
+  ],
+  "author": "SolCraft Team",
+  "license": "MIT"
+}
+

@@ -1,4 +1,4 @@
-import { logger } from '../../netlify/functions/utils/logger.js';
+import { logger } from '../utils/logger.js';
 // SolCraft Nexus - Multi-Purpose Tokens API
 // Implementazione completa basata su studio XRPL approfondito
 

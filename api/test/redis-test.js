@@ -1,4 +1,4 @@
-import { logger } from '../../netlify/functions/utils/logger.js';
+import { logger } from '../utils/logger.js';
 import { Redis } from '@upstash/redis';
 
 // Test connessione Redis con le credenziali fornite

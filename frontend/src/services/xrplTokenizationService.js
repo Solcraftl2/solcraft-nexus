@@ -1,368 +1,632 @@
-import { logger } from '../../../netlify/functions/utils/logger.js';
 /**
- * XRPL Real Tokenization Service
- * Implementazione REALE per tokenizzazione asset su XRPL usando Multi-Purpose Token (MPT)
- * Sostituisce completamente le simulazioni con transazioni blockchain vere
+ * Tokenization Service Ottimizzato per Solcraft Nexus
+ * Gestisce creazione token seguendo best practices XRPL
+ * Implementazione basata sui code samples XRPL ufficiali
  */
 
-import { Client, Wallet, xrplToDrops, dropsToXrpl } from 'xrpl';
+import { convertStringToHex, convertHexToString, isValidClassicAddress } from 'xrpl';
+import xrplService from './xrplService.js';
+import walletService from './walletService.js';
 
-class XRPLTokenizationService {
+class TokenizationService {
     constructor() {
-        // Configurazione XRPL Client per Mainnet/Testnet
-        this.client = new Client(process.env.VITE_XRPL_SERVER || 'wss://s.altnet.rippletest.net:51233');
-        this.isConnected = false;
+        this.tokens = new Map();
+        this.trustLines = new Map();
+        this.eventListeners = new Map();
         
-        // Account Issuer configurato per tokenizzazione
-        this.issuerWallet = null;
-        this.issuerAddress = process.env.VITE_ISSUER_ADDRESS;
-        this.issuerSecret = process.env.VITE_ISSUER_SECRET;
-    }
-
-    /**
-     * Connessione al network XRPL
-     */
-    async connect() {
-        try {
-            if (!this.isConnected) {
-                await this.client.connect();
-                this.isConnected = true;
-                logger.info('✅ Connesso a XRPL network');
-            }
-            
-            // Inizializza wallet issuer se configurato
-            if (this.issuerSecret) {
-                this.issuerWallet = Wallet.fromSeed(this.issuerSecret);
-                logger.info('✅ Issuer wallet inizializzato:', this.issuerWallet.address);
-            }
-            
-            return true;
-        } catch (error) {
-            logger.error('❌ Errore connessione XRPL:', error);
-            throw new Error(`Connessione XRPL fallita: ${error.message}`);
-        }
-    }
-
-    /**
-     * Disconnessione dal network XRPL
-     */
-    async disconnect() {
-        try {
-            if (this.isConnected) {
-                await this.client.disconnect();
-                this.isConnected = false;
-                logger.info('✅ Disconnesso da XRPL network');
-            }
-        } catch (error) {
-            logger.error('❌ Errore disconnessione XRPL:', error);
-        }
-    }
-
-    /**
-     * Crea un nuovo Multi-Purpose Token (MPT) per asset immobiliare
-     * IMPLEMENTAZIONE REALE - sostituisce simulazione
-     */
-    async createRealEstateToken(assetData) {
-        try {
-            await this.connect();
-            
-            if (!this.issuerWallet) {
-                throw new Error('Issuer wallet non configurato');
-            }
-
-            // Validazione dati asset
-            this.validateAssetData(assetData);
-
-            // Preparazione metadata immutabile per MPT
-            const metadata = this.prepareAssetMetadata(assetData);
-            
-            // Costruzione transazione MPTokenIssuanceCreate REALE
-            const transaction = {
-                TransactionType: 'MPTokenIssuanceCreate',
-                Account: this.issuerWallet.address,
-                MPTokenMetadata: this.encodeMetadata(metadata),
-                MaximumAmount: assetData.totalSupply.toString(),
-                TransferFee: this.calculateTransferFee(assetData.transferFeePercent || 0.5),
-                Flags: this.calculateMPTFlags(assetData)
-            };
-
-            // Preparazione e firma transazione
-            const prepared = await this.client.autofill(transaction);
-            const signed = this.issuerWallet.sign(prepared);
-
-            // Invio transazione REALE su XRPL
-            logger.info('🚀 Invio transazione MPT su XRPL...');
-            const result = await this.client.submitAndWait(signed.tx_blob);
-
-            if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-                // Estrazione MPT Issuance ID dalla transazione
-                const mptIssuanceId = this.extractMPTIssuanceId(result);
-                
-                // Creazione record token reale
-                const tokenRecord = {
-                    mptIssuanceId,
-                    transactionHash: result.result.hash,
-                    issuerAddress: this.issuerWallet.address,
-                    metadata,
-                    assetData,
-                    createdAt: new Date().toISOString(),
-                    status: 'active',
-                    ledgerIndex: result.result.ledger_index
-                };
-
-                logger.info('✅ Token MPT creato con successo:', mptIssuanceId);
-                return tokenRecord;
-            } else {
-                throw new Error(`Transazione fallita: ${result.result.meta.TransactionResult}`);
-            }
-
-        } catch (error) {
-            logger.error('❌ Errore creazione token reale:', error);
-            throw new Error(`Tokenizzazione fallita: ${error.message}`);
-        }
-    }
-
-    /**
-     * Prepara metadata immutabile per asset immobiliare
-     */
-    prepareAssetMetadata(assetData) {
-        return {
-            Name: `${assetData.name} Token`,
-            Identifier: assetData.symbol,
-            AssetType: 'Real Estate',
-            Location: assetData.location,
-            Description: assetData.description,
-            FaceValue: assetData.faceValue,
-            TotalSupply: assetData.totalSupply,
-            Currency: assetData.currency || 'EUR',
-            IssueDate: new Date().toISOString().split('T')[0],
-            Jurisdiction: assetData.jurisdiction || 'Italy',
-            RegulatoryCompliance: 'EU MiFID II, GDPR',
-            SecurityType: 'Real Estate Token',
-            Issuer: 'SolCraft Nexus',
-            ExternalUrl: `https://solcraft-nexus.vercel.app/assets/${assetData.symbol}`,
-            LegalDocuments: assetData.legalDocuments || [],
-            Valuation: {
-                amount: assetData.valuation,
-                currency: assetData.currency || 'EUR',
-                date: new Date().toISOString().split('T')[0],
-                valuator: assetData.valuator || 'Certified Appraiser'
-            }
+        // Configurazione token
+        this.tokenConfig = {
+            maxCurrencyCodeLength: 20,
+            minCurrencyCodeLength: 3,
+            maxMetadataSize: 1024,
+            defaultTransferFee: 0,
+            maxTransferFee: 1000000000 // 1 billion (1%)
         };
     }
 
     /**
-     * Codifica metadata in formato hex per XRPL
+     * Crea un nuovo token seguendo best practices XRPL
      */
-    encodeMetadata(metadata) {
-        const jsonString = JSON.stringify(metadata);
-        return Buffer.from(jsonString, 'utf8').toString('hex').toUpperCase();
-    }
-
-    /**
-     * Calcola transfer fee per MPT (in formato XRPL)
-     */
-    calculateTransferFee(percentFee) {
-        // XRPL transfer fee: 1000000000 = 0%, 2000000000 = 100%
-        // Formula: 1000000000 + (percentFee * 10000000)
-        return Math.floor(1000000000 + (percentFee * 10000000));
-    }
-
-    /**
-     * Calcola flags per MPT basati su configurazione asset
-     */
-    calculateMPTFlags(assetData) {
-        let flags = 0;
-        
-        // Flag standard per asset immobiliari
-        if (assetData.transferable !== false) flags |= 0x00000001; // Transferable
-        if (assetData.burnable === true) flags |= 0x00000002; // Burnable
-        if (assetData.onlyXRP === true) flags |= 0x00000004; // OnlyXRP
-        
-        return flags;
-    }
-
-    /**
-     * Estrae MPT Issuance ID dalla transazione
-     */
-    extractMPTIssuanceId(transactionResult) {
+    async createToken(tokenData) {
         try {
-            const createdNodes = transactionResult.result.meta.CreatedNodes;
-            const mptNode = createdNodes.find(node => 
-                node.CreatedNode && node.CreatedNode.LedgerEntryType === 'MPToken'
-            );
-            
-            if (mptNode) {
-                return mptNode.CreatedNode.LedgerIndex;
+            const {
+                currencyCode,
+                totalSupply,
+                metadata = {},
+                transferFee = this.tokenConfig.defaultTransferFee,
+                requireAuth = false,
+                disallowXRP = true,
+                defaultRipple = false
+            } = tokenData;
+
+            // Validazione input
+            this.validateTokenData(tokenData);
+
+            const wallet = walletService.getCurrentWallet();
+            if (!wallet) {
+                throw new Error('Wallet non connesso');
             }
-            
-            throw new Error('MPT Issuance ID non trovato nella transazione');
+
+            console.log('🔄 Creazione token:', currencyCode);
+
+            // Step 1: Configura account issuer
+            const issuerConfig = await this.configureIssuerAccount({
+                transferFee,
+                requireAuth,
+                disallowXRP,
+                defaultRipple
+            });
+
+            // Step 2: Crea token metadata
+            const tokenMetadata = {
+                ...metadata,
+                currencyCode,
+                totalSupply,
+                issuer: wallet.address,
+                createdAt: new Date().toISOString(),
+                network: xrplService.getCurrentNetwork()?.name || 'unknown'
+            };
+
+            // Step 3: Crea trust line per il token (se necessario)
+            const trustLineResult = await this.createTrustLine(
+                wallet.address,
+                currencyCode,
+                totalSupply
+            );
+
+            // Step 4: Emetti token (Payment da issuer a se stesso)
+            const paymentResult = await this.issueTokens(
+                wallet.address,
+                currencyCode,
+                totalSupply
+            );
+
+            // Step 5: Crea record token
+            const token = {
+                id: this.generateTokenId(),
+                currencyCode,
+                totalSupply: parseFloat(totalSupply),
+                issuer: wallet.address,
+                metadata: tokenMetadata,
+                config: {
+                    transferFee,
+                    requireAuth,
+                    disallowXRP,
+                    defaultRipple
+                },
+                transactions: {
+                    issuerConfig: issuerConfig.hash,
+                    trustLine: trustLineResult.hash,
+                    payment: paymentResult.hash
+                },
+                status: 'active',
+                createdAt: new Date().toISOString()
+            };
+
+            // Salva token
+            this.tokens.set(token.id, token);
+
+            // Emetti evento
+            this.emit('tokenCreated', token);
+
+            console.log('✅ Token creato:', token.id);
+            return token;
+
         } catch (error) {
-            logger.error('❌ Errore estrazione MPT ID:', error);
+            console.error('❌ Errore creazione token:', error);
             throw error;
         }
     }
 
     /**
-     * Valida dati asset prima della tokenizzazione
+     * Configura account issuer
      */
-    validateAssetData(assetData) {
-        const required = ['name', 'symbol', 'location', 'faceValue', 'totalSupply'];
-        
-        for (const field of required) {
-            if (!assetData[field]) {
-                throw new Error(`Campo obbligatorio mancante: ${field}`);
+    async configureIssuerAccount(config) {
+        try {
+            const wallet = walletService.getCurrentWallet();
+            
+            // Prepara flags per AccountSet
+            let setFlags = 0;
+            let clearFlags = 0;
+
+            // Disallow XRP flag
+            if (config.disallowXRP) {
+                setFlags |= 0x00000008; // asfDisallowXRP
+            } else {
+                clearFlags |= 0x00000008;
+            }
+
+            // Require Auth flag
+            if (config.requireAuth) {
+                setFlags |= 0x00000004; // asfRequireAuth
+            } else {
+                clearFlags |= 0x00000004;
+            }
+
+            // Default Ripple flag
+            if (config.defaultRipple) {
+                setFlags |= 0x00020000; // asfDefaultRipple
+            } else {
+                clearFlags |= 0x00020000;
+            }
+
+            // Crea transazione AccountSet
+            const accountSetTx = {
+                TransactionType: 'AccountSet',
+                Account: wallet.address
+            };
+
+            // Aggiungi flags se necessario
+            if (setFlags > 0) {
+                accountSetTx.SetFlag = setFlags;
+            }
+            if (clearFlags > 0) {
+                accountSetTx.ClearFlag = clearFlags;
+            }
+
+            // Aggiungi transfer fee se specificato
+            if (config.transferFee > 0) {
+                accountSetTx.TransferRate = 1000000000 + config.transferFee;
+            }
+
+            console.log('🔄 Configurazione account issuer...', accountSetTx);
+
+            // Invia transazione
+            const response = await xrplService.submitTransaction(accountSetTx, wallet);
+            
+            if (response.result.engine_result !== 'tesSUCCESS') {
+                throw new Error(`Errore configurazione issuer: ${response.result.engine_result}`);
+            }
+
+            return {
+                hash: response.result.tx_json.hash,
+                config,
+                timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error('❌ Errore configurazione issuer:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Crea trust line per il token
+     */
+    async createTrustLine(issuer, currencyCode, limit) {
+        try {
+            const wallet = walletService.getCurrentWallet();
+            
+            // Formatta currency code
+            const formattedCurrency = this.formatCurrencyCode(currencyCode);
+
+            // Crea transazione TrustSet
+            const trustSetTx = {
+                TransactionType: 'TrustSet',
+                Account: wallet.address,
+                LimitAmount: {
+                    currency: formattedCurrency,
+                    issuer: issuer,
+                    value: limit.toString()
+                }
+            };
+
+            console.log('🔄 Creazione trust line...', trustSetTx);
+
+            // Invia transazione
+            const response = await xrplService.submitTransaction(trustSetTx, wallet);
+            
+            if (response.result.engine_result !== 'tesSUCCESS') {
+                throw new Error(`Errore trust line: ${response.result.engine_result}`);
+            }
+
+            // Salva trust line
+            const trustLineKey = `${wallet.address}:${currencyCode}:${issuer}`;
+            this.trustLines.set(trustLineKey, {
+                account: wallet.address,
+                currency: currencyCode,
+                issuer: issuer,
+                limit: parseFloat(limit),
+                hash: response.result.tx_json.hash,
+                createdAt: new Date().toISOString()
+            });
+
+            return {
+                hash: response.result.tx_json.hash,
+                account: wallet.address,
+                currency: currencyCode,
+                issuer: issuer,
+                limit: parseFloat(limit)
+            };
+
+        } catch (error) {
+            console.error('❌ Errore trust line:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Emetti token (Payment da issuer)
+     */
+    async issueTokens(destination, currencyCode, amount) {
+        try {
+            const wallet = walletService.getCurrentWallet();
+            
+            // Formatta currency code
+            const formattedCurrency = this.formatCurrencyCode(currencyCode);
+
+            // Crea transazione Payment
+            const paymentTx = {
+                TransactionType: 'Payment',
+                Account: wallet.address,
+                Destination: destination,
+                Amount: {
+                    currency: formattedCurrency,
+                    issuer: wallet.address,
+                    value: amount.toString()
+                }
+            };
+
+            console.log('🔄 Emissione token...', paymentTx);
+
+            // Invia transazione
+            const response = await xrplService.submitTransaction(paymentTx, wallet);
+            
+            if (response.result.engine_result !== 'tesSUCCESS') {
+                throw new Error(`Errore emissione token: ${response.result.engine_result}`);
+            }
+
+            return {
+                hash: response.result.tx_json.hash,
+                from: wallet.address,
+                to: destination,
+                currency: currencyCode,
+                amount: parseFloat(amount)
+            };
+
+        } catch (error) {
+            console.error('❌ Errore emissione token:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Trasferisce token tra account
+     */
+    async transferToken(fromWallet, toAddress, currencyCode, amount, memo = '') {
+        try {
+            // Validazione input
+            if (!isValidClassicAddress(toAddress)) {
+                throw new Error('Indirizzo destinazione non valido');
+            }
+
+            if (!currencyCode || amount <= 0) {
+                throw new Error('Currency code e amount richiesti');
+            }
+
+            // Trova token info
+            const tokenInfo = await this.getTokenInfo(currencyCode);
+            if (!tokenInfo) {
+                throw new Error(`Token ${currencyCode} non trovato`);
+            }
+
+            // Verifica saldo
+            const balance = await this.getTokenBalance(fromWallet.address, currencyCode);
+            if (balance.balance < amount) {
+                throw new Error(`Saldo insufficiente. Disponibile: ${balance.balance}, Richiesto: ${amount}`);
+            }
+
+            // Formatta currency code
+            const formattedCurrency = this.formatCurrencyCode(currencyCode);
+
+            // Crea transazione Payment
+            const paymentTx = {
+                TransactionType: 'Payment',
+                Account: fromWallet.address,
+                Destination: toAddress,
+                Amount: {
+                    currency: formattedCurrency,
+                    issuer: tokenInfo.issuer,
+                    value: amount.toString()
+                }
+            };
+
+            // Aggiungi memo se specificato
+            if (memo) {
+                paymentTx.Memos = [{
+                    Memo: {
+                        MemoData: convertStringToHex(memo),
+                        MemoType: convertStringToHex('text/plain')
+                    }
+                }];
+            }
+
+            console.log('🔄 Trasferimento token...', paymentTx);
+
+            // Invia transazione
+            const response = await xrplService.submitTransaction(paymentTx, fromWallet);
+            
+            if (response.result.engine_result !== 'tesSUCCESS') {
+                throw new Error(`Errore trasferimento: ${response.result.engine_result}`);
+            }
+
+            const transfer = {
+                hash: response.result.tx_json.hash,
+                from: fromWallet.address,
+                to: toAddress,
+                currency: currencyCode,
+                amount: parseFloat(amount),
+                memo,
+                timestamp: new Date().toISOString()
+            };
+
+            // Emetti evento
+            this.emit('tokenTransferred', transfer);
+
+            return transfer;
+
+        } catch (error) {
+            console.error('❌ Errore trasferimento token:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ottieni informazioni token
+     */
+    async getTokenInfo(currencyCode) {
+        try {
+            // Cerca nei token creati
+            for (const token of this.tokens.values()) {
+                if (token.currencyCode === currencyCode) {
+                    return token;
+                }
+            }
+
+            // Se non trovato localmente, cerca su XRPL
+            // (implementazione semplificata)
+            return null;
+
+        } catch (error) {
+            console.error('❌ Errore recupero info token:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ottieni saldo token per un account
+     */
+    async getTokenBalance(address, currencyCode) {
+        try {
+            if (!isValidClassicAddress(address)) {
+                throw new Error('Indirizzo non valido');
+            }
+
+            // Trova token info
+            const tokenInfo = await this.getTokenInfo(currencyCode);
+            if (!tokenInfo) {
+                throw new Error(`Token ${currencyCode} non trovato`);
+            }
+
+            // Richiedi account lines
+            const response = await xrplService.client.request({
+                command: 'account_lines',
+                account: address,
+                ledger_index: 'validated'
+            });
+
+            const lines = response.result.lines;
+            const formattedCurrency = this.formatCurrencyCode(currencyCode);
+            
+            // Trova la line per questo token
+            const tokenLine = lines.find(line => 
+                line.currency === formattedCurrency && 
+                line.account === tokenInfo.issuer
+            );
+
+            if (!tokenLine) {
+                return {
+                    currency: currencyCode,
+                    balance: 0,
+                    limit: 0,
+                    issuer: tokenInfo.issuer,
+                    hasLine: false
+                };
+            }
+
+            return {
+                currency: currencyCode,
+                balance: parseFloat(tokenLine.balance),
+                limit: parseFloat(tokenLine.limit),
+                issuer: tokenInfo.issuer,
+                hasLine: true,
+                qualityIn: tokenLine.quality_in,
+                qualityOut: tokenLine.quality_out
+            };
+
+        } catch (error) {
+            console.error('❌ Errore saldo token:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Lista tutti i token creati
+     */
+    getCreatedTokens() {
+        return Array.from(this.tokens.values())
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    /**
+     * Lista token per issuer
+     */
+    getTokensByIssuer(issuerAddress) {
+        return Array.from(this.tokens.values())
+            .filter(token => token.issuer === issuerAddress)
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    /**
+     * Ottieni trust lines per un account
+     */
+    async getAccountTrustLines(address) {
+        try {
+            if (!isValidClassicAddress(address)) {
+                throw new Error('Indirizzo non valido');
+            }
+
+            const response = await xrplService.client.request({
+                command: 'account_lines',
+                account: address,
+                ledger_index: 'validated'
+            });
+
+            return response.result.lines.map(line => ({
+                currency: line.currency,
+                issuer: line.account,
+                balance: parseFloat(line.balance),
+                limit: parseFloat(line.limit),
+                qualityIn: line.quality_in,
+                qualityOut: line.quality_out
+            }));
+
+        } catch (error) {
+            console.error('❌ Errore trust lines:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Formatta currency code per XRPL
+     */
+    formatCurrencyCode(code) {
+        if (code.length === 3) {
+            // Standard currency code (es. USD, EUR)
+            return code.toUpperCase();
+        } else {
+            // Custom currency code - converti in hex
+            return convertStringToHex(code).padEnd(40, '0');
+        }
+    }
+
+    /**
+     * Decodifica currency code da XRPL
+     */
+    decodeCurrencyCode(hexCode) {
+        if (hexCode.length === 3) {
+            return hexCode;
+        } else {
+            try {
+                return convertHexToString(hexCode).replace(/\0/g, '');
+            } catch (error) {
+                return hexCode;
             }
         }
+    }
 
-        if (assetData.totalSupply <= 0) {
+    /**
+     * Genera ID token unico
+     */
+    generateTokenId() {
+        return `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * Validazione dati token
+     */
+    validateTokenData(tokenData) {
+        const { currencyCode, totalSupply, transferFee } = tokenData;
+
+        if (!currencyCode || currencyCode.length < this.tokenConfig.minCurrencyCodeLength) {
+            throw new Error(`Currency code deve essere almeno ${this.tokenConfig.minCurrencyCodeLength} caratteri`);
+        }
+
+        if (currencyCode.length > this.tokenConfig.maxCurrencyCodeLength) {
+            throw new Error(`Currency code non può superare ${this.tokenConfig.maxCurrencyCodeLength} caratteri`);
+        }
+
+        if (!totalSupply || totalSupply <= 0) {
             throw new Error('Total supply deve essere maggiore di 0');
         }
 
-        if (assetData.faceValue <= 0) {
-            throw new Error('Face value deve essere maggiore di 0');
-        }
-
-        if (assetData.symbol.length > 20) {
-            throw new Error('Symbol deve essere massimo 20 caratteri');
+        if (transferFee && (transferFee < 0 || transferFee > this.tokenConfig.maxTransferFee)) {
+            throw new Error(`Transfer fee deve essere tra 0 e ${this.tokenConfig.maxTransferFee}`);
         }
     }
 
     /**
-     * Invia token MPT a un account destinatario
+     * Ottieni statistiche tokenizzazione
      */
-    async sendMPTTokens(mptIssuanceId, destinationAddress, amount) {
-        try {
-            await this.connect();
+    getTokenizationStats() {
+        const tokens = Array.from(this.tokens.values());
+        
+        return {
+            totalTokens: tokens.length,
+            totalSupply: tokens.reduce((sum, token) => sum + token.totalSupply, 0),
+            activeTokens: tokens.filter(token => token.status === 'active').length,
+            recentTokens: tokens.filter(token => {
+                const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                return new Date(token.createdAt) > dayAgo;
+            }).length,
+            tokensByNetwork: tokens.reduce((acc, token) => {
+                const network = token.metadata.network || 'unknown';
+                acc[network] = (acc[network] || 0) + 1;
+                return acc;
+            }, {})
+        };
+    }
 
-            if (!this.issuerWallet) {
-                throw new Error('Issuer wallet non configurato');
+    /**
+     * Sottoscrivi eventi
+     */
+    on(event, callback) {
+        if (!this.eventListeners.has(event)) {
+            this.eventListeners.set(event, []);
+        }
+        this.eventListeners.get(event).push(callback);
+    }
+
+    /**
+     * Rimuovi sottoscrizione eventi
+     */
+    off(event, callback) {
+        if (this.eventListeners.has(event)) {
+            const callbacks = this.eventListeners.get(event);
+            const index = callbacks.indexOf(callback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
             }
-
-            const transaction = {
-                TransactionType: 'MPTokenAuthorize',
-                Account: this.issuerWallet.address,
-                MPTokenIssuanceID: mptIssuanceId,
-                Holder: destinationAddress,
-                Amount: amount.toString()
-            };
-
-            const prepared = await this.client.autofill(transaction);
-            const signed = this.issuerWallet.sign(prepared);
-            const result = await this.client.submitAndWait(signed.tx_blob);
-
-            if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-                logger.info('✅ Token MPT inviati con successo');
-                return {
-                    success: true,
-                    transactionHash: result.result.hash,
-                    amount,
-                    destinationAddress
-                };
-            } else {
-                throw new Error(`Invio fallito: ${result.result.meta.TransactionResult}`);
-            }
-
-        } catch (error) {
-            logger.error('❌ Errore invio token:', error);
-            throw error;
         }
     }
 
     /**
-     * Ottiene informazioni su un MPT esistente
+     * Emetti evento
      */
-    async getMPTInfo(mptIssuanceId) {
-        try {
-            await this.connect();
-
-            const response = await this.client.request({
-                command: 'ledger_entry',
-                mptoken: mptIssuanceId
-            });
-
-            if (response.result && response.result.node) {
-                const mptData = response.result.node;
-                
-                // Decodifica metadata se presente
-                let metadata = null;
-                if (mptData.MPTokenMetadata) {
-                    try {
-                        const decodedHex = Buffer.from(mptData.MPTokenMetadata, 'hex').toString('utf8');
-                        metadata = JSON.parse(decodedHex);
-                    } catch (e) {
-                        logger.warn('⚠️ Impossibile decodificare metadata:', e);
-                    }
+    emit(event, data) {
+        if (this.eventListeners.has(event)) {
+            this.eventListeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Errore callback evento ${event}:`, error);
                 }
-
-                return {
-                    mptIssuanceId,
-                    issuer: mptData.Issuer,
-                    maximumAmount: mptData.MaximumAmount,
-                    outstandingAmount: mptData.OutstandingAmount || '0',
-                    transferFee: mptData.TransferFee,
-                    flags: mptData.Flags,
-                    metadata,
-                    sequence: mptData.Sequence
-                };
-            } else {
-                throw new Error('MPT non trovato');
-            }
-
-        } catch (error) {
-            logger.error('❌ Errore recupero info MPT:', error);
-            throw error;
+            });
         }
     }
 
     /**
-     * Lista tutti i token MPT emessi dall'issuer
+     * Cleanup risorse
      */
-    async getIssuerMPTs() {
-        try {
-            await this.connect();
-
-            if (!this.issuerWallet) {
-                throw new Error('Issuer wallet non configurato');
-            }
-
-            const response = await this.client.request({
-                command: 'account_objects',
-                account: this.issuerWallet.address,
-                type: 'mptoken'
-            });
-
-            const mptTokens = response.result.account_objects || [];
-            
-            // Processa ogni token per includere metadata decodificata
-            const processedTokens = await Promise.all(
-                mptTokens.map(async (token) => {
-                    try {
-                        const fullInfo = await this.getMPTInfo(token.index);
-                        return fullInfo;
-                    } catch (error) {
-                        logger.warn('⚠️ Errore processing token:', token.index, error);
-                        return null;
-                    }
-                })
-            );
-
-            return processedTokens.filter(token => token !== null);
-
-        } catch (error) {
-            logger.error('❌ Errore recupero MPT issuer:', error);
-            throw error;
-        }
+    cleanup() {
+        this.tokens.clear();
+        this.trustLines.clear();
+        this.eventListeners.clear();
+        console.log('✅ Cleanup tokenization service completato');
     }
 }
 
-// Istanza singleton del servizio
-const xrplTokenizationService = new XRPLTokenizationService();
-
-export default xrplTokenizationService;
-
-// Export delle funzioni principali per uso diretto
-export {
-    xrplTokenizationService as tokenizationService
-};
+// Esporta istanza singleton
+const tokenizationService = new TokenizationService();
+export default tokenizationService;
 

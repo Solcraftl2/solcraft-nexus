@@ -1,496 +1,501 @@
-import { logger } from '../../../netlify/functions/utils/logger.js';
-import React from 'react';
-
 /**
- * Wallet Service - Gestione connessioni wallet Web3/XRPL
- * Supporta: Crossmark, XUMM, Trust Wallet
+ * Wallet Service Reale per Solcraft Nexus
+ * Gestisce connessioni wallet reali (XUMM, Crossmark) con popup di autorizzazione
+ * Implementazione basata sui code samples XRPL ufficiali
  */
+
+import { isValidClassicAddress, dropsToXrp } from 'xrpl';
+import xrplService from './xrplService.js';
+
 class WalletService {
-  constructor() {
-    this.connectedWallet = null;
-    this.walletData = null;
-    this.listeners = new Set();
-  }
-
-  /**
-   * Rileva wallet disponibili nel browser
-   * @returns {Promise<string[]>} Array di wallet disponibili
-   */
-  async getAvailableWallets() {
-    const available = [];
-
-    try {
-      // Crossmark Wallet Detection
-      if (window.crossmark) {
-        available.push('crossmark');
-      }
-
-      // XUMM Wallet Detection (via browser extension o mobile)
-      if (window.xumm || this.isXUMMAvailable()) {
-        available.push('xumm');
-      }
-
-      // Trust Wallet Detection
-      if (window.trustwallet || (window.ethereum && window.ethereum.isTrust)) {
-        available.push('trust');
-      }
-
-      // MetaMask Detection (fallback per testing)
-      if (window.ethereum && window.ethereum.isMetaMask) {
-        available.push('metamask');
-      }
-
-      logger.info('Available wallets:', available);
-      return available;
-    } catch (error) {
-      logger.error('Error detecting wallets:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Connette al wallet specificato
-   * @param {string} walletType - Tipo di wallet (crossmark, xumm, trust)
-   * @returns {Promise<Object>} Risultato connessione
-   */
-  async connectWallet(walletType) {
-    try {
-      logger.info(`Connecting to ${walletType} wallet...`);
-
-      switch (walletType) {
-        case 'crossmark':
-          return await this.connectCrossmark();
-        case 'xumm':
-          return await this.connectXUMM();
-        case 'trust':
-          return await this.connectTrustWallet();
-        case 'metamask':
-          return await this.connectMetaMask();
-        default:
-          throw new Error(`Wallet type ${walletType} not supported`);
-      }
-    } catch (error) {
-      logger.error(`Error connecting to ${walletType}:`, error);
-      return {
-        success: false,
-        error: error.message || 'Errore durante la connessione al wallet'
-      };
-    }
-  }
-
-  /**
-   * Connessione Crossmark Wallet
-   */
-  async connectCrossmark() {
-    if (!window.crossmark) {
-      return {
-        success: false,
-        error: 'Crossmark wallet non installato'
-      };
-    }
-
-    try {
-      // Richiesta connessione
-      const response = await window.crossmark.request({
-        method: 'xrpl_requestAccounts'
-      });
-
-      if (response && response.response && response.response.account) {
-        const account = response.response.account;
+    constructor() {
+        this.currentWallet = null;
+        this.isConnected = false;
+        this.eventListeners = new Map();
+        this.connectionAttempts = 0;
+        this.maxRetries = 3;
         
-        this.connectedWallet = 'crossmark';
-        this.walletData = {
-          address: account.address,
-          publicKey: account.publicKey,
-          network: account.network || 'mainnet'
+        // Configurazione wallet supportati
+        this.supportedWallets = {
+            xumm: {
+                name: 'XUMM',
+                icon: '/icons/xumm.png',
+                available: false
+            },
+            crossmark: {
+                name: 'Crossmark',
+                icon: '/icons/crossmark.png',
+                available: false
+            }
         };
-
-        this.notifyListeners('connected', this.walletData);
-
-        return {
-          success: true,
-          wallet: 'crossmark',
-          address: account.address,
-          publicKey: account.publicKey,
-          network: account.network || 'mainnet'
-        };
-      } else {
-        return {
-          success: false,
-          error: 'Connessione rifiutata dall\'utente'
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message || 'Errore durante la connessione a Crossmark'
-      };
+        
+        // Verifica wallet disponibili all'avvio
+        this.checkAvailableWallets();
     }
-  }
 
-  /**
-   * Connessione XUMM Wallet
-   */
-  async connectXUMM() {
-    try {
-      // XUMM può essere disponibile come extension o via deep linking
-      if (window.xumm) {
-        // Extension XUMM
-        const response = await window.xumm.request({
-          method: 'xrpl_requestAccounts'
-        });
-
-        if (response && response.account) {
-          this.connectedWallet = 'xumm';
-          this.walletData = {
-            address: response.account.address,
-            publicKey: response.account.publicKey,
-            network: response.account.network || 'mainnet'
-          };
-
-          this.notifyListeners('connected', this.walletData);
-
-          return {
-            success: true,
-            wallet: 'xumm',
-            address: response.account.address,
-            publicKey: response.account.publicKey,
-            network: response.account.network || 'mainnet'
-          };
+    /**
+     * Verifica wallet disponibili
+     */
+    async checkAvailableWallets() {
+        try {
+            // Verifica XUMM
+            if (window.xumm) {
+                this.supportedWallets.xumm.available = true;
+                console.log('✅ XUMM disponibile');
+            }
+            
+            // Verifica Crossmark
+            if (window.crossmark) {
+                this.supportedWallets.crossmark.available = true;
+                console.log('✅ Crossmark disponibile');
+            }
+            
+            // Se nessun wallet è disponibile, mostra istruzioni
+            if (!this.supportedWallets.xumm.available && !this.supportedWallets.crossmark.available) {
+                console.warn('⚠️ Nessun wallet XRPL disponibile. Installa XUMM o Crossmark.');
+            }
+            
+        } catch (error) {
+            console.error('❌ Errore verifica wallet:', error);
         }
-      } else {
-        // Deep linking per mobile XUMM
-        return await this.connectXUMMDeepLink();
-      }
-
-      return {
-        success: false,
-        error: 'XUMM wallet non disponibile'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message || 'Errore durante la connessione a XUMM'
-      };
     }
-  }
 
-  /**
-   * Connessione XUMM via deep linking
-   */
-  async connectXUMMDeepLink() {
-    try {
-      // Implementazione semplificata per deep linking XUMM
-      // In produzione, utilizzare XUMM SDK per payload creation
-      
-      const payload = {
-        txjson: {
-          TransactionType: 'SignIn'
-        },
-        options: {
-          submit: false,
-          expire: 5 // 5 minuti
+    /**
+     * Connessione XUMM con popup reale
+     */
+    async connectXUMM() {
+        try {
+            console.log('🔄 Connessione XUMM...');
+            
+            if (!window.xumm) {
+                throw new Error('XUMM non disponibile. Installa l\'app XUMM e riprova.');
+            }
+
+            // Assicurati che XRPL Service sia connesso
+            if (!xrplService.isConnected()) {
+                await xrplService.connect();
+            }
+
+            // Richiedi autorizzazione XUMM (questo mostrerà il popup)
+            const authorization = await window.xumm.authorize();
+            
+            if (!authorization || !authorization.account) {
+                throw new Error('Autorizzazione XUMM rifiutata dall\'utente');
+            }
+
+            const address = authorization.account;
+            
+            // Valida indirizzo
+            if (!isValidClassicAddress(address)) {
+                throw new Error('Indirizzo wallet non valido');
+            }
+
+            // Recupera dettagli account da XRPL
+            const accountDetails = await this.getAccountDetails(address);
+            
+            // Crea oggetto wallet
+            const wallet = {
+                address: address,
+                type: 'xumm',
+                name: 'XUMM Wallet',
+                isConnected: true,
+                connectedAt: new Date().toISOString(),
+                ...accountDetails
+            };
+
+            // Salva wallet corrente
+            this.currentWallet = wallet;
+            this.isConnected = true;
+            this.connectionAttempts = 0;
+
+            // Salva in localStorage per persistenza
+            localStorage.setItem('solcraft_wallet', JSON.stringify({
+                address: wallet.address,
+                type: wallet.type,
+                connectedAt: wallet.connectedAt
+            }));
+
+            // Emetti evento connessione
+            this.emit('walletConnected', wallet);
+
+            console.log('✅ XUMM connesso:', address);
+            return wallet;
+
+        } catch (error) {
+            this.connectionAttempts++;
+            console.error('❌ Errore connessione XUMM:', error);
+            
+            // Emetti evento errore
+            this.emit('connectionError', {
+                wallet: 'xumm',
+                error: error.message,
+                attempts: this.connectionAttempts
+            });
+            
+            throw error;
         }
-      };
-
-      // Simulazione risposta XUMM (in produzione usare XUMM API)
-      logger.info('XUMM deep link payload:', payload);
-      
-      // Per ora ritorniamo un mock per testing
-      return {
-        success: false,
-        error: 'XUMM deep linking non ancora implementato. Usa Crossmark per ora.'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message || 'Errore XUMM deep linking'
-      };
-    }
-  }
-
-  /**
-   * Connessione Trust Wallet
-   */
-  async connectTrustWallet() {
-    if (!window.trustwallet && !(window.ethereum && window.ethereum.isTrust)) {
-      return {
-        success: false,
-        error: 'Trust Wallet non installato'
-      };
     }
 
-    try {
-      const provider = window.trustwallet || window.ethereum;
-      
-      // Richiesta connessione
-      const accounts = await provider.request({
-        method: 'eth_requestAccounts'
-      });
+    /**
+     * Connessione Crossmark con popup reale
+     */
+    async connectCrossmark() {
+        try {
+            console.log('🔄 Connessione Crossmark...');
+            
+            if (!window.crossmark) {
+                throw new Error('Crossmark non disponibile. Installa l\'estensione Crossmark e riprova.');
+            }
 
-      if (accounts && accounts.length > 0) {
-        this.connectedWallet = 'trust';
-        this.walletData = {
-          address: accounts[0],
-          network: 'ethereum' // Trust Wallet principalmente per Ethereum
-        };
+            // Assicurati che XRPL Service sia connesso
+            if (!xrplService.isConnected()) {
+                await xrplService.connect();
+            }
 
-        this.notifyListeners('connected', this.walletData);
+            // Richiedi connessione Crossmark (questo mostrerà il popup)
+            const response = await window.crossmark.signIn();
+            
+            if (!response || !response.response || !response.response.account) {
+                throw new Error('Connessione Crossmark rifiutata dall\'utente');
+            }
 
-        return {
-          success: true,
-          wallet: 'trust',
-          address: accounts[0],
-          network: 'ethereum'
-        };
-      } else {
-        return {
-          success: false,
-          error: 'Nessun account disponibile'
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message || 'Errore durante la connessione a Trust Wallet'
-      };
-    }
-  }
+            const address = response.response.account;
+            
+            // Valida indirizzo
+            if (!isValidClassicAddress(address)) {
+                throw new Error('Indirizzo wallet non valido');
+            }
 
-  /**
-   * Connessione MetaMask (fallback per testing)
-   */
-  async connectMetaMask() {
-    if (!window.ethereum || !window.ethereum.isMetaMask) {
-      return {
-        success: false,
-        error: 'MetaMask non installato'
-      };
-    }
+            // Recupera dettagli account da XRPL
+            const accountDetails = await this.getAccountDetails(address);
+            
+            // Crea oggetto wallet
+            const wallet = {
+                address: address,
+                type: 'crossmark',
+                name: 'Crossmark Wallet',
+                isConnected: true,
+                connectedAt: new Date().toISOString(),
+                ...accountDetails
+            };
 
-    try {
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
+            // Salva wallet corrente
+            this.currentWallet = wallet;
+            this.isConnected = true;
+            this.connectionAttempts = 0;
 
-      if (accounts && accounts.length > 0) {
-        this.connectedWallet = 'metamask';
-        this.walletData = {
-          address: accounts[0],
-          network: 'ethereum'
-        };
+            // Salva in localStorage per persistenza
+            localStorage.setItem('solcraft_wallet', JSON.stringify({
+                address: wallet.address,
+                type: wallet.type,
+                connectedAt: wallet.connectedAt
+            }));
 
-        this.notifyListeners('connected', this.walletData);
+            // Emetti evento connessione
+            this.emit('walletConnected', wallet);
 
-        return {
-          success: true,
-          wallet: 'metamask',
-          address: accounts[0],
-          network: 'ethereum'
-        };
-      } else {
-        return {
-          success: false,
-          error: 'Nessun account disponibile'
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message || 'Errore durante la connessione a MetaMask'
-      };
-    }
-  }
+            console.log('✅ Crossmark connesso:', address);
+            return wallet;
 
-  /**
-   * Disconnette il wallet corrente
-   */
-  async disconnectWallet() {
-    try {
-      if (this.connectedWallet) {
-        this.notifyListeners('disconnected', null);
-        this.connectedWallet = null;
-        this.walletData = null;
-      }
-      
-      return { success: true };
-    } catch (error) {
-      logger.error('Error disconnecting wallet:', error);
-      return {
-        success: false,
-        error: error.message || 'Errore durante la disconnessione'
-      };
-    }
-  }
-
-  /**
-   * Ottiene informazioni wallet connesso
-   */
-  getConnectedWallet() {
-    return {
-      wallet: this.connectedWallet,
-      data: this.walletData,
-      isConnected: !!this.connectedWallet
-    };
-  }
-
-  /**
-   * Verifica se XUMM è disponibile
-   */
-  isXUMMAvailable() {
-    // Verifica se siamo su mobile e XUMM può essere disponibile
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    return isMobile; // Su mobile XUMM può essere disponibile via deep linking
-  }
-
-  /**
-   * Aggiunge listener per eventi wallet
-   */
-  addListener(callback) {
-    this.listeners.add(callback);
-  }
-
-  /**
-   * Rimuove listener
-   */
-  removeListener(callback) {
-    this.listeners.delete(callback);
-  }
-
-  /**
-   * Notifica tutti i listener
-   */
-  notifyListeners(event, data) {
-    this.listeners.forEach(callback => {
-      try {
-        callback(event, data);
-      } catch (error) {
-        logger.error('Error in wallet listener:', error);
-      }
-    });
-  }
-
-  /**
-   * Firma messaggio con wallet connesso
-   */
-  async signMessage(message) {
-    if (!this.connectedWallet || !this.walletData) {
-      throw new Error('Nessun wallet connesso');
+        } catch (error) {
+            this.connectionAttempts++;
+            console.error('❌ Errore connessione Crossmark:', error);
+            
+            // Emetti evento errore
+            this.emit('connectionError', {
+                wallet: 'crossmark',
+                error: error.message,
+                attempts: this.connectionAttempts
+            });
+            
+            throw error;
+        }
     }
 
-    try {
-      switch (this.connectedWallet) {
-        case 'crossmark':
-          return await this.signWithCrossmark(message);
-        case 'xumm':
-          return await this.signWithXUMM(message);
-        case 'trust':
-        case 'metamask':
-          return await this.signWithEthereum(message);
-        default:
-          throw new Error(`Firma non supportata per ${this.connectedWallet}`);
-      }
-    } catch (error) {
-      logger.error('Error signing message:', error);
-      throw error;
+    /**
+     * Recupera dettagli account da XRPL
+     */
+    async getAccountDetails(address) {
+        try {
+            // Recupera informazioni account
+            const accountInfo = await xrplService.getAccountInfo(address);
+            const balance = await xrplService.getAccountBalance(address);
+            const reserve = await xrplService.getReserveRequirement(balance.ownerCount);
+
+            return {
+                balanceXRP: balance.balanceXRP,
+                balanceDrops: balance.balanceDrops,
+                availableBalanceXRP: balance.balanceXRP - reserve.totalReserve,
+                reserveXRP: reserve.totalReserve,
+                ownerCount: balance.ownerCount,
+                sequence: accountInfo.Sequence,
+                previousTxnID: accountInfo.PreviousTxnID,
+                accountFlags: accountInfo.Flags,
+                lastUpdated: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error('❌ Errore recupero dettagli account:', error);
+            
+            // Ritorna valori di default se non riesce a recuperare i dettagli
+            return {
+                balanceXRP: 0,
+                balanceDrops: '0',
+                availableBalanceXRP: 0,
+                reserveXRP: 10, // Reserve di default
+                ownerCount: 0,
+                sequence: 0,
+                lastUpdated: new Date().toISOString()
+            };
+        }
     }
-  }
 
-  /**
-   * Firma con Crossmark
-   */
-  async signWithCrossmark(message) {
-    const response = await window.crossmark.request({
-      method: 'xrpl_signMessage',
-      params: {
-        message: message
-      }
-    });
+    /**
+     * Aggiorna dettagli wallet corrente
+     */
+    async refreshWalletDetails() {
+        try {
+            if (!this.currentWallet) {
+                throw new Error('Nessun wallet connesso');
+            }
 
-    return response.response;
-  }
+            const updatedDetails = await this.getAccountDetails(this.currentWallet.address);
+            
+            // Aggiorna wallet corrente
+            this.currentWallet = {
+                ...this.currentWallet,
+                ...updatedDetails
+            };
 
-  /**
-   * Firma con XUMM
-   */
-  async signWithXUMM(message) {
-    // Implementazione firma XUMM
-    throw new Error('Firma XUMM non ancora implementata');
-  }
+            // Emetti evento aggiornamento
+            this.emit('walletUpdated', this.currentWallet);
 
-  /**
-   * Firma con provider Ethereum (Trust Wallet, MetaMask)
-   */
-  async signWithEthereum(message) {
-    const provider = window.trustwallet || window.ethereum;
-    
-    const signature = await provider.request({
-      method: 'personal_sign',
-      params: [message, this.walletData.address]
-    });
+            return this.currentWallet;
 
-    return signature;
-  }
+        } catch (error) {
+            console.error('❌ Errore aggiornamento wallet:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Disconnessione wallet
+     */
+    async disconnect() {
+        try {
+            if (!this.isConnected) {
+                console.log('ℹ️ Nessun wallet connesso');
+                return;
+            }
+
+            const previousWallet = this.currentWallet;
+
+            // Reset stato
+            this.currentWallet = null;
+            this.isConnected = false;
+            this.connectionAttempts = 0;
+
+            // Rimuovi da localStorage
+            localStorage.removeItem('solcraft_wallet');
+
+            // Disconnetti da wallet specifico
+            if (previousWallet?.type === 'xumm' && window.xumm) {
+                try {
+                    await window.xumm.logout();
+                } catch (error) {
+                    console.warn('⚠️ Errore logout XUMM:', error);
+                }
+            }
+
+            // Emetti evento disconnessione
+            this.emit('walletDisconnected', previousWallet);
+
+            console.log('✅ Wallet disconnesso');
+
+        } catch (error) {
+            console.error('❌ Errore disconnessione:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ripristina connessione da localStorage
+     */
+    async restoreConnection() {
+        try {
+            const savedWallet = localStorage.getItem('solcraft_wallet');
+            
+            if (!savedWallet) {
+                return null;
+            }
+
+            const walletData = JSON.parse(savedWallet);
+            
+            // Verifica se il wallet è ancora disponibile
+            if (walletData.type === 'xumm' && !window.xumm) {
+                localStorage.removeItem('solcraft_wallet');
+                return null;
+            }
+            
+            if (walletData.type === 'crossmark' && !window.crossmark) {
+                localStorage.removeItem('solcraft_wallet');
+                return null;
+            }
+
+            // Verifica se la connessione è ancora valida (max 24 ore)
+            const connectedAt = new Date(walletData.connectedAt);
+            const now = new Date();
+            const hoursDiff = (now - connectedAt) / (1000 * 60 * 60);
+            
+            if (hoursDiff > 24) {
+                localStorage.removeItem('solcraft_wallet');
+                return null;
+            }
+
+            // Recupera dettagli aggiornati
+            const accountDetails = await this.getAccountDetails(walletData.address);
+            
+            // Ripristina wallet
+            const wallet = {
+                address: walletData.address,
+                type: walletData.type,
+                name: walletData.type === 'xumm' ? 'XUMM Wallet' : 'Crossmark Wallet',
+                isConnected: true,
+                connectedAt: walletData.connectedAt,
+                restoredAt: new Date().toISOString(),
+                ...accountDetails
+            };
+
+            this.currentWallet = wallet;
+            this.isConnected = true;
+
+            console.log('✅ Connessione wallet ripristinata:', wallet.address);
+            return wallet;
+
+        } catch (error) {
+            console.error('❌ Errore ripristino connessione:', error);
+            localStorage.removeItem('solcraft_wallet');
+            return null;
+        }
+    }
+
+    /**
+     * Ottieni wallet corrente
+     */
+    getCurrentWallet() {
+        return this.currentWallet;
+    }
+
+    /**
+     * Verifica se wallet è connesso
+     */
+    isWalletConnected() {
+        return this.isConnected && this.currentWallet !== null;
+    }
+
+    /**
+     * Ottieni wallet supportati
+     */
+    getSupportedWallets() {
+        return this.supportedWallets;
+    }
+
+    /**
+     * Ottieni wallet disponibili
+     */
+    getAvailableWallets() {
+        return Object.entries(this.supportedWallets)
+            .filter(([_, wallet]) => wallet.available)
+            .reduce((acc, [key, wallet]) => {
+                acc[key] = wallet;
+                return acc;
+            }, {});
+    }
+
+    /**
+     * Verifica saldo sufficiente per transazione
+     */
+    async checkSufficientBalance(amount, includeReserve = true) {
+        try {
+            if (!this.currentWallet) {
+                throw new Error('Nessun wallet connesso');
+            }
+
+            const requiredAmount = parseFloat(amount);
+            const availableBalance = includeReserve ? 
+                this.currentWallet.availableBalanceXRP : 
+                this.currentWallet.balanceXRP;
+
+            return {
+                sufficient: availableBalance >= requiredAmount,
+                available: availableBalance,
+                required: requiredAmount,
+                difference: availableBalance - requiredAmount
+            };
+
+        } catch (error) {
+            console.error('❌ Errore verifica saldo:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Sottoscrivi eventi
+     */
+    on(event, callback) {
+        if (!this.eventListeners.has(event)) {
+            this.eventListeners.set(event, []);
+        }
+        this.eventListeners.get(event).push(callback);
+    }
+
+    /**
+     * Rimuovi sottoscrizione eventi
+     */
+    off(event, callback) {
+        if (this.eventListeners.has(event)) {
+            const callbacks = this.eventListeners.get(event);
+            const index = callbacks.indexOf(callback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        }
+    }
+
+    /**
+     * Emetti evento
+     */
+    emit(event, data) {
+        if (this.eventListeners.has(event)) {
+            this.eventListeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Errore callback evento ${event}:`, error);
+                }
+            });
+        }
+    }
+
+    /**
+     * Cleanup risorse
+     */
+    cleanup() {
+        this.currentWallet = null;
+        this.isConnected = false;
+        this.eventListeners.clear();
+        localStorage.removeItem('solcraft_wallet');
+        console.log('✅ Cleanup wallet service completato');
+    }
 }
 
-// Istanza singleton
+// Esporta istanza singleton
 const walletService = new WalletService();
 
-// Hook React per uso nei componenti
-export const useWallet = () => {
-  const [walletState, setWalletState] = React.useState({
-    isConnected: false,
-    wallet: null,
-    address: null,
-    data: null
-  });
+// Auto-ripristino connessione all'avvio
+walletService.restoreConnection().catch(error => {
+    console.warn('⚠️ Impossibile ripristinare connessione wallet:', error);
+});
 
-  React.useEffect(() => {
-    const handleWalletEvent = (event, data) => {
-      if (event === 'connected') {
-        setWalletState({
-          isConnected: true,
-          wallet: walletService.connectedWallet,
-          address: data.address,
-          data: data
-        });
-      } else if (event === 'disconnected') {
-        setWalletState({
-          isConnected: false,
-          wallet: null,
-          address: null,
-          data: null
-        });
-      }
-    };
-
-    walletService.addListener(handleWalletEvent);
-
-    // Verifica stato iniziale
-    const currentWallet = walletService.getConnectedWallet();
-    if (currentWallet.isConnected) {
-      setWalletState({
-        isConnected: true,
-        wallet: currentWallet.wallet,
-        address: currentWallet.data?.address,
-        data: currentWallet.data
-      });
-    }
-
-    return () => {
-      walletService.removeListener(handleWalletEvent);
-    };
-  }, []);
-
-  return {
-    ...walletState,
-    connectWallet: walletService.connectWallet.bind(walletService),
-    disconnectWallet: walletService.disconnectWallet.bind(walletService),
-    getAvailableWallets: walletService.getAvailableWallets.bind(walletService),
-    signMessage: walletService.signMessage.bind(walletService)
-  };
-};
-
-export { walletService };
 export default walletService;
 

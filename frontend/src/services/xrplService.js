@@ -1,514 +1,695 @@
-import { Client, Wallet, dropsToXrp, xrpToDrops } from 'xrpl';
-
 /**
- * XRPLService - Servizio per gestire tutte le operazioni XRPL
- * Gestisce connessioni, wallet, transazioni e query del ledger
+ * XRPL Service Reale Migliorato per Solcraft Nexus
+ * Client XRPL completo con monitoraggio real-time e cache ottimizzata
+ * Implementazione basata sui code samples XRPL ufficiali
  */
+
+import { Client, dropsToXrp, xrpToDrops, isValidClassicAddress } from 'xrpl';
+
 class XRPLService {
-  constructor() {
-    this.client = null;
-    this.isConnected = false;
-    this.network = 'testnet'; // 'testnet' o 'mainnet'
-    this.servers = {
-      testnet: 'wss://s.altnet.rippletest.net:51233',
-      mainnet: 'wss://xrplcluster.com/'
-    };
-    this.currentWallet = null;
-    this.eventListeners = new Map();
-  }
-
-  /**
-   * Connessione al network XRPL
-   */
-  async connect(network = 'testnet') {
-    try {
-      this.network = network;
-      const serverUrl = this.servers[network];
-      
-      if (!serverUrl) {
-        throw new Error(`Network non supportato: ${network}`);
-      }
-
-      this.client = new Client(serverUrl);
-      await this.client.connect();
-      this.isConnected = true;
-
-      console.log(`✅ Connesso a XRPL ${network}: ${serverUrl}`);
-      
-      // Setup event listeners
-      this.setupEventListeners();
-      
-      return {
-        success: true,
-        network: this.network,
-        server: serverUrl
-      };
-    } catch (error) {
-      console.error('❌ Errore connessione XRPL:', error);
-      throw new Error(`Connessione fallita: ${error.message}`);
-    }
-  }
-
-  /**
-   * Disconnessione dal network
-   */
-  async disconnect() {
-    try {
-      if (this.client && this.isConnected) {
-        await this.client.disconnect();
-        this.isConnected = false;
+    constructor() {
         this.client = null;
-        console.log('✅ Disconnesso da XRPL');
-      }
-    } catch (error) {
-      console.error('❌ Errore disconnessione:', error);
+        this.isConnected = false;
+        this.currentNetwork = null;
+        this.eventListeners = new Map();
+        this.cache = new Map();
+        this.subscriptions = new Set();
+        
+        // Configurazione network
+        this.networks = {
+            testnet: {
+                server: 'wss://s.altnet.rippletest.net:51233',
+                name: 'Testnet',
+                explorer: 'https://testnet.xrpl.org'
+            },
+            devnet: {
+                server: 'wss://s.devnet.rippletest.net:51233',
+                name: 'Devnet',
+                explorer: 'https://devnet.xrpl.org'
+            },
+            mainnet: {
+                server: 'wss://xrplcluster.com',
+                name: 'Mainnet',
+                explorer: 'https://livenet.xrpl.org'
+            }
+        };
+        
+        // Configurazione cache
+        this.cacheConfig = {
+            accountInfo: 30000, // 30 secondi
+            balance: 15000, // 15 secondi
+            transactions: 60000, // 1 minuto
+            maxEntries: 1000
+        };
+        
+        // Configurazione retry
+        this.retryConfig = {
+            maxRetries: 3,
+            baseDelay: 1000,
+            maxDelay: 10000
+        };
+        
+        // Avvia cleanup cache periodico
+        this.startCacheCleanup();
     }
-  }
 
-  /**
-   * Verifica connessione
-   */
-  checkConnection() {
-    if (!this.client || !this.isConnected) {
-      throw new Error('Non connesso a XRPL. Chiamare connect() prima.');
-    }
-  }
-
-  /**
-   * Creazione nuovo wallet
-   */
-  generateWallet() {
-    try {
-      const wallet = Wallet.generate();
-      console.log('✅ Nuovo wallet generato:', wallet.address);
-      
-      return {
-        address: wallet.address,
-        seed: wallet.seed,
-        publicKey: wallet.publicKey,
-        privateKey: wallet.privateKey
-      };
-    } catch (error) {
-      console.error('❌ Errore generazione wallet:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Importa wallet da seed
-   */
-  importWallet(seed) {
-    try {
-      const wallet = Wallet.fromSeed(seed);
-      this.currentWallet = wallet;
-      console.log('✅ Wallet importato:', wallet.address);
-      
-      return {
-        address: wallet.address,
-        publicKey: wallet.publicKey
-      };
-    } catch (error) {
-      console.error('❌ Errore import wallet:', error);
-      throw new Error(`Import fallito: ${error.message}`);
-    }
-  }
-
-  /**
-   * Finanziamento account su Testnet
-   */
-  async fundTestnetAccount(wallet = null) {
-    try {
-      this.checkConnection();
-      
-      if (this.network !== 'testnet') {
-        throw new Error('Funding disponibile solo su Testnet');
-      }
-
-      const fundResult = await this.client.fundWallet(wallet);
-      console.log('✅ Account finanziato:', fundResult);
-      
-      return {
-        wallet: {
-          address: fundResult.wallet.address,
-          seed: fundResult.wallet.seed
-        },
-        balance: fundResult.balance
-      };
-    } catch (error) {
-      console.error('❌ Errore funding account:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Ottieni informazioni account
-   */
-  async getAccountInfo(address) {
-    try {
-      this.checkConnection();
-      
-      const response = await this.client.request({
-        command: 'account_info',
-        account: address,
-        ledger_index: 'validated'
-      });
-
-      const accountData = response.result.account_data;
-      
-      return {
-        address: accountData.Account,
-        balance: dropsToXrp(accountData.Balance),
-        sequence: accountData.Sequence,
-        ownerCount: accountData.OwnerCount,
-        previousTxnID: accountData.PreviousTxnID,
-        flags: accountData.Flags
-      };
-    } catch (error) {
-      console.error('❌ Errore get account info:', error);
-      if (error.data?.error === 'actNotFound') {
-        throw new Error('Account non trovato o non attivato');
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Ottieni bilancio account
-   */
-  async getBalance(address) {
-    try {
-      const accountInfo = await this.getAccountInfo(address);
-      return parseFloat(accountInfo.balance);
-    } catch (error) {
-      console.error('❌ Errore get balance:', error);
-      return 0;
-    }
-  }
-
-  /**
-   * Invia pagamento XRP
-   */
-  async sendXRP(fromWallet, toAddress, amount, memo = null) {
-    try {
-      this.checkConnection();
-      
-      if (!fromWallet || !fromWallet.seed) {
-        throw new Error('Wallet mittente non valido');
-      }
-
-      const wallet = Wallet.fromSeed(fromWallet.seed);
-      const amountInDrops = xrpToDrops(amount.toString());
-
-      const payment = {
-        TransactionType: 'Payment',
-        Account: wallet.address,
-        Destination: toAddress,
-        Amount: amountInDrops
-      };
-
-      // Aggiungi memo se fornito
-      if (memo) {
-        payment.Memos = [{
-          Memo: {
-            MemoData: Buffer.from(memo, 'utf8').toString('hex').toUpperCase()
-          }
-        }];
-      }
-
-      // Prepara e invia transazione
-      const prepared = await this.client.autofill(payment);
-      const signed = wallet.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob);
-
-      console.log('✅ Pagamento inviato:', result);
-
-      return {
-        success: result.result.meta.TransactionResult === 'tesSUCCESS',
-        hash: result.result.hash,
-        fee: dropsToXrp(result.result.Fee),
-        result: result.result.meta.TransactionResult
-      };
-    } catch (error) {
-      console.error('❌ Errore invio pagamento:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Crea Trust Line per token
-   */
-  async createTrustLine(wallet, tokenCode, issuerAddress, limit = '1000000') {
-    try {
-      this.checkConnection();
-      
-      const walletObj = Wallet.fromSeed(wallet.seed);
-
-      const trustSet = {
-        TransactionType: 'TrustSet',
-        Account: walletObj.address,
-        LimitAmount: {
-          currency: tokenCode,
-          issuer: issuerAddress,
-          value: limit
-        }
-      };
-
-      const prepared = await this.client.autofill(trustSet);
-      const signed = walletObj.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob);
-
-      console.log('✅ Trust Line creata:', result);
-
-      return {
-        success: result.result.meta.TransactionResult === 'tesSUCCESS',
-        hash: result.result.hash,
-        tokenCode,
-        issuerAddress,
-        limit
-      };
-    } catch (error) {
-      console.error('❌ Errore creazione Trust Line:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Emetti token personalizzato
-   */
-  async issueToken(issuerWallet, holderAddress, tokenCode, amount) {
-    try {
-      this.checkConnection();
-      
-      const wallet = Wallet.fromSeed(issuerWallet.seed);
-
-      const payment = {
-        TransactionType: 'Payment',
-        Account: wallet.address,
-        Destination: holderAddress,
-        Amount: {
-          currency: tokenCode,
-          issuer: wallet.address,
-          value: amount.toString()
-        }
-      };
-
-      const prepared = await this.client.autofill(payment);
-      const signed = wallet.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob);
-
-      console.log('✅ Token emesso:', result);
-
-      return {
-        success: result.result.meta.TransactionResult === 'tesSUCCESS',
-        hash: result.result.hash,
-        tokenCode,
-        amount,
-        issuer: wallet.address,
-        holder: holderAddress
-      };
-    } catch (error) {
-      console.error('❌ Errore emissione token:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Crea ordine DEX
-   */
-  async createDEXOrder(wallet, takerGets, takerPays, expiration = null) {
-    try {
-      this.checkConnection();
-      
-      const walletObj = Wallet.fromSeed(wallet.seed);
-
-      const offer = {
-        TransactionType: 'OfferCreate',
-        Account: walletObj.address,
-        TakerGets: takerGets,
-        TakerPays: takerPays
-      };
-
-      if (expiration) {
-        offer.Expiration = expiration;
-      }
-
-      const prepared = await this.client.autofill(offer);
-      const signed = walletObj.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob);
-
-      console.log('✅ Ordine DEX creato:', result);
-
-      return {
-        success: result.result.meta.TransactionResult === 'tesSUCCESS',
-        hash: result.result.hash,
-        offerSequence: result.result.Sequence
-      };
-    } catch (error) {
-      console.error('❌ Errore creazione ordine DEX:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Ottieni Order Book DEX
-   */
-  async getOrderBook(takerGets, takerPays, limit = 20) {
-    try {
-      this.checkConnection();
-      
-      const response = await this.client.request({
-        command: 'book_offers',
-        taker_gets: takerGets,
-        taker_pays: takerPays,
-        limit: limit
-      });
-
-      return response.result.offers || [];
-    } catch (error) {
-      console.error('❌ Errore get order book:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Ottieni storico transazioni
-   */
-  async getTransactionHistory(address, limit = 20) {
-    try {
-      this.checkConnection();
-      
-      const response = await this.client.request({
-        command: 'account_tx',
-        account: address,
-        limit: limit,
-        ledger_index_min: -1,
-        ledger_index_max: -1
-      });
-
-      return response.result.transactions || [];
-    } catch (error) {
-      console.error('❌ Errore get transaction history:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Setup event listeners per ledger updates
-   */
-  setupEventListeners() {
-    if (!this.client) return;
-
-    // Sottoscrivi a ledger close events
-    this.client.request({
-      command: 'subscribe',
-      streams: ['ledger']
-    });
-
-    // Listener per nuovi ledger
-    this.client.on('ledgerClosed', (ledger) => {
-      console.log(`📊 Nuovo Ledger #${ledger.ledger_index} - ${ledger.txn_count} transazioni`);
-      this.notifyListeners('ledgerClosed', ledger);
-    });
-
-    // Listener per transazioni
-    this.client.on('transaction', (tx) => {
-      console.log('📝 Nuova transazione:', tx);
-      this.notifyListeners('transaction', tx);
-    });
-  }
-
-  /**
-   * Aggiungi listener personalizzato
-   */
-  addEventListener(event, callback) {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-    }
-    this.eventListeners.get(event).push(callback);
-  }
-
-  /**
-   * Rimuovi listener
-   */
-  removeEventListener(event, callback) {
-    if (this.eventListeners.has(event)) {
-      const listeners = this.eventListeners.get(event);
-      const index = listeners.indexOf(callback);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    }
-  }
-
-  /**
-   * Notifica listeners
-   */
-  notifyListeners(event, data) {
-    if (this.eventListeners.has(event)) {
-      this.eventListeners.get(event).forEach(callback => {
+    /**
+     * Connessione al network XRPL con retry automatico
+     */
+    async connect(network = 'testnet') {
         try {
-          callback(data);
+            console.log(`🔄 Connessione a XRPL ${network}...`);
+            
+            if (this.isConnected && this.currentNetwork === network) {
+                console.log('✅ Già connesso a', network);
+                return true;
+            }
+
+            // Disconnetti se già connesso a un altro network
+            if (this.isConnected) {
+                await this.disconnect();
+            }
+
+            const networkConfig = this.networks[network];
+            if (!networkConfig) {
+                throw new Error(`Network non supportato: ${network}`);
+            }
+
+            // Crea nuovo client
+            this.client = new Client(networkConfig.server);
+            
+            // Setup event listeners
+            this.setupEventListeners();
+            
+            // Connetti con retry
+            await this.connectWithRetry();
+            
+            this.isConnected = true;
+            this.currentNetwork = network;
+            
+            console.log(`✅ Connesso a XRPL ${network}`);
+            
+            // Emetti evento connessione
+            this.emit('connected', { network, server: networkConfig.server });
+            
+            return true;
+
         } catch (error) {
-          console.error(`❌ Errore in listener ${event}:`, error);
+            console.error('❌ Errore connessione XRPL:', error);
+            this.isConnected = false;
+            this.currentNetwork = null;
+            throw error;
         }
-      });
     }
-  }
 
-  /**
-   * Ottieni info network corrente
-   */
-  getNetworkInfo() {
-    return {
-      network: this.network,
-      server: this.servers[this.network],
-      isConnected: this.isConnected,
-      currentWallet: this.currentWallet?.address || null
-    };
-  }
-
-  /**
-   * Validazione indirizzo XRPL
-   */
-  isValidAddress(address) {
-    try {
-      // Verifica formato base
-      if (!address || typeof address !== 'string') return false;
-      if (address.length < 25 || address.length > 34) return false;
-      if (!address.startsWith('r')) return false;
-      
-      // Verifica caratteri validi (base58)
-      const base58Regex = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
-      return base58Regex.test(address);
-    } catch (error) {
-      return false;
+    /**
+     * Connessione con retry automatico
+     */
+    async connectWithRetry() {
+        let lastError;
+        
+        for (let attempt = 1; attempt <= this.retryConfig.maxRetries; attempt++) {
+            try {
+                await this.client.connect();
+                return;
+            } catch (error) {
+                lastError = error;
+                console.warn(`⚠️ Tentativo ${attempt}/${this.retryConfig.maxRetries} fallito:`, error.message);
+                
+                if (attempt < this.retryConfig.maxRetries) {
+                    const delay = Math.min(
+                        this.retryConfig.baseDelay * Math.pow(2, attempt - 1),
+                        this.retryConfig.maxDelay
+                    );
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+        
+        throw lastError;
     }
-  }
 
-  /**
-   * Formatta importo XRP
-   */
-  formatXRP(amount) {
-    return `${parseFloat(amount).toFixed(6)} XRP`;
-  }
+    /**
+     * Setup event listeners per il client
+     */
+    setupEventListeners() {
+        if (!this.client) return;
 
-  /**
-   * Converti drops a XRP
-   */
-  dropsToXrp(drops) {
-    return dropsToXrp(drops);
-  }
+        // Listener per disconnessioni
+        this.client.on('disconnected', (code) => {
+            console.warn('⚠️ XRPL disconnesso:', code);
+            this.isConnected = false;
+            this.emit('disconnected', { code });
+            
+            // Auto-reconnect dopo 5 secondi
+            setTimeout(() => {
+                if (!this.isConnected && this.currentNetwork) {
+                    console.log('🔄 Tentativo auto-reconnect...');
+                    this.connect(this.currentNetwork).catch(error => {
+                        console.error('❌ Auto-reconnect fallito:', error);
+                    });
+                }
+            }, 5000);
+        });
 
-  /**
-   * Converti XRP a drops
-   */
-  xrpToDrops(xrp) {
-    return xrpToDrops(xrp);
-  }
+        // Listener per errori
+        this.client.on('error', (error) => {
+            console.error('❌ Errore XRPL client:', error);
+            this.emit('error', error);
+        });
+
+        // Listener per transazioni
+        this.client.on('transaction', (tx) => {
+            this.handleTransaction(tx);
+        });
+
+        // Listener per validazioni ledger
+        this.client.on('ledgerClosed', (ledger) => {
+            this.emit('ledgerClosed', ledger);
+        });
+    }
+
+    /**
+     * Gestisce transazioni in arrivo
+     */
+    handleTransaction(tx) {
+        try {
+            // Invalida cache per account coinvolti
+            if (tx.transaction) {
+                this.invalidateAccountCache(tx.transaction.Account);
+                if (tx.transaction.Destination) {
+                    this.invalidateAccountCache(tx.transaction.Destination);
+                }
+            }
+
+            // Emetti eventi specifici per tipo transazione
+            const txType = tx.transaction?.TransactionType;
+            if (txType) {
+                this.emit(`transaction:${txType.toLowerCase()}`, tx);
+            }
+            
+            // Emetti evento generico
+            this.emit('transaction', tx);
+
+        } catch (error) {
+            console.error('❌ Errore gestione transazione:', error);
+        }
+    }
+
+    /**
+     * Disconnessione
+     */
+    async disconnect() {
+        try {
+            if (this.client && this.isConnected) {
+                // Rimuovi tutte le sottoscrizioni
+                for (const account of this.subscriptions) {
+                    await this.unsubscribeFromAccount(account);
+                }
+                
+                await this.client.disconnect();
+                console.log('✅ Disconnesso da XRPL');
+            }
+            
+            this.client = null;
+            this.isConnected = false;
+            this.currentNetwork = null;
+            this.subscriptions.clear();
+            
+            // Emetti evento disconnessione
+            this.emit('disconnected', { manual: true });
+
+        } catch (error) {
+            console.error('❌ Errore disconnessione:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Verifica se è connesso
+     */
+    isConnected() {
+        return this.isConnected && this.client && this.client.isConnected();
+    }
+
+    /**
+     * Ottieni informazioni account con cache
+     */
+    async getAccountInfo(address) {
+        try {
+            if (!isValidClassicAddress(address)) {
+                throw new Error('Indirizzo non valido');
+            }
+
+            // Verifica cache
+            const cacheKey = `accountInfo:${address}`;
+            const cached = this.getFromCache(cacheKey);
+            if (cached) {
+                return cached;
+            }
+
+            if (!this.isConnected) {
+                throw new Error('Client XRPL non connesso');
+            }
+
+            const response = await this.client.request({
+                command: 'account_info',
+                account: address,
+                ledger_index: 'validated'
+            });
+
+            const accountInfo = response.result.account_data;
+            
+            // Salva in cache
+            this.setCache(cacheKey, accountInfo, this.cacheConfig.accountInfo);
+            
+            return accountInfo;
+
+        } catch (error) {
+            if (error.data?.error === 'actNotFound') {
+                throw new Error('Account non trovato. Potrebbe non essere ancora attivato.');
+            }
+            console.error('❌ Errore recupero account info:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ottieni saldo account con cache
+     */
+    async getAccountBalance(address) {
+        try {
+            // Verifica cache
+            const cacheKey = `balance:${address}`;
+            const cached = this.getFromCache(cacheKey);
+            if (cached) {
+                return cached;
+            }
+
+            const accountInfo = await this.getAccountInfo(address);
+            
+            const balance = {
+                balanceDrops: accountInfo.Balance,
+                balanceXRP: dropsToXrp(accountInfo.Balance),
+                ownerCount: accountInfo.OwnerCount || 0,
+                sequence: accountInfo.Sequence,
+                previousTxnID: accountInfo.PreviousTxnID
+            };
+            
+            // Salva in cache
+            this.setCache(cacheKey, balance, this.cacheConfig.balance);
+            
+            return balance;
+
+        } catch (error) {
+            console.error('❌ Errore recupero saldo:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Calcola reserve requirement
+     */
+    async getReserveRequirement(ownerCount = 0) {
+        try {
+            if (!this.isConnected) {
+                throw new Error('Client XRPL non connesso');
+            }
+
+            const response = await this.client.request({
+                command: 'server_info'
+            });
+
+            const serverInfo = response.result.info;
+            const baseReserve = dropsToXrp(serverInfo.validated_ledger.reserve_base);
+            const ownerReserve = dropsToXrp(serverInfo.validated_ledger.reserve_inc);
+            
+            const totalReserve = baseReserve + (ownerCount * ownerReserve);
+
+            return {
+                baseReserve,
+                ownerReserve,
+                ownerCount,
+                totalReserve
+            };
+
+        } catch (error) {
+            console.error('❌ Errore calcolo reserve:', error);
+            // Ritorna valori di default se non riesce a recuperare
+            return {
+                baseReserve: 10,
+                ownerReserve: 2,
+                ownerCount,
+                totalReserve: 10 + (ownerCount * 2)
+            };
+        }
+    }
+
+    /**
+     * Invia transazione
+     */
+    async submitTransaction(transaction, wallet) {
+        try {
+            if (!this.isConnected) {
+                throw new Error('Client XRPL non connesso');
+            }
+
+            console.log('🔄 Invio transazione...', transaction);
+
+            // Prepara transazione
+            const prepared = await this.client.autofill(transaction);
+            
+            let response;
+            
+            if (wallet.type === 'xumm') {
+                response = await this.submitWithXUMM(prepared);
+            } else if (wallet.type === 'crossmark') {
+                response = await this.submitWithCrossmark(prepared);
+            } else {
+                throw new Error(`Tipo wallet non supportato: ${wallet.type}`);
+            }
+
+            console.log('✅ Transazione inviata:', response);
+            
+            // Invalida cache per account coinvolti
+            this.invalidateAccountCache(transaction.Account);
+            if (transaction.Destination) {
+                this.invalidateAccountCache(transaction.Destination);
+            }
+
+            return response;
+
+        } catch (error) {
+            console.error('❌ Errore invio transazione:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Invia transazione con XUMM
+     */
+    async submitWithXUMM(transaction) {
+        try {
+            if (!window.xumm) {
+                throw new Error('XUMM non disponibile');
+            }
+
+            const payload = await window.xumm.payload.createAndSubscribe({
+                txjson: transaction
+            });
+
+            if (payload.signed) {
+                return {
+                    result: {
+                        engine_result: 'tesSUCCESS',
+                        tx_json: {
+                            hash: payload.txid,
+                            ...transaction
+                        }
+                    }
+                };
+            } else {
+                throw new Error('Transazione rifiutata dall\'utente');
+            }
+
+        } catch (error) {
+            console.error('❌ Errore XUMM:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Invia transazione con Crossmark
+     */
+    async submitWithCrossmark(transaction) {
+        try {
+            if (!window.crossmark) {
+                throw new Error('Crossmark non disponibile');
+            }
+
+            const response = await window.crossmark.sign(transaction);
+
+            if (response && response.response && response.response.dispatched_result) {
+                return {
+                    result: {
+                        engine_result: response.response.dispatched_result,
+                        tx_json: {
+                            hash: response.response.tx_hash,
+                            ...transaction
+                        }
+                    }
+                };
+            } else {
+                throw new Error('Transazione rifiutata dall\'utente');
+            }
+
+        } catch (error) {
+            console.error('❌ Errore Crossmark:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ottieni stato transazione
+     */
+    async getTransactionStatus(hash) {
+        try {
+            if (!this.isConnected) {
+                throw new Error('Client XRPL non connesso');
+            }
+
+            const response = await this.client.request({
+                command: 'tx',
+                transaction: hash
+            });
+
+            return {
+                hash: hash,
+                validated: response.result.validated,
+                result: response.result.meta.TransactionResult,
+                ledgerIndex: response.result.ledger_index,
+                transaction: response.result
+            };
+
+        } catch (error) {
+            if (error.data?.error === 'txnNotFound') {
+                return {
+                    hash: hash,
+                    validated: false,
+                    result: 'PENDING',
+                    ledgerIndex: null,
+                    transaction: null
+                };
+            }
+            console.error('❌ Errore stato transazione:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ottieni storico transazioni account
+     */
+    async getAccountTransactions(address, options = {}) {
+        try {
+            if (!isValidClassicAddress(address)) {
+                throw new Error('Indirizzo non valido');
+            }
+
+            if (!this.isConnected) {
+                throw new Error('Client XRPL non connesso');
+            }
+
+            const request = {
+                command: 'account_tx',
+                account: address,
+                ledger_index_min: -1,
+                ledger_index_max: -1,
+                limit: options.limit || 50,
+                forward: options.forward || false
+            };
+
+            if (options.marker) {
+                request.marker = options.marker;
+            }
+
+            const response = await this.client.request(request);
+
+            return {
+                transactions: response.result.transactions,
+                marker: response.result.marker,
+                limit: response.result.limit,
+                account: address
+            };
+
+        } catch (error) {
+            console.error('❌ Errore storico transazioni:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Sottoscrivi a transazioni account
+     */
+    async subscribeToAccount(address) {
+        try {
+            if (!isValidClassicAddress(address)) {
+                throw new Error('Indirizzo non valido');
+            }
+
+            if (!this.isConnected) {
+                throw new Error('Client XRPL non connesso');
+            }
+
+            await this.client.request({
+                command: 'subscribe',
+                accounts: [address]
+            });
+
+            this.subscriptions.add(address);
+            console.log('✅ Sottoscrizione account:', address);
+
+        } catch (error) {
+            console.error('❌ Errore sottoscrizione account:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Rimuovi sottoscrizione account
+     */
+    async unsubscribeFromAccount(address) {
+        try {
+            if (!this.isConnected) {
+                return;
+            }
+
+            await this.client.request({
+                command: 'unsubscribe',
+                accounts: [address]
+            });
+
+            this.subscriptions.delete(address);
+            console.log('✅ Sottoscrizione rimossa:', address);
+
+        } catch (error) {
+            console.error('❌ Errore rimozione sottoscrizione:', error);
+        }
+    }
+
+    /**
+     * Gestione cache
+     */
+    setCache(key, value, ttl) {
+        const expiry = Date.now() + ttl;
+        this.cache.set(key, { value, expiry });
+        
+        // Cleanup se cache troppo grande
+        if (this.cache.size > this.cacheConfig.maxEntries) {
+            this.cleanupCache();
+        }
+    }
+
+    getFromCache(key) {
+        const cached = this.cache.get(key);
+        if (!cached) return null;
+        
+        if (Date.now() > cached.expiry) {
+            this.cache.delete(key);
+            return null;
+        }
+        
+        return cached.value;
+    }
+
+    invalidateAccountCache(address) {
+        const keysToDelete = [];
+        for (const key of this.cache.keys()) {
+            if (key.includes(address)) {
+                keysToDelete.push(key);
+            }
+        }
+        keysToDelete.forEach(key => this.cache.delete(key));
+    }
+
+    cleanupCache() {
+        const now = Date.now();
+        for (const [key, cached] of this.cache.entries()) {
+            if (now > cached.expiry) {
+                this.cache.delete(key);
+            }
+        }
+    }
+
+    startCacheCleanup() {
+        setInterval(() => {
+            this.cleanupCache();
+        }, 60000); // Cleanup ogni minuto
+    }
+
+    /**
+     * Ottieni informazioni network corrente
+     */
+    getCurrentNetwork() {
+        return this.currentNetwork ? {
+            name: this.currentNetwork,
+            ...this.networks[this.currentNetwork]
+        } : null;
+    }
+
+    /**
+     * Sottoscrivi eventi
+     */
+    on(event, callback) {
+        if (!this.eventListeners.has(event)) {
+            this.eventListeners.set(event, []);
+        }
+        this.eventListeners.get(event).push(callback);
+    }
+
+    /**
+     * Rimuovi sottoscrizione eventi
+     */
+    off(event, callback) {
+        if (this.eventListeners.has(event)) {
+            const callbacks = this.eventListeners.get(event);
+            const index = callbacks.indexOf(callback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        }
+    }
+
+    /**
+     * Emetti evento
+     */
+    emit(event, data) {
+        if (this.eventListeners.has(event)) {
+            this.eventListeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Errore callback evento ${event}:`, error);
+                }
+            });
+        }
+    }
+
+    /**
+     * Cleanup risorse
+     */
+    async cleanup() {
+        try {
+            await this.disconnect();
+            this.cache.clear();
+            this.eventListeners.clear();
+            console.log('✅ Cleanup XRPL service completato');
+        } catch (error) {
+            console.error('❌ Errore cleanup:', error);
+        }
+    }
 }
 
-// Istanza singleton
+// Esporta istanza singleton
 const xrplService = new XRPLService();
-
 export default xrplService;
 

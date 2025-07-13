@@ -456,7 +456,7 @@ const Home = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gradient-to-br from-purple-900 to-violet-900 p-8 rounded-2xl max-w-md w-full mx-4 border border-purple-500/30">
             <h3 className="text-2xl font-bold text-white mb-6 text-center">Connect Your Wallet</h3>
-            <p className="text-gray-300 text-center mb-6">Connect to XRPL Mainnet for real tokenization</p>
+            <p className="text-gray-300 text-center mb-6">Connect to XRPL Testnet with real APIs for testing</p>
             <div className="space-y-4">
               <button
                 onClick={() => connectWallet('XUMM')}

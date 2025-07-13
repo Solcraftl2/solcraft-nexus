@@ -34,15 +34,16 @@ class XRPLService:
     async def get_account_info(self, account_address: str) -> Dict[str, Any]:
         """Get account information from XRPL"""
         try:
-            account_info = self.client.request(xrpl.models.requests.AccountInfo(
-                account=account_address,
-                ledger_index="validated"
-            ))
-            return {
-                "success": True,
-                "account": account_info.result["account_data"],
-                "balance_xrp": float(account_info.result["account_data"]["Balance"]) / 1000000
-            }
+            async with JsonRpcClient(self.json_rpc_url) as client:
+                account_info = await client.request(xrpl.models.requests.AccountInfo(
+                    account=account_address,
+                    ledger_index="validated"
+                ))
+                return {
+                    "success": True,
+                    "account": account_info.result["account_data"],
+                    "balance_xrp": float(account_info.result["account_data"]["Balance"]) / 1000000
+                }
         except Exception as e:
             logger.error(f"Error getting account info: {str(e)}")
             return {"success": False, "error": str(e)}

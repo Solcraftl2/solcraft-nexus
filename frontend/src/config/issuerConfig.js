@@ -5,8 +5,8 @@
 
 // Configurazione Issuer Address principale
 export const SOLCRAFT_ISSUER_CONFIG = {
-  // Indirizzo issuer dedicato per SolCraft Nexus
-  address: "rSolCraftNexusIssuer1234567890123456789", // Placeholder - da sostituire con indirizzo reale
+  // Indirizzo issuer di TEST per SolCraft Nexus
+  address: "rpxv28rM4ttpGmTnVGyKbiYRSpLGTjUZiu", // Issuer di test - NON usare in produzione
   
   // Informazioni identificative
   name: "SolCraft Nexus",
@@ -14,7 +14,7 @@ export const SOLCRAFT_ISSUER_CONFIG = {
   domain: "solcraft-nexus.vercel.app",
   
   // Configurazione di rete
-  network: "mainnet", // mainnet per produzione, testnet per test
+  network: "testnet", // testnet per modalità test, mainnet per produzione
   
   // Caratteristiche dell'issuer
   features: {
@@ -45,20 +45,20 @@ export const SOLCRAFT_ISSUER_CONFIG = {
 export const ISSUER_CONFIGS = {
   production: {
     ...SOLCRAFT_ISSUER_CONFIG,
-    network: "mainnet",
-    address: "rSolCraftNexusIssuer1234567890123456789" // Da configurare
+    network: "testnet", // Mantieni testnet anche per production per ora
+    address: "rpxv28rM4ttpGmTnVGyKbiYRSpLGTjUZiu" // Address di test
   },
   
   staging: {
     ...SOLCRAFT_ISSUER_CONFIG,
     network: "testnet",
-    address: "rSolCraftTestIssuer1234567890123456789" // Da configurare
+    address: "rpxv28rM4ttpGmTnVGyKbiYRSpLGTjUZiu" // Address di test
   },
   
   development: {
     ...SOLCRAFT_ISSUER_CONFIG,
     network: "testnet",
-    address: "rSolCraftDevIssuer1234567890123456789" // Da configurare
+    address: "rpxv28rM4ttpGmTnVGyKbiYRSpLGTjUZiu" // Address di test
   }
 };
 

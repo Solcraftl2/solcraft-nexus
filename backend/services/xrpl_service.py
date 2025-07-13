@@ -51,25 +51,26 @@ class XRPLService:
     async def get_account_tokens(self, account_address: str) -> Dict[str, Any]:
         """Get account token balances (trustlines)"""
         try:
-            account_lines = self.client.request(xrpl.models.requests.AccountLines(
-                account=account_address,
-                ledger_index="validated"
-            ))
-            
-            tokens = []
-            for line in account_lines.result.get("lines", []):
-                tokens.append({
-                    "currency": line["currency"],
-                    "issuer": line["account"],
-                    "balance": float(line["balance"]),
-                    "limit": float(line["limit"]) if line["limit"] != "0" else None
-                })
-            
-            return {
-                "success": True,
-                "tokens": tokens,
-                "count": len(tokens)
-            }
+            async with JsonRpcClient(self.json_rpc_url) as client:
+                account_lines = await client.request(xrpl.models.requests.AccountLines(
+                    account=account_address,
+                    ledger_index="validated"
+                ))
+                
+                tokens = []
+                for line in account_lines.result.get("lines", []):
+                    tokens.append({
+                        "currency": line["currency"],
+                        "issuer": line["account"],
+                        "balance": float(line["balance"]),
+                        "limit": float(line["limit"]) if line["limit"] != "0" else None
+                    })
+                
+                return {
+                    "success": True,
+                    "tokens": tokens,
+                    "count": len(tokens)
+                }
         except Exception as e:
             logger.error(f"Error getting account tokens: {str(e)}")
             return {"success": False, "error": str(e)}

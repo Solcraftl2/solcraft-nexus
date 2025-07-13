@@ -237,6 +237,8 @@ const Home = () => {
 
   const connectWallet = async (walletType) => {
     setLoading(true);
+    setError(null);
+    
     try {
       let result;
       
@@ -253,15 +255,25 @@ const Home = () => {
         default:
           throw new Error('Unknown wallet type');
       }
-
+      
       if (result.success) {
         setConnectedWallet(result);
         setWalletModalOpen(false);
-        alert(`✅ ${walletType} wallet connected successfully!\n\nAddress: ${result.address}\nBalance: ${result.balanceXrp || 'N/A'} XRP\n\nYou can now tokenize assets and trade on XRPL mainnet.`);
+        
+        // Show success message
+        setSuccessMessage(`✅ ${walletType} wallet connected successfully!\n\nAddress: ${result.address}\nBalance: ${result.balanceXrp || 'N/A'} XRP`);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(null), 5000);
       }
     } catch (error) {
       console.error('Wallet connection error:', error);
-      alert(`❌ ${walletType} connection failed:\n\n${error.message}\n\nPlease try again or use a different wallet.`);
+      
+      // Set error message instead of alert
+      setError(`${walletType} connection failed: ${error.message}`);
+      
+      // Clear error message after 8 seconds
+      setTimeout(() => setError(null), 8000);
     } finally {
       setLoading(false);
     }

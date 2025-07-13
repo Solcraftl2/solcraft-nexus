@@ -87,10 +87,7 @@ class XUMMService:
                 "payload_uuid": payload_uuid,
                 "signed": payload.meta.signed,
                 "cancelled": payload.meta.cancelled,
-                "expired": payload.meta.expired,
-                "opened": payload.meta.opened,
-                "return_url_app": payload.meta.return_url_app,
-                "return_url_web": payload.meta.return_url_web
+                "expired": payload.meta.expired
             }
             
             # Add transaction details if signed

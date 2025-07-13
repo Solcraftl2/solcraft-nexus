@@ -417,7 +417,7 @@ const Home = () => {
               </div>
               <p className="text-gray-400">Advanced Web3 tokenization platform on Ripple Blockchain</p>
               <div className="mt-4 text-sm text-gray-500">
-                Connected to XRPL Mainnet
+                Connected to XRPL Testnet (Real APIs)
               </div>
             </div>
             <div>

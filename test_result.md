@@ -352,8 +352,12 @@ metadata:
   test_sequence: 2
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "XUMM Modal Auto-Close Fix"
+    - "Crossmark Wallet Connection"
+    - "Web3Auth Social Login"
+  stuck_tasks:
+    - "XUMM Modal Auto-Close Fix"
   test_all: false
   test_priority: "high_first"
 

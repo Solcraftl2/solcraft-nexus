@@ -28,53 +28,178 @@ class WalletService {
     return this.authToken;
   }
 
-  // XUMM Wallet Connection
+  // XUMM Wallet Connection via Backend Proxy
   async connectXumm() {
     try {
-      console.log('Connecting to XUMM wallet...');
+      console.log('Connecting to XUMM wallet via backend proxy...');
       
-      // For frontend, we'll use the XUMM SDK's authorize method
-      // This will open the XUMM app for signing
-      const xumm = new XummSdk();
-      
-      // Create a simple ping payload to get user's address
-      const payload = await xumm.payload.createAndSubscribe({
-        txjson: {
-          TransactionType: 'SignIn'
+      // Create XUMM connection request through backend
+      const response = await fetch(`${this.backendUrl}/api/wallet/xumm/connect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        options: {
-          submit: false,
-          expire: 5,
-          return_url: {
-            web: window.location.origin
-          }
-        }
       });
 
-      console.log('XUMM payload created:', payload);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'XUMM connection request failed');
+      }
 
-      // Show QR code or redirect
-      const qrUrl = payload.refs.qr_png;
-      const deepLink = payload.next.always;
+      const xummData = await response.json();
+      console.log('XUMM payload created:', xummData);
 
-      // For demo, we'll simulate the connection
-      // In real implementation, user would scan QR or click deep link
-      const userConfirmed = window.confirm(
-        `XUMM Wallet Connection:\n\n1. Scan this QR code with XUMM app\n2. Or click OK to simulate connection\n\nQR: ${qrUrl}`
-      );
-
-      if (userConfirmed) {
-        // Simulate successful connection
-        // In real app, you'd wait for the WebSocket event
-        const simulatedAddress = 'rSolcraftXummWalletAddress123456789';
-        return await this.handleSuccessfulConnection('xumm', simulatedAddress);
+      // Show QR code and deep link to user
+      const userChoice = await this.showXummConnectionModal(xummData);
+      
+      if (userChoice === 'qr') {
+        // User wants to scan QR code
+        window.open(xummData.qr_url, '_blank', 'width=400,height=400');
+      } else if (userChoice === 'deeplink') {
+        // User wants to use deep link
+        window.open(xummData.deep_link, '_self');
       } else {
         throw new Error('User cancelled XUMM connection');
+      }
+
+      // Poll for connection result
+      const connectionResult = await this.pollXummConnection(xummData.payload_uuid);
+      
+      if (connectionResult.success && connectionResult.connected) {
+        return await this.handleSuccessfulConnection('xumm', connectionResult.address, null, connectionResult);
+      } else {
+        throw new Error('XUMM connection was not completed');
       }
     } catch (error) {
       console.error('XUMM connection error:', error);
       throw new Error(`XUMM connection failed: ${error.message}`);
     }
+  }
+
+  // Show XUMM connection modal to user
+  async showXummConnectionModal(xummData) {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); display: flex; align-items: center;
+        justify-content: center; z-index: 10000; font-family: Arial, sans-serif;
+      `;
+      
+      modal.innerHTML = `
+        <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 2rem; border-radius: 1rem; max-width: 400px; width: 90%; border: 1px solid rgba(99, 102, 241, 0.3); text-align: center;">
+          <h3 style="color: white; margin-bottom: 1rem;">Connect XUMM Wallet</h3>
+          <p style="color: #94a3b8; margin-bottom: 1.5rem;">Choose how to connect your XUMM wallet:</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <button id="qr-option" style="
+              background: linear-gradient(135deg, #3b82f6, #6366f1); color: white; 
+              padding: 1rem; border: none; border-radius: 0.5rem; font-size: 1rem; 
+              font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            ">
+              📱 Scan QR Code
+            </button>
+            
+            <button id="deeplink-option" style="
+              background: linear-gradient(135deg, #10b981, #059669); color: white; 
+              padding: 1rem; border: none; border-radius: 0.5rem; font-size: 1rem; 
+              font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            ">
+              🚀 Open XUMM App
+            </button>
+            
+            <button id="cancel-option" style="
+              background: transparent; border: 1px solid #6366f1; color: #6366f1; 
+              padding: 1rem; border-radius: 0.5rem; font-size: 1rem; 
+              font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            ">
+              Cancel
+            </button>
+          </div>
+          
+          <div style="margin-top: 1rem; font-size: 0.875rem; color: #64748b;">
+            <p>Expires in: <span id="timer">${Math.floor((new Date(xummData.expires_at) - new Date()) / 1000)}s</span></p>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Timer countdown
+      const timer = modal.querySelector('#timer');
+      const expireTime = new Date(xummData.expires_at);
+      const interval = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((expireTime - new Date()) / 1000));
+        timer.textContent = `${remaining}s`;
+        if (remaining === 0) {
+          clearInterval(interval);
+          document.body.removeChild(modal);
+          resolve('expired');
+        }
+      }, 1000);
+      
+      // Event listeners
+      modal.querySelector('#qr-option').onclick = () => {
+        clearInterval(interval);
+        document.body.removeChild(modal);
+        resolve('qr');
+      };
+      
+      modal.querySelector('#deeplink-option').onclick = () => {
+        clearInterval(interval);
+        document.body.removeChild(modal);
+        resolve('deeplink');
+      };
+      
+      modal.querySelector('#cancel-option').onclick = () => {
+        clearInterval(interval);
+        document.body.removeChild(modal);
+        resolve('cancel');
+      };
+    });
+  }
+
+  // Poll XUMM connection status
+  async pollXummConnection(payloadUuid, maxAttempts = 30) {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      
+      const poll = async () => {
+        try {
+          attempts++;
+          console.log(`Polling XUMM connection (${attempts}/${maxAttempts}):`, payloadUuid);
+          
+          const response = await fetch(`${this.backendUrl}/api/wallet/xumm/${payloadUuid}/result`);
+          
+          if (!response.ok) {
+            throw new Error('Failed to check XUMM status');
+          }
+          
+          const result = await response.json();
+          
+          if (result.success && result.connected) {
+            console.log('XUMM wallet connected:', result);
+            resolve(result);
+          } else if (result.cancelled || result.expired) {
+            reject(new Error('XUMM connection was cancelled or expired'));
+          } else if (attempts >= maxAttempts) {
+            reject(new Error('XUMM connection timeout'));
+          } else {
+            // Continue polling
+            setTimeout(poll, 2000);
+          }
+        } catch (error) {
+          if (attempts >= maxAttempts) {
+            reject(error);
+          } else {
+            // Retry on error
+            setTimeout(poll, 2000);
+          }
+        }
+      };
+      
+      poll();
+    });
   }
 
   // Crossmark Wallet Connection

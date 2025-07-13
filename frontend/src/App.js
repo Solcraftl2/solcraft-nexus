@@ -465,7 +465,7 @@ const Home = () => {
               >
                 <span className="mr-2">📱</span>
                 XUMM Wallet
-                <span className="ml-2 text-xs">(Real XRPL)</span>
+                <span className="ml-2 text-xs">(Real XRPL Testnet)</span>
               </button>
               <button
                 onClick={() => connectWallet('Crossmark')}

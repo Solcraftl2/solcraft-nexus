@@ -118,6 +118,7 @@ class WalletService {
           
           <div style="margin-top: 1rem; font-size: 0.875rem; color: #64748b;">
             <p>Expires in: <span id="timer">${Math.floor((new Date(xummData.expires_at) - new Date()) / 1000)}s</span></p>
+            <p id="status-message" style="color: #10b981; margin-top: 0.5rem; display: none;">✅ Waiting for wallet confirmation...</p>
           </div>
         </div>
       `;
@@ -133,27 +134,41 @@ class WalletService {
         if (remaining === 0) {
           clearInterval(interval);
           document.body.removeChild(modal);
-          resolve('expired');
+          resolve({ userChoice: 'expired', modalElement: null });
         }
       }, 1000);
       
       // Event listeners
       modal.querySelector('#qr-option').onclick = () => {
-        clearInterval(interval);
-        document.body.removeChild(modal);
-        resolve('qr');
+        // Show status message and disable buttons
+        const statusMsg = modal.querySelector('#status-message');
+        statusMsg.style.display = 'block';
+        statusMsg.textContent = '✅ QR Code opened - scan with XUMM app...';
+        
+        // Disable buttons to prevent multiple clicks
+        modal.querySelector('#qr-option').disabled = true;
+        modal.querySelector('#deeplink-option').disabled = true;
+        
+        resolve({ userChoice: 'qr', modalElement: modal, interval: interval });
       };
       
       modal.querySelector('#deeplink-option').onclick = () => {
-        clearInterval(interval);
-        document.body.removeChild(modal);
-        resolve('deeplink');
+        // Show status message and disable buttons
+        const statusMsg = modal.querySelector('#status-message');
+        statusMsg.style.display = 'block';
+        statusMsg.textContent = '✅ Opening XUMM app - confirm the transaction...';
+        
+        // Disable buttons to prevent multiple clicks
+        modal.querySelector('#qr-option').disabled = true;
+        modal.querySelector('#deeplink-option').disabled = true;
+        
+        resolve({ userChoice: 'deeplink', modalElement: modal, interval: interval });
       };
       
       modal.querySelector('#cancel-option').onclick = () => {
         clearInterval(interval);
         document.body.removeChild(modal);
-        resolve('cancel');
+        resolve({ userChoice: 'cancel', modalElement: null });
       };
     });
   }

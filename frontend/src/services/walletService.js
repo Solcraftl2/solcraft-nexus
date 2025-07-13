@@ -1,7 +1,10 @@
 /**
  * Solcraft Nexus - Real Wallet Service
  * XRPL testnet wallet integration via backend proxy
+ * Integrato con database Supabase per persistenza dati
  */
+
+import { registerWallet, updateWalletBalance, getWallet } from './supabaseService.js';
 
 class WalletService {
   constructor() {
@@ -275,6 +278,30 @@ class WalletService {
 
       console.log(`${walletType} wallet connected successfully:`, address);
 
+      // Registra wallet nel database Supabase
+      const walletData = {
+        address: address,
+        type: walletType,
+        network: 'testnet',
+        balance: connectionData?.balance_xrp || 0,
+        xummUserToken: connectionData?.token || null,
+        metadata: {
+          provider: provider,
+          connectedAt: new Date().toISOString(),
+          connectionData: connectionData ? {
+            message: connectionData.message,
+            balanceXrp: connectionData.balance_xrp
+          } : null
+        }
+      };
+
+      const dbResult = await registerWallet(walletData);
+      if (!dbResult.success) {
+        console.warn('⚠️ Errore salvataggio wallet nel database:', dbResult.error);
+      } else {
+        console.log('✅ Wallet registrato nel database:', dbResult.data);
+      }
+
       // If we already have connection data from XUMM backend, use it
       if (connectionData && connectionData.token) {
         this.connectedWallet = walletType;
@@ -292,7 +319,8 @@ class WalletService {
           address: address,
           balanceXrp: connectionData.balance_xrp,
           message: connectionData.message,
-          provider: provider
+          provider: provider,
+          dbId: dbResult.data?.id
         };
       }
 

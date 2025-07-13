@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@crossmarkio/sdk": "^0.4.0",
+    "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.8.4",
     "cra-template": "1.2.0",
     "react": "^19.0.0",

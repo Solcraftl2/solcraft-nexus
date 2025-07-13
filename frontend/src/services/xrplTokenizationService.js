@@ -2,12 +2,21 @@
  * Tokenization Service con Issuer Address Configurato
  * Gestisce creazione token tramite issuer dedicato Solcraft Nexus
  * Implementazione basata sui code samples XRPL ufficiali
+ * Integrato con database Supabase per persistenza dati
  */
 
 import { convertStringToHex, convertHexToString, isValidClassicAddress } from 'xrpl';
 import xrplService from './xrplService.js';
 import walletService from './walletService.js';
 import { getCurrentIssuerConfig, validateIssuerConfig, generateTokenSymbol, ASSET_TYPES_CONFIG } from '../config/issuerConfig.js';
+import { 
+    createTokenization, 
+    updateTokenizationStatus, 
+    getTokenizationsByOwner,
+    createTransaction,
+    updateTransactionStatus,
+    incrementPlatformCounter
+} from './supabaseService.js';
 
 class TokenizationService {
     constructor() {
@@ -188,7 +197,68 @@ Contatta l'amministratore per configurare l'issuer address dedicato.
                 createdAt: new Date().toISOString()
             };
 
-            // Salva token
+            // Salva token nel database Supabase
+            const dbTokenData = {
+                assetName: name,
+                assetType: assetType,
+                description: description,
+                valueUsd: parseFloat(assetValue),
+                tokenSymbol: currencyCode,
+                tokenSupply: parseFloat(totalSupply),
+                tokenDecimals: 6,
+                issuerAddress: issuerAddress,
+                ownerAddress: wallet.address,
+                metadata: {
+                    ...this.issuerConfig.defaultTokenMetadata,
+                    ...metadata,
+                    createdAt: new Date().toISOString(),
+                    network: this.issuerConfig.network,
+                    platform: this.issuerConfig.name,
+                    transactions: {
+                        trustLine: trustLineResult.hash,
+                        issuance: issuanceResult.hash
+                    }
+                }
+            };
+
+            // Crea record nel database
+            const dbResult = await createTokenization(dbTokenData);
+            if (!dbResult.success) {
+                console.warn('⚠️ Errore salvataggio database:', dbResult.error);
+            } else {
+                // Aggiorna stato a completato
+                await updateTokenizationStatus(
+                    dbResult.data.id, 
+                    'completed', 
+                    [trustLineResult.hash, issuanceResult.hash]
+                );
+                
+                // Incrementa contatori piattaforma
+                await incrementPlatformCounter('total_tokenizations');
+                await incrementPlatformCounter('active_tokenizations');
+            }
+
+            // Salva anche in memoria per compatibilità
+            const token = {
+                id: dbResult.data?.id || this.generateTokenId(),
+                currency: currencyCode,
+                name,
+                description,
+                assetType,
+                totalSupply: parseFloat(totalSupply),
+                assetValue: parseFloat(assetValue),
+                issuer: issuerAddress,
+                holder: wallet.address,
+                metadata: dbTokenData.metadata,
+                transactions: {
+                    trustLine: trustLineResult.hash,
+                    issuance: issuanceResult.hash
+                },
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                dbId: dbResult.data?.id
+            };
+
             this.tokens.set(token.id, token);
 
             // Emetti evento

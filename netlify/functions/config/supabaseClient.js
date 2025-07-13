@@ -1,164 +1,74 @@
-import { logger } from '../utils/logger.js';
-
-const { parse } = require('querystring');
-
-// Helper per compatibilità Vercel -> Netlify
-function createReqRes(event) {
-  const req = {
-    method: event.httpMethod,
-    headers: event.headers,
-    body: event.body ? (event.headers['content-type']?.includes('application/json') ? JSON.parse(event.body) : parse(event.body)) : {},
-    query: event.queryStringParameters || {},
-    ip: event.headers['x-forwarded-for'] || event.headers['client-ip'] || '127.0.0.1'
-  };
-  
-  const res = {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-    },
-    body: '',
-    
-    status: function(code) {
-      this.statusCode = code;
-      return this;
-    },
-    
-    json: function(data) {
-      this.body = JSON.stringify(data);
-      return this;
-    },
-    
-    end: function(data) {
-      if (data) this.body = data;
-      return this;
-    },
-    
-    setHeader: function(name, value) {
-      this.headers[name] = value;
-      return this;
-    }
-  };
-  
-  return { req, res };
-}
-
 import { createClient } from '@supabase/supabase-js';
 
-// Configurazione Supabase per API Backend
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+// Configurazione Supabase per Solcraft Nexus
+const supabaseUrl = 'https://dtzlkcqddjaoubrjnzjw.supabase.co';
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0emxrY3FkZGphb3Vicmpuemp3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDkzMTU0OCwiZXhwIjoyMDY2NTA3NTQ4fQ.tZg8eN3D6Jiy_L6u70DdQzdMA5CM8ix6VYcktnYYi7w';
 
-// Validazione variabili di ambiente richieste
-if (!supabaseUrl) {
-  throw new Error('SUPABASE_URL environment variable is required');
-}
+// Client Supabase con service role per operazioni backend
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
-if (!supabaseServiceKey) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY environment variable is required');
-}
+// Client Supabase pubblico per frontend
+export const supabaseClient = createClient(
+  supabaseUrl, 
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0emxrY3FkZGphb3Vicmpuemp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5MzE1NDgsImV4cCI6MjA2NjUwNzU0OH0.eYJhbGc1OjJIUzI1NiIsInR5cCI6IkpXVCJ9'
+);
 
-// Client Supabase per operazioni backend
-export const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// Utility functions per operazioni comuni
-export const handleSupabaseError = (error, operation) => {
-  logger.error(`Supabase error in ${operation}:`, error);
+// Utility per gestire errori di connessione
+export const handleSupabaseError = (error) => {
+  console.error('Supabase Error:', error);
+  
+  if (error.message?.includes('paused') || error.message?.includes('inactive')) {
+    return {
+      success: false,
+      error: 'Database temporaneamente non disponibile. Il progetto Supabase è in pausa. Riattivazione richiesta.',
+      code: 'PROJECT_PAUSED',
+      retry: true
+    };
+  }
+  
+  if (error.message?.includes('network') || error.message?.includes('fetch')) {
+    return {
+      success: false,
+      error: 'Errore di connessione al database. Riprova tra qualche istante.',
+      code: 'NETWORK_ERROR',
+      retry: true
+    };
+  }
+  
   return {
     success: false,
-    error: error.message || 'Database operation failed',
-    details: error.details || null
+    error: error.message || 'Errore database sconosciuto',
+    code: 'UNKNOWN_ERROR',
+    retry: false
   };
 };
 
-export const validateSupabaseResponse = (data, error, operation) => {
-  if (error) {
-    throw new Error(`${operation} failed: ${error.message}`);
+// Test connessione database
+export const testConnection = async () => {
+  try {
+    const { data, error } = await supabaseClient
+      .from('portfolios')
+      .select('count')
+      .limit(1);
+    
+    if (error) {
+      return handleSupabaseError(error);
+    }
+    
+    return {
+      success: true,
+      message: 'Connessione Supabase attiva',
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    return handleSupabaseError(error);
   }
-  return data;
 };
 
-// Funzioni helper per tabelle specifiche
-export const insertUser = async (userData) => {
-  const { data, error } = await supabase
-    .from('users')
-    .insert(userData)
-    .select()
-    .single();
-  
-  return validateSupabaseResponse(data, error, 'Insert user');
-};
-
-export const getUserByEmail = async (email) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('email', email.toLowerCase())
-    .single();
-  
-  if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-    throw new Error(`Get user by email failed: ${error.message}`);
-  }
-  
-  return data;
-};
-
-export const insertAsset = async (assetData) => {
-  const { data, error } = await supabase
-    .from('assets')
-    .insert(assetData)
-    .select()
-    .single();
-  
-  return validateSupabaseResponse(data, error, 'Insert asset');
-};
-
-export const insertToken = async (tokenData) => {
-  const { data, error } = await supabase
-    .from('tokens')
-    .insert(tokenData)
-    .select()
-    .single();
-  
-  return validateSupabaseResponse(data, error, 'Insert token');
-};
-
-export const insertTransaction = async (transactionData) => {
-  const { data, error } = await supabase
-    .from('transactions')
-    .insert(transactionData)
-    .select()
-    .single();
-  
-  return validateSupabaseResponse(data, error, 'Insert transaction');
-};
-
-export const getUserPortfolio = async (userId) => {
-  const { data, error } = await supabase
-    .from('portfolios')
-    .select(`
-      *,
-      assets(name, symbol, token_price, asset_categories(name, icon))
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-  
-  return validateSupabaseResponse(data, error, 'Get user portfolio');
-};
-
-export const updateUserProfile = async (userId, updates) => {
-  const { data, error } = await supabase
-    .from('users')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-    .select()
-    .single();
-  
-  return validateSupabaseResponse(data, error, 'Update user profile');
-};
-
-export default supabase;
+export default supabaseClient;
 

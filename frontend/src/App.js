@@ -722,26 +722,26 @@ const Home = () => {
         </div>
       </footer>
 
-      {/* Real Wallet Connection Modal */}
+      {/* Professional Wallet Connection Modal */}
       {walletModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-gradient-to-br from-purple-900 to-violet-900 p-8 rounded-2xl max-w-md w-full mx-4 border border-purple-500/30">
-            <h3 className="text-2xl font-bold text-white mb-6 text-center">Connect Your Wallet</h3>
-            <p className="text-gray-300 text-center mb-6">Connect to XRPL Testnet with real APIs for testing</p>
+          <div className="bg-white p-8 rounded-2xl max-w-md w-full mx-4 border border-gray-200 shadow-2xl">
+            <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">Connect Your Wallet</h3>
+            <p className="text-gray-600 text-center mb-6">Connect to start tokenizing and trading assets</p>
             <div className="space-y-4">
               <button
                 onClick={() => connectWallet('XUMM')}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+                className="w-full bg-blue-600 text-white p-4 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
               >
                 <span className="mr-2">📱</span>
                 XUMM Wallet
-                <span className="ml-2 text-xs">(Real XRPL Testnet)</span>
+                <span className="ml-2 text-xs">(Recommended)</span>
               </button>
               <button
                 onClick={() => connectWallet('Crossmark')}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+                className="w-full bg-gray-100 text-gray-700 p-4 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
               >
                 <span className="mr-2">✅</span>
                 Crossmark
@@ -750,22 +750,22 @@ const Home = () => {
               <button
                 onClick={() => connectWallet('Web3Auth')}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white p-4 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+                className="w-full bg-gray-100 text-gray-700 p-4 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
               >
                 <span className="mr-2">🔐</span>
                 Web3Auth (Social)
-                <span className="ml-2 text-xs">(Google, Twitter, etc.)</span>
+                <span className="ml-2 text-xs">(Coming Soon)</span>
               </button>
             </div>
             <button
               onClick={() => setWalletModalOpen(false)}
               disabled={loading}
-              className="w-full mt-6 border border-purple-500 text-purple-400 p-3 rounded-lg font-semibold hover:bg-purple-500 hover:text-white transition-all duration-200 disabled:opacity-50"
+              className="w-full mt-6 border border-gray-300 text-gray-700 p-3 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200 disabled:opacity-50"
             >
               Cancel
             </button>
             {loading && (
-              <div className="mt-4 text-center text-gray-300 text-sm">
+              <div className="mt-4 text-center text-gray-600 text-sm">
                 ⏳ Connecting wallet... Please wait.
               </div>
             )}

@@ -201,14 +201,12 @@ const Home = () => {
   useEffect(() => {
     if (platformStats) {
       const updateStats = () => {
-        setDisplayStats(formatStats(platformStats));
+        setDisplayStats(getDisplayStats());
       };
       
-      // Initial update
       updateStats();
+      const interval = setInterval(updateStats, 5000); // Update every 5 seconds
       
-      // Update every 10 seconds for live feel
-      const interval = setInterval(updateStats, 10000);
       return () => clearInterval(interval);
     }
   }, [platformStats]);

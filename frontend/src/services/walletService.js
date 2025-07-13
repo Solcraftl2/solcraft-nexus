@@ -185,6 +185,17 @@ class WalletService {
         }
       };
       
+      const updateModalStatus = (message, color = '#f59e0b') => {
+        if (modalElement && document.body.contains(modalElement)) {
+          const statusMsg = modalElement.querySelector('#status-message');
+          if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = message;
+            statusMsg.style.color = color;
+          }
+        }
+      };
+      
       const poll = async () => {
         try {
           attempts++;
@@ -193,59 +204,81 @@ class WalletService {
           const response = await fetch(`${this.backendUrl}/api/wallet/xumm/${payloadUuid}/result`);
           
           if (!response.ok) {
-            throw new Error('Failed to check XUMM status');
-          }
-          
-          const result = await response.json();
-          console.log('XUMM poll result:', result);
-          
-          // Update modal status message if modal is still open
-          if (modalElement && document.body.contains(modalElement)) {
-            const statusMsg = modalElement.querySelector('#status-message');
-            if (statusMsg) {
-              statusMsg.style.display = 'block';
-              if (result.connected) {
-                statusMsg.textContent = '✅ Wallet connected successfully!';
-                statusMsg.style.color = '#10b981';
-              } else if (result.signed) {
-                statusMsg.textContent = '✅ Transaction signed! Connecting wallet...';
-                statusMsg.style.color = '#10b981';
-              } else {
-                statusMsg.textContent = '⏳ Waiting for wallet confirmation...';
-                statusMsg.style.color = '#f59e0b';
+            if (response.status === 404) {
+              updateModalStatus('⏳ Waiting for wallet confirmation...', '#f59e0b');
+            } else {
+              throw new Error(`HTTP ${response.status}: Failed to check XUMM status`);
+            }
+          } else {
+            const result = await response.json();
+            console.log('XUMM poll result:', result);
+            
+            // Update modal status message if modal is still open
+            if (modalElement && document.body.contains(modalElement)) {
+              const statusMsg = modalElement.querySelector('#status-message');
+              if (statusMsg) {
+                statusMsg.style.display = 'block';
+                if (result.connected) {
+                  statusMsg.textContent = '✅ Wallet connected successfully!';
+                  statusMsg.style.color = '#10b981';
+                } else if (result.signed) {
+                  statusMsg.textContent = '✅ Transaction signed! Connecting wallet...';
+                  statusMsg.style.color = '#10b981';
+                } else {
+                  statusMsg.textContent = '⏳ Waiting for wallet confirmation...';
+                  statusMsg.style.color = '#f59e0b';
+                }
               }
+            }
+            
+            // Check if wallet is fully connected (signed + processed)
+            if (result.success && result.connected) {
+              console.log('✅ XUMM wallet connected successfully:', result);
+              cleanupModal(); // Close modal automatically
+              resolve(result);
+              return;
+            } else if (result.cancelled) {
+              console.log('❌ XUMM connection cancelled by user');
+              cleanupModal();
+              reject(new Error('XUMM connection was cancelled by user'));
+              return;
+            } else if (result.expired) {
+              console.log('⏰ XUMM connection expired');
+              cleanupModal();
+              reject(new Error('XUMM connection expired'));
+              return;
             }
           }
           
-          // Check if wallet is fully connected (signed + processed)
-          if (result.success && result.connected) {
-            console.log('✅ XUMM wallet connected successfully:', result);
-            cleanupModal(); // Close modal automatically
-            resolve(result);
-          } else if (result.cancelled) {
-            console.log('❌ XUMM connection cancelled by user');
-            cleanupModal();
-            reject(new Error('XUMM connection was cancelled by user'));
-          } else if (result.expired) {
-            console.log('⏰ XUMM connection expired');
-            cleanupModal();
-            reject(new Error('XUMM connection expired'));
-          } else if (attempts >= maxAttempts) {
+          // Check if we've reached max attempts
+          if (attempts >= maxAttempts) {
             console.log('⏰ XUMM connection polling timeout');
-            cleanupModal();
-            reject(new Error('XUMM connection timeout - please try again'));
-          } else {
-            // Continue polling every 2 seconds
-            console.log(`XUMM status: signed=${result.signed}, connected=${result.connected} - continuing to poll...`);
-            setTimeout(poll, 2000);
+            updateModalStatus('⏰ Connection timeout - please try again', '#ef4444');
+            setTimeout(() => {
+              cleanupModal();
+              reject(new Error('XUMM connection timeout - please try again'));
+            }, 3000); // Show timeout message for 3 seconds
+            return;
           }
+          
+          // Continue polling every 2 seconds
+          console.log(`XUMM status: continuing to poll in 2s (attempt ${attempts}/${maxAttempts})...`);
+          setTimeout(poll, 2000);
+          
         } catch (error) {
           console.error('XUMM polling error:', error);
+          
+          // Update modal with error message
+          updateModalStatus(`❌ Error: ${error.message}`, '#ef4444');
+          
           if (attempts >= maxAttempts) {
-            cleanupModal();
-            reject(new Error('Failed to check XUMM status - please try again'));
+            setTimeout(() => {
+              cleanupModal();
+              reject(new Error('Failed to check XUMM status - please try again'));
+            }, 3000);
+            return;
           } else {
-            // Retry on error
+            // Retry on error with longer delay
             setTimeout(poll, 3000);
           }
         }

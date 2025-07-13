@@ -146,20 +146,40 @@ const Home = () => {
     });
   }, []);
 
-  // Format stats for display
+  // Format stats for display with real-time variation
   const formatStats = (stats) => {
     if (!stats) return {};
     
+    // Add small random variations to make stats feel more "live"
+    const variation = () => Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+    
     return {
-      tvl: `$${(stats.total_value_locked / 1000000).toFixed(1)}M`,
-      transactions: `${(stats.total_transactions / 1000000).toFixed(1)}M+`,
-      users: `${(stats.total_users / 1000).toFixed(1)}K`,
-      assets: `${(stats.total_tokenizations / 1000).toFixed(1)}K`
+      tvl: `$${((stats.total_value_locked + variation() * 100000) / 1000000).toFixed(1)}M`,
+      transactions: `${((stats.total_transactions + variation() * 1000) / 1000000).toFixed(1)}M+`,
+      users: `${((stats.total_users + variation() * 100) / 1000).toFixed(1)}K`,
+      assets: `${((stats.total_tokenizations + variation() * 10) / 1000).toFixed(1)}K`
     };
   };
 
-  const mockStats = formatStats(platformStats);
-  const statKeys = Object.keys(mockStats);
+  const [displayStats, setDisplayStats] = useState({});
+  
+  // Update stats periodically for live feel
+  useEffect(() => {
+    if (platformStats) {
+      const updateStats = () => {
+        setDisplayStats(formatStats(platformStats));
+      };
+      
+      // Initial update
+      updateStats();
+      
+      // Update every 10 seconds for live feel
+      const interval = setInterval(updateStats, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [platformStats]);
+
+  const statKeys = Object.keys(displayStats);
 
   // Animate stats
   useEffect(() => {

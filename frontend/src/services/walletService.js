@@ -1,9 +1,7 @@
 /**
  * Solcraft Nexus - Real Wallet Service
- * XRPL mainnet wallet integration for XUMM and Crossmark
+ * XRPL testnet wallet integration via backend proxy
  */
-
-import { XummSdk } from 'xumm-sdk';
 
 class WalletService {
   constructor() {

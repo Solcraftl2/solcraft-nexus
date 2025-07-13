@@ -12,8 +12,7 @@ import xrpl
 from xrpl.models import Payment, TrustSet, OfferCreate, AccountSet
 from xrpl.clients import JsonRpcClient, WebsocketClient
 from xrpl.wallet import Wallet
-from xrpl.transaction import safe_sign_and_autofill_transaction, send_reliable_submission
-# Note: These imports may not be available in current xrpl-py version
+from xrpl.transaction import autofill_and_sign, reliable_submission
 from dotenv import load_dotenv
 import logging
 

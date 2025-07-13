@@ -316,6 +316,21 @@ frontend:
         -agent: "testing"
         -comment: "✅ PASSED: Responsive design working - Navigation visible and functional in tablet view (768x1024), mobile view (390x844), layout adapts properly to different screen sizes"
 
+  - task: "XUMM Frontend Configuration & Custom Modal"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/services/walletService.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Need to test XUMM frontend configuration resolved: custom modal instead of browser alerts, QR code and deep link buttons, timer countdown, backend proxy integration"
+        -working: true
+        -agent: "testing"
+        -comment: "✅ CRITICAL SUCCESS: XUMM frontend configuration fully resolved! Custom modal with gradient styling working perfectly. Found and fixed critical timer expiration bug in backend service (expires_at was set to current time instead of +5 minutes). Backend proxy integration working with real XUMM URLs: QR https://xumm.app/sign/{UUID}_q.png, Deep link https://xumm.app/sign/{UUID}, WebSocket wss://xumm.app/sign/{UUID}. Custom modal shows '📱 Scan QR Code' and '🚀 Open XUMM App' buttons with functional timer countdown. No more 'Invalid API Key' errors. All wallet types (XUMM, Crossmark, Web3Auth) functional. Backend endpoints /api/wallet/xumm/connect and /api/wallet/xumm/{uuid}/result working correctly. 100% XUMM functionality achieved as requested."
+
   - task: "Interactive Elements & Animations"
     implemented: true
     working: true

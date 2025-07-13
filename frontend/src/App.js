@@ -394,71 +394,210 @@ const Home = () => {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-violet-900/50"></div>
-        <div 
-          className="absolute inset-0 bg-cover bg-center opacity-20"
-          style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1637099536974-22c1d38eed51?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxibG9ja2NoYWluJTIwdGVjaG5vbG9neXxlbnwwfHx8cHVycGxlfDE3NTI0MTYzNjZ8MA&ixlib=rb-4.1.0&q=85')`
-          }}
-        ></div>
-        
-        {/* Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-5xl md:text-7xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-purple-400 via-emerald-400 to-yellow-400 bg-clip-text text-transparent">
-              Tokenize the Future
-            </span>
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto">
-            Advanced Web3 platform for asset and risk tokenization on Ripple Blockchain. 
-            Transform real estate, art, insurance, and carbon credits into tradeable tokens.
-          </p>
+      {/* Hero Section - RWA.xyz style */}
+      <section className="bg-white pt-16 pb-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 tracking-tight">
+              Every tokenized asset,<br />
+              <span className="text-blue-600">in one place.</span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto leading-relaxed">
+              Investors, issuers, and service providers use Solcraft Nexus to understand tokenized asset markets.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+              <button
+                onClick={handleOpenPortal}
+                className="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-all duration-200"
+              >
+                View Analytics
+              </button>
+              <a
+                href="#platform"
+                className="border border-gray-300 text-gray-700 px-8 py-4 rounded-lg text-lg font-semibold hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+              >
+                List Your Asset
+              </a>
+            </div>
+
+            {/* Professional hero image */}
+            <div className="relative mb-16">
+              <img
+                src="/api/placeholder/800/400"
+                alt="Professional tokenization platform interface"
+                className="w-full max-w-4xl mx-auto rounded-xl shadow-2xl"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trusted By Section */}
+      <section className="bg-gray-50 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <p className="text-lg text-gray-600 mb-8">
+              <strong>Trusted by institutions, investors, and media companies.</strong>
+            </p>
+          </div>
           
-          {/* Real-time Stats */}
-          {platformStats && displayStats && Object.keys(displayStats).length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-              {Object.entries(displayStats).map(([key, value], index) => (
-                <div key={key} className="text-center">
-                  <div className={`text-3xl font-bold transition-all duration-500 ${
-                    currentStat === index ? 'text-emerald-400 scale-110' : 'text-white'
-                  }`}>
-                    {value}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 items-center opacity-60">
+            {trustedPartners.map((partner, index) => (
+              <div key={index} className="flex justify-center">
+                <img
+                  src={partner.logo}
+                  alt={`${partner.name} logo`}
+                  className="h-12 w-auto grayscale hover:grayscale-0 transition-all duration-200"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Platform Stats */}
+      <section id="analytics" className="bg-white py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Solcraft Nexus is a purpose-built platform for understanding tokenization across public blockchains
+            </h2>
+          </div>
+          
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-8 mb-16">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {displayStats.tvl || '$245.3M'}
+              </div>
+              <div className="text-sm text-gray-600 uppercase tracking-wide font-medium">
+                TOTAL VALUE LOCKED
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {displayStats.tracked || '850+'}
+              </div>
+              <div className="text-sm text-gray-600 uppercase tracking-wide font-medium">
+                ASSETS TRACKED
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {displayStats.projects || '120+'}
+              </div>
+              <div className="text-sm text-gray-600 uppercase tracking-wide font-medium">
+                ACTIVE PROJECTS
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {displayStats.transactions || '1.2M+'}
+              </div>
+              <div className="text-sm text-gray-600 uppercase tracking-wide font-medium">
+                TRANSACTIONS
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {displayStats.users || '45.3K'}
+              </div>
+              <div className="text-sm text-gray-600 uppercase tracking-wide font-medium">
+                USERS
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {displayStats.assets || '2.8K'}
+              </div>
+              <div className="text-sm text-gray-600 uppercase tracking-wide font-medium">
+                ASSETS
+              </div>
+            </div>
+          </div>
+
+          {/* Platform Screenshot */}
+          <div className="text-center">
+            <img
+              src="/api/placeholder/1200/600"
+              alt="Solcraft Nexus platform interface"
+              className="w-full max-w-6xl mx-auto rounded-xl shadow-2xl"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Target Audience Cards */}
+      <section className="bg-gray-50 py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Made for digital asset teams, token investors, and asset issuers
+            </h2>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                View Analytics ↗
+              </h3>
+              <p className="text-gray-600 leading-relaxed">
+                Discover both institutional and startup activity across asset classes and blockchain networks
+              </p>
+            </div>
+            
+            <div className="bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                API & Data Downloads ↗
+              </h3>
+              <p className="text-gray-600 leading-relaxed">
+                Power your research or investment platform with our API and data downloads
+              </p>
+            </div>
+            
+            <div className="bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                List Your Company ↗
+              </h3>
+              <p className="text-gray-600 leading-relaxed">
+                Integrate your assets into the leading data platform to access the largest institutional audience
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Asset Classes */}
+      <section id="assets" className="bg-white py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Asset Classes
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Professional tokenization across multiple asset classes with institutional-grade compliance
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {assetClasses.map((asset, index) => (
+              <div key={index} className="bg-white border border-gray-200 p-6 rounded-xl hover:shadow-lg transition-all duration-200">
+                <div className="text-4xl mb-4">{asset.icon}</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">{asset.title}</h3>
+                <p className="text-gray-600 mb-4 leading-relaxed">{asset.description}</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Volume:</span>
+                    <span className="font-semibold text-blue-600">{asset.volume}</span>
                   </div>
-                  <div className="text-gray-400 text-sm uppercase tracking-wide">
-                    {key === 'tvl' ? 'Total Value Locked' : 
-                     key === 'transactions' ? 'Transactions' :
-                     key === 'users' ? 'Users' : 'Assets'}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Projects:</span>
+                    <span className="font-semibold text-gray-900">{asset.projects}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Connection Status */}
-          {connectedWallet && (
-            <div className="mb-8 bg-orange-900/30 border border-orange-500/30 rounded-lg p-4 max-w-md mx-auto">
-              <div className="text-orange-400 text-sm">✅ Connected to XRPL Testnet (Real APIs)</div>
-              <div className="text-white text-lg font-semibold">{connectedWallet.walletType}</div>
-              <div className="text-gray-300 text-sm">{connectedWallet.address}</div>
-            </div>
-          )}
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={handleOpenPortal}
-              disabled={loading}
-              className="bg-gradient-to-r from-purple-600 to-emerald-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-purple-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? '⏳ Connecting...' : 
-               connectedWallet ? '🚀 Go to Dashboard' : '🚀 Open Portal'}
-            </button>
-            <button className="border-2 border-purple-500 text-purple-400 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-purple-500 hover:text-white transition-all duration-200">
-              📚 View Documentation
-            </button>
+              </div>
+            ))}
           </div>
         </div>
       </section>

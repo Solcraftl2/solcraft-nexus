@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend Testing for Solcraft Nexus XRPL Mainnet
-Tests all backend API endpoints for real XRPL mainnet functionality
+Comprehensive Supabase Migration Verification Testing for Solcraft Nexus
+Tests MongoDB → Supabase migration completion and functionality
 """
 
 import asyncio
@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional
 # Backend URL from environment
 BACKEND_URL = "https://8c8b6f48-76cf-4c30-ade7-0e13c26055cb.preview.emergentagent.com/api"
 
-# Test data - using real XRPL mainnet addresses
+# Test data - using real XRPL testnet addresses for Supabase testing
 TEST_WALLET_ADDRESS = "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY"  # Well-known XRPL address
 INVALID_WALLET_ADDRESS = "invalid_address_format"
 TEST_TOKEN_SYMBOL = "TST"

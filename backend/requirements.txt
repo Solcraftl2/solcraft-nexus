@@ -24,4 +24,4 @@ python-multipart>=0.0.9
 jq>=1.6.0
 typer>=0.9.0
 xrpl-py>=2.6.0
-xumm-py>=1.3.0
+xumm-sdk-py>=1.0.4

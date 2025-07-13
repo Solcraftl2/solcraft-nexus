@@ -562,6 +562,9 @@ async def get_xumm_connection_result(payload_uuid: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/analytics/platform")
+async def get_platform_analytics():
     """Get platform analytics and statistics"""
     try:
         # Get tokenization statistics

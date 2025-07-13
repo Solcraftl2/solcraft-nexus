@@ -132,19 +132,54 @@ const Home = () => {
   const [connectedWallet, setConnectedWallet] = useState(null);
   const [platformStats, setPlatformStats] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
-    // Fetch platform stats
-    fetchPlatformStats().then(setPlatformStats);
+    // Fetch platform stats with better error handling
+    const loadPlatformStats = async () => {
+      try {
+        setError(null);
+        const stats = await fetchPlatformStats();
+        setPlatformStats(stats);
+      } catch (error) {
+        console.error('Failed to load platform stats:', error);
+        setError('Unable to load platform statistics. Using demo data.');
+        // Still set demo stats so UI doesn't break
+        setPlatformStats({
+          total_value_locked: 245200000,
+          total_transactions: 1200000,
+          total_users: 45300,
+          total_tokenizations: 2800
+        });
+      }
+    };
     
-    // Try to restore wallet connection
+    loadPlatformStats();
+    
+    // Try to restore wallet connection with better error handling
     walletService.restoreConnection().then(result => {
       if (result.success) {
         setConnectedWallet(result);
+        setSuccessMessage('Wallet connection restored successfully');
         console.log('Wallet connection restored:', result);
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
       }
+    }).catch(error => {
+      console.warn('Could not restore wallet connection:', error.message);
+      // Don't show error for failed restore - it's normal
     });
   }, []);
+
+  // Clear error messages automatically
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // Format stats for display with real-time variation
   const formatStats = (stats) => {

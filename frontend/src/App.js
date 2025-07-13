@@ -289,8 +289,8 @@ const Home = () => {
 
           {/* Connection Status */}
           {connectedWallet && (
-            <div className="mb-8 bg-green-900/30 border border-green-500/30 rounded-lg p-4 max-w-md mx-auto">
-              <div className="text-green-400 text-sm">✅ Connected to XRPL Mainnet</div>
+            <div className="mb-8 bg-orange-900/30 border border-orange-500/30 rounded-lg p-4 max-w-md mx-auto">
+              <div className="text-orange-400 text-sm">✅ Connected to XRPL Testnet (Real APIs)</div>
               <div className="text-white text-lg font-semibold">{connectedWallet.walletType}</div>
               <div className="text-gray-300 text-sm">{connectedWallet.address}</div>
             </div>

@@ -118,7 +118,6 @@ const howItWorks = [
 const Home = ({ connectedWallet, setConnectedWallet }) => {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [currentStat, setCurrentStat] = useState(0);
-  const [connectedWallet, setConnectedWallet] = useState(null);
   const [platformStats, setPlatformStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

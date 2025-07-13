@@ -51,59 +51,45 @@ const fetchPlatformStats = async () => {
   };
 };
 
-const supportedAssets = [
-  {
-    icon: "🏠",
-    title: "Real Estate",
-    description: "Tokenize property investments with instant liquidity",
-    color: "from-blue-500 to-purple-600"
-  },
-  {
-    icon: "🎨",
-    title: "Art & Collectibles",
-    description: "Transform artistic assets into tradeable NFTs",
-    color: "from-pink-500 to-orange-500"
-  },
-  {
-    icon: "🛡️",
-    title: "Insurance & Risk",
-    description: "Tokenize policies, guarantees, and risk instruments",
-    color: "from-green-500 to-blue-500"
-  },
-  {
-    icon: "🌱",
-    title: "Carbon Credits",
-    description: "Trade sustainability tokens for environmental impact",
-    color: "from-green-400 to-emerald-600"
-  },
-  {
-    icon: "🚗",
-    title: "Physical Assets",
-    description: "Commodities and tangible asset tokenization",
-    color: "from-yellow-500 to-red-500"
-  }
+// Professional institutional partners (placeholders)
+const trustedPartners = [
+  { name: "Goldman Sachs", logo: "/api/placeholder/120/40" },
+  { name: "JP Morgan", logo: "/api/placeholder/120/40" },
+  { name: "BlackRock", logo: "/api/placeholder/120/40" },
+  { name: "Coinbase", logo: "/api/placeholder/120/40" },
+  { name: "Binance", logo: "/api/placeholder/120/40" },
+  { name: "Chainlink", logo: "/api/placeholder/120/40" }
 ];
 
-const features = [
+// Professional asset classes
+const assetClasses = [
   {
-    icon: "🪙",
-    title: "Advanced Tokenization",
-    description: "Asset-backed tokens following XRPL best practices with complete metadata management"
+    title: "Real Estate",
+    description: "Commercial and residential property tokenization with regulatory compliance.",
+    icon: "🏢",
+    volume: "$2.8B",
+    projects: 145
   },
   {
-    icon: "💸",
-    title: "Native XRP Payments",
-    description: "Instant cross-border transactions with optimized fee management"
+    title: "Private Credit",
+    description: "Institutional-grade credit instruments and debt securities.",
+    icon: "💼", 
+    volume: "$1.2B",
+    projects: 87
   },
   {
-    icon: "📊",
-    title: "Real-time Analytics",
-    description: "Portfolio dashboard with performance metrics and risk assessment"
+    title: "Commodities",
+    description: "Physical commodities and precious metals tokenization.",
+    icon: "⚡",
+    volume: "$950M",
+    projects: 63
   },
   {
-    icon: "🏛️",
-    title: "Integrated Marketplace",
-    description: "P2P trading, liquidity pools, and secure escrow services"
+    title: "Equity Securities",
+    description: "Private equity and venture capital fund tokens.",
+    icon: "📈",
+    volume: "$1.8B",
+    projects: 124
   }
 ];
 

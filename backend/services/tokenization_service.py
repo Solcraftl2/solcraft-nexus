@@ -1,6 +1,6 @@
 """
 Solcraft Nexus - Tokenization Service
-Real asset tokenization on XRPL mainnet
+Real asset tokenization on XRPL with Supabase PostgreSQL
 """
 
 import os
@@ -9,9 +9,9 @@ import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
-from motor.motor_asyncio import AsyncIOMotorDatabase
 from services.xrpl_service import xrpl_service
 from services.xumm_service import xumm_service
+from services.supabase_service import supabase_service
 from dotenv import load_dotenv
 import logging
 
@@ -56,13 +56,10 @@ class TokenTransaction(BaseModel):
 
 
 class TokenizationService:
-    """Service for real asset tokenization on XRPL"""
+    """Service for real asset tokenization on XRPL with Supabase"""
     
-    def __init__(self, db: AsyncIOMotorDatabase):
-        self.db = db
-        self.tokenizations_collection = db.tokenizations
-        self.transactions_collection = db.token_transactions
-        self.wallets_collection = db.wallets
+    def __init__(self):
+        self.db = supabase_service
         
     async def create_asset_tokenization(self, asset_data: Dict[str, Any], 
                                        owner_address: str) -> Dict[str, Any]:
@@ -87,16 +84,17 @@ class TokenizationService:
                 token_symbol = token_symbol[:20]
             
             # Create tokenization record
-            tokenization = AssetTokenization(
-                asset_name=asset_data["asset_name"],
-                asset_type=asset_data["asset_type"],
-                asset_description=asset_data["asset_description"],
-                asset_value_usd=float(asset_data["asset_value_usd"]),
-                token_symbol=token_symbol,
-                token_supply=int(asset_data.get("token_supply", 1000000)),
-                issuer_address=owner_address,  # Owner is also issuer initially
-                owner_address=owner_address,
-                metadata={
+            tokenization_data = {
+                "id": str(uuid.uuid4()),
+                "asset_name": asset_data["asset_name"],
+                "asset_type": asset_data["asset_type"],
+                "asset_description": asset_data["asset_description"],
+                "asset_value_usd": float(asset_data["asset_value_usd"]),
+                "token_symbol": token_symbol,
+                "token_supply": int(asset_data.get("token_supply", 1000000)),
+                "issuer_address": owner_address,  # Owner is also issuer initially
+                "owner_address": owner_address,
+                "metadata": {
                     "location": asset_data.get("location"),
                     "documents": asset_data.get("documents", []),
                     "valuation_date": asset_data.get("valuation_date"),
@@ -104,15 +102,19 @@ class TokenizationService:
                     "legal_entity": asset_data.get("legal_entity"),
                     "compliance_status": asset_data.get("compliance_status", "pending")
                 },
-                status="pending"
-            )
+                "status": "pending",
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
             
-            # Save to database
-            result = await self.tokenizations_collection.insert_one(tokenization.dict())
+            # Save to Supabase
+            result = await self.db.create_tokenization(tokenization_data)
+            if not result["success"]:
+                return result
             
             return {
                 "success": True,
-                "tokenization_id": tokenization.id,
+                "tokenization_id": tokenization_data["id"],
                 "token_symbol": token_symbol,
                 "status": "pending",
                 "next_step": "create_trustline",
@@ -127,39 +129,44 @@ class TokenizationService:
         """Create trustline for new token"""
         try:
             # Get tokenization
-            tokenization_doc = await self.tokenizations_collection.find_one({"id": tokenization_id})
-            if not tokenization_doc:
+            tokenization_result = await self.db.get_tokenization(tokenization_id)
+            if not tokenization_result["success"] or not tokenization_result["data"]:
                 return {"success": False, "error": "Tokenization not found"}
             
-            tokenization = AssetTokenization(**tokenization_doc)
+            tokenization = tokenization_result["data"]
             
             # Create XUMM sign request for trustline
             xumm_result = await xumm_service.create_trustline_request(
                 user_account=user_address,
-                token_currency=tokenization.token_symbol,
-                issuer=tokenization.issuer_address,
-                limit=str(tokenization.token_supply)
+                token_currency=tokenization["token_symbol"],
+                issuer=tokenization["issuer_address"],
+                limit=str(tokenization["token_supply"])
             )
             
             if not xumm_result["success"]:
                 return xumm_result
             
             # Create transaction record
-            transaction = TokenTransaction(
-                transaction_type="trustline",
-                token_symbol=tokenization.token_symbol,
-                issuer_address=tokenization.issuer_address,
-                to_address=user_address,
-                amount=0,  # Trustline doesn't transfer amount
-                xumm_payload_uuid=xumm_result["payload_uuid"],
-                status="pending"
-            )
+            transaction_data = {
+                "id": str(uuid.uuid4()),
+                "transaction_type": "trustline",
+                "token_symbol": tokenization["token_symbol"],
+                "issuer_address": tokenization["issuer_address"],
+                "to_address": user_address,
+                "amount": 0,  # Trustline doesn't transfer amount
+                "xumm_payload_uuid": xumm_result["payload_uuid"],
+                "status": "pending",
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
             
-            await self.transactions_collection.insert_one(transaction.dict())
+            transaction_result = await self.db.create_transaction(transaction_data)
+            if not transaction_result["success"]:
+                return transaction_result
             
             return {
                 "success": True,
-                "transaction_id": transaction.id,
+                "transaction_id": transaction_data["id"],
                 "payload_uuid": xumm_result["payload_uuid"],
                 "qr_url": xumm_result["qr_url"],
                 "deep_link": xumm_result["deep_link"],
@@ -175,51 +182,56 @@ class TokenizationService:
         """Issue tokens to recipient"""
         try:
             # Get tokenization
-            tokenization_doc = await self.tokenizations_collection.find_one({"id": tokenization_id})
-            if not tokenization_doc:
+            tokenization_result = await self.db.get_tokenization(tokenization_id)
+            if not tokenization_result["success"] or not tokenization_result["data"]:
                 return {"success": False, "error": "Tokenization not found"}
             
-            tokenization = AssetTokenization(**tokenization_doc)
+            tokenization = tokenization_result["data"]
             
             # Check if tokenization is ready for issuing
-            if tokenization.status != "trustline_created":
+            if tokenization["status"] != "trustline_created":
                 return {"success": False, "error": "Trustline must be created first"}
             
             # Create payment transaction (token issuance)
             xumm_result = await xumm_service.create_payment_request(
-                from_account=tokenization.issuer_address,
+                from_account=tokenization["issuer_address"],
                 to_account=recipient_address,
                 amount=str(amount),
-                currency=tokenization.token_symbol,
-                issuer=tokenization.issuer_address
+                currency=tokenization["token_symbol"],
+                issuer=tokenization["issuer_address"]
             )
             
             if not xumm_result["success"]:
                 return xumm_result
             
             # Create transaction record
-            transaction = TokenTransaction(
-                transaction_type="issue",
-                token_symbol=tokenization.token_symbol,
-                issuer_address=tokenization.issuer_address,
-                from_address=tokenization.issuer_address,
-                to_address=recipient_address,
-                amount=float(amount),
-                xumm_payload_uuid=xumm_result["payload_uuid"],
-                status="pending"
-            )
+            transaction_data = {
+                "id": str(uuid.uuid4()),
+                "transaction_type": "issue",
+                "token_symbol": tokenization["token_symbol"],
+                "issuer_address": tokenization["issuer_address"],
+                "from_address": tokenization["issuer_address"],
+                "to_address": recipient_address,
+                "amount": float(amount),
+                "xumm_payload_uuid": xumm_result["payload_uuid"],
+                "status": "pending",
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
             
-            await self.transactions_collection.insert_one(transaction.dict())
+            transaction_result = await self.db.create_transaction(transaction_data)
+            if not transaction_result["success"]:
+                return transaction_result
             
             return {
                 "success": True,
-                "transaction_id": transaction.id,
+                "transaction_id": transaction_data["id"],
                 "payload_uuid": xumm_result["payload_uuid"],
                 "qr_url": xumm_result["qr_url"],
                 "deep_link": xumm_result["deep_link"],
                 "expires_at": xumm_result["expires_at"],
                 "amount": amount,
-                "token_symbol": tokenization.token_symbol,
+                "token_symbol": tokenization["token_symbol"],
                 "message": "Scan QR code to sign token issuance transaction"
             }
         except Exception as e:
@@ -244,22 +256,27 @@ class TokenizationService:
                 return xumm_result
             
             # Create transaction record
-            transaction = TokenTransaction(
-                transaction_type="transfer",
-                token_symbol=token_symbol,
-                issuer_address=issuer_address,
-                from_address=from_address,
-                to_address=to_address,
-                amount=amount,
-                xumm_payload_uuid=xumm_result["payload_uuid"],
-                status="pending"
-            )
+            transaction_data = {
+                "id": str(uuid.uuid4()),
+                "transaction_type": "transfer",
+                "token_symbol": token_symbol,
+                "issuer_address": issuer_address,
+                "from_address": from_address,
+                "to_address": to_address,
+                "amount": amount,
+                "xumm_payload_uuid": xumm_result["payload_uuid"],
+                "status": "pending",
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
             
-            await self.transactions_collection.insert_one(transaction.dict())
+            transaction_result = await self.db.create_transaction(transaction_data)
+            if not transaction_result["success"]:
+                return transaction_result
             
             return {
                 "success": True,
-                "transaction_id": transaction.id,
+                "transaction_id": transaction_data["id"],
                 "payload_uuid": xumm_result["payload_uuid"],
                 "qr_url": xumm_result["qr_url"],
                 "deep_link": xumm_result["deep_link"],
@@ -274,47 +291,42 @@ class TokenizationService:
         """Check transaction status via XUMM"""
         try:
             # Get transaction
-            transaction_doc = await self.transactions_collection.find_one({"id": transaction_id})
-            if not transaction_doc:
+            transaction_result = await self.db.get_transaction(transaction_id)
+            if not transaction_result["success"] or not transaction_result["data"]:
                 return {"success": False, "error": "Transaction not found"}
             
-            transaction = TokenTransaction(**transaction_doc)
+            transaction = transaction_result["data"]
             
-            if not transaction.xumm_payload_uuid:
+            if not transaction.get("xumm_payload_uuid"):
                 return {"success": False, "error": "No XUMM payload found"}
             
             # Check XUMM status
-            xumm_status = await xumm_service.get_payload_status(transaction.xumm_payload_uuid)
+            xumm_status = await xumm_service.get_payload_status(transaction["xumm_payload_uuid"])
             if not xumm_status["success"]:
                 return xumm_status
             
             # Update transaction status
             new_status = "pending"
-            if xumm_status["signed"] and xumm_status["submitted"]:
+            txn_hash = None
+            
+            if xumm_status.get("signed") and xumm_status.get("submitted"):
                 new_status = "validated"
-                # Update with transaction hash if available
                 if "tx_id" in xumm_status:
-                    await self.transactions_collection.update_one(
-                        {"id": transaction_id},
-                        {"$set": {"txn_hash": xumm_status["tx_id"], "status": new_status, "updated_at": datetime.utcnow()}}
-                    )
-            elif xumm_status["cancelled"]:
+                    txn_hash = xumm_status["tx_id"]
+            elif xumm_status.get("cancelled"):
                 new_status = "failed"
-            elif xumm_status["expired"]:
+            elif xumm_status.get("expired"):
                 new_status = "failed"
             
-            if new_status != transaction.status:
-                await self.transactions_collection.update_one(
-                    {"id": transaction_id},
-                    {"$set": {"status": new_status, "updated_at": datetime.utcnow()}}
-                )
+            if new_status != transaction["status"]:
+                await self.db.update_transaction_status(transaction_id, new_status, txn_hash)
             
             return {
                 "success": True,
                 "transaction_id": transaction_id,
                 "status": new_status,
                 "xumm_status": xumm_status,
-                "txn_hash": xumm_status.get("tx_id")
+                "txn_hash": txn_hash
             }
         except Exception as e:
             logger.error(f"Error checking transaction status: {str(e)}")
@@ -332,10 +344,10 @@ class TokenizationService:
             enriched_tokens = []
             for token in tokens_result["tokens"]:
                 # Look up tokenization info
-                tokenization_doc = await self.tokenizations_collection.find_one({
-                    "token_symbol": token["currency"],
-                    "issuer_address": token["issuer"]
-                })
+                # Note: We need to modify this query for Supabase
+                tokenization_result = await self.db.supabase.table("tokenizations").select("*").eq(
+                    "token_symbol", token["currency"]
+                ).eq("issuer_address", token["issuer"]).execute()
                 
                 token_info = {
                     "currency": token["currency"],
@@ -344,13 +356,13 @@ class TokenizationService:
                     "limit": token["limit"]
                 }
                 
-                if tokenization_doc:
-                    tokenization = AssetTokenization(**tokenization_doc)
+                if tokenization_result.data:
+                    tokenization = tokenization_result.data[0]
                     token_info.update({
-                        "asset_name": tokenization.asset_name,
-                        "asset_type": tokenization.asset_type,
-                        "asset_value_usd": tokenization.asset_value_usd,
-                        "tokenization_id": tokenization.id
+                        "asset_name": tokenization["asset_name"],
+                        "asset_type": tokenization["asset_type"],
+                        "asset_value_usd": tokenization["asset_value_usd"],
+                        "tokenization_id": tokenization["id"]
                     })
                 
                 enriched_tokens.append(token_info)
@@ -368,30 +380,34 @@ class TokenizationService:
     async def get_tokenization_details(self, tokenization_id: str) -> Dict[str, Any]:
         """Get detailed tokenization information"""
         try:
-            tokenization_doc = await self.tokenizations_collection.find_one({"id": tokenization_id})
-            if not tokenization_doc:
+            tokenization_result = await self.db.get_tokenization(tokenization_id)
+            if not tokenization_result["success"] or not tokenization_result["data"]:
                 return {"success": False, "error": "Tokenization not found"}
             
-            tokenization = AssetTokenization(**tokenization_doc)
+            tokenization = tokenization_result["data"]
             
             # Get token metrics from XRPL
             metrics = await xrpl_service.get_token_metrics(
-                tokenization.token_symbol,
-                tokenization.issuer_address
+                tokenization["token_symbol"],
+                tokenization["issuer_address"]
             )
             
             # Get related transactions
-            transactions = await self.transactions_collection.find({
-                "token_symbol": tokenization.token_symbol,
-                "issuer_address": tokenization.issuer_address
-            }).sort("created_at", -1).limit(10).to_list(10)
+            transactions_result = await self.db.supabase.table("token_transactions").select("*").eq(
+                "token_symbol", tokenization["token_symbol"]
+            ).eq("issuer_address", tokenization["issuer_address"]).order(
+                "created_at", desc=True
+            ).limit(10).execute()
             
-            result = tokenization.dict()
+            result = tokenization.copy()
             if metrics["success"]:
                 result["metrics"] = metrics
-            result["recent_transactions"] = transactions
+            result["recent_transactions"] = transactions_result.data
             
             return {"success": True, "tokenization": result}
         except Exception as e:
             logger.error(f"Error getting tokenization details: {str(e)}")
             return {"success": False, "error": str(e)}
+
+# Create service instance
+tokenization_service = TokenizationService()

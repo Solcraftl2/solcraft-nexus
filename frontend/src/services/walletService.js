@@ -181,7 +181,7 @@ class WalletService {
       modal.querySelector('#cancel-option').onclick = () => {
         clearInterval(interval);
         document.body.removeChild(modal);
-        resolve({ userChoice: 'cancel', modalElement: null });
+        resolve({ userChoice: 'cancel', modalElement: null, interval: null });
       };
     });
   }

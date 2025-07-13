@@ -695,6 +695,7 @@ const Home = () => {
           </div>
         </div>
       </footer>
+      </div>
 
       {/* Professional Wallet Connection Modal */}
       {walletModalOpen && (

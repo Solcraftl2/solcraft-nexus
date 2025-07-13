@@ -204,7 +204,10 @@ class WalletService {
             const statusMsg = modalElement.querySelector('#status-message');
             if (statusMsg) {
               statusMsg.style.display = 'block';
-              if (result.signed) {
+              if (result.connected) {
+                statusMsg.textContent = '✅ Wallet connected successfully!';
+                statusMsg.style.color = '#10b981';
+              } else if (result.signed) {
                 statusMsg.textContent = '✅ Transaction signed! Connecting wallet...';
                 statusMsg.style.color = '#10b981';
               } else {
@@ -214,6 +217,7 @@ class WalletService {
             }
           }
           
+          // Check if wallet is fully connected (signed + processed)
           if (result.success && result.connected) {
             console.log('✅ XUMM wallet connected successfully:', result);
             cleanupModal(); // Close modal automatically

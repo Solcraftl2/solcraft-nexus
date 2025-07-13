@@ -25,11 +25,18 @@ class XRPLService:
     """Service for XRPL mainnet operations"""
     
     def __init__(self):
-        self.network = os.getenv("XRPL_NETWORK", "mainnet")
-        self.websocket_url = os.getenv("XRPL_WEBSOCKET_URL", "wss://xrplcluster.com/")
-        self.json_rpc_url = os.getenv("XRPL_JSON_RPC_URL", "https://xrplcluster.com/")
+        self.network = os.getenv("XRPL_NETWORK", "testnet")
+        
+        if self.network == "testnet":
+            self.websocket_url = os.getenv("XRPL_WEBSOCKET_URL", "wss://s.altnet.rippletest.net:51233")
+            self.json_rpc_url = os.getenv("XRPL_JSON_RPC_URL", "https://s.altnet.rippletest.net:51234")
+        else:
+            self.websocket_url = os.getenv("XRPL_WEBSOCKET_URL", "wss://xrplcluster.com/")
+            self.json_rpc_url = os.getenv("XRPL_JSON_RPC_URL", "https://xrplcluster.com/")
+            
         self.client = JsonRpcClient(self.json_rpc_url)
         self.solcraft_symbol = os.getenv("SOLCRAFT_TOKEN_SYMBOL", "SOLCRAFT")
+        self.solcraft_issuer = os.getenv("SOLCRAFT_ISSUER_ADDRESS", "rpxv28rM4ttpGmTnVGyKbiYRSpLGTjUZiu")
         
     async def get_account_info(self, account_address: str) -> Dict[str, Any]:
         """Get account information from XRPL"""

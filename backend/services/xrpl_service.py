@@ -217,36 +217,37 @@ class XRPLService:
     async def get_transaction_history(self, account: str, limit: int = 20) -> Dict[str, Any]:
         """Get account transaction history"""
         try:
-            account_tx = self.client.request(xrpl.models.requests.AccountTx(
-                account=account,
-                ledger_index_min=-1,
-                ledger_index_max=-1,
-                limit=limit
-            ))
-            
-            transactions = []
-            for tx in account_tx.result.get("transactions", []):
-                tx_data = tx["tx"]
-                meta_data = tx["meta"]
+            async with JsonRpcClient(self.json_rpc_url) as client:
+                account_tx = await client.request(xrpl.models.requests.AccountTx(
+                    account=account,
+                    ledger_index_min=-1,
+                    ledger_index_max=-1,
+                    limit=limit
+                ))
                 
-                transactions.append({
-                    "hash": tx_data["hash"],
-                    "transaction_type": tx_data["TransactionType"],
-                    "account": tx_data["Account"],
-                    "destination": tx_data.get("Destination"),
-                    "amount": tx_data.get("Amount"),
-                    "fee": tx_data["Fee"],
-                    "date": tx_data.get("date"),
-                    "ledger_index": tx["ledger_index"],
-                    "validated": tx["validated"],
-                    "meta": meta_data
-                })
-            
-            return {
-                "success": True,
-                "transactions": transactions,
-                "count": len(transactions)
-            }
+                transactions = []
+                for tx in account_tx.result.get("transactions", []):
+                    tx_data = tx["tx"]
+                    meta_data = tx["meta"]
+                    
+                    transactions.append({
+                        "hash": tx_data["hash"],
+                        "transaction_type": tx_data["TransactionType"],
+                        "account": tx_data["Account"],
+                        "destination": tx_data.get("Destination"),
+                        "amount": tx_data.get("Amount"),
+                        "fee": tx_data["Fee"],
+                        "date": tx_data.get("date"),
+                        "ledger_index": tx["ledger_index"],
+                        "validated": tx["validated"],
+                        "meta": meta_data
+                    })
+                
+                return {
+                    "success": True,
+                    "transactions": transactions,
+                    "count": len(transactions)
+                }
         except Exception as e:
             logger.error(f"Error getting transaction history: {str(e)}")
             return {"success": False, "error": str(e)}

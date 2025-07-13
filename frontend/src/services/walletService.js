@@ -253,8 +253,8 @@ class WalletService {
       const userConfirmed = window.confirm(`Login with ${providerName}?\n\nThis will create a new XRPL address for you.`);
       
       if (userConfirmed) {
-        // Generate a new XRPL address for the user
-        const simulatedAddress = `rSolcraft${providerName}${Date.now().toString().slice(-6)}`;
+        // Generate a new XRPL address for the user (testnet format)
+        const simulatedAddress = `rSolcraft${providerName}Test${Date.now().toString().slice(-6)}`;
         return await this.handleSuccessfulConnection('web3auth', simulatedAddress, providerName);
       } else {
         throw new Error('User cancelled Web3Auth connection');

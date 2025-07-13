@@ -86,7 +86,6 @@ class XUMMService:
                 "success": True,
                 "payload_uuid": payload_uuid,
                 "signed": payload.meta.signed,
-                "submitted": payload.meta.submitted,
                 "cancelled": payload.meta.cancelled,
                 "expired": payload.meta.expired,
                 "opened": payload.meta.opened,

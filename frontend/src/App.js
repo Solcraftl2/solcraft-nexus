@@ -287,19 +287,19 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900">
+    <>
       {/* Error/Success Messages */}
       {error && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/90 border border-red-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md w-full mx-4 backdrop-blur-md">
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg shadow-lg max-w-md w-full mx-4">
           <div className="flex items-center">
             <span className="mr-2">❌</span>
             <div className="flex-1">
               <p className="font-semibold">Connection Error</p>
-              <p className="text-sm text-red-200">{error}</p>
+              <p className="text-sm text-red-600">{error}</p>
             </div>
             <button 
               onClick={() => setError(null)}
-              className="ml-4 text-red-200 hover:text-white transition-colors"
+              className="ml-4 text-red-400 hover:text-red-600 transition-colors"
             >
               ✕
             </button>
@@ -308,16 +308,16 @@ const Home = () => {
       )}
       
       {successMessage && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-green-900/90 border border-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md w-full mx-4 backdrop-blur-md">
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-green-50 border border-green-200 text-green-800 px-6 py-4 rounded-lg shadow-lg max-w-md w-full mx-4">
           <div className="flex items-center">
             <span className="mr-2">✅</span>
             <div className="flex-1">
               <p className="font-semibold">Success!</p>
-              <p className="text-sm text-green-200 whitespace-pre-line">{successMessage}</p>
+              <p className="text-sm text-green-600 whitespace-pre-line">{successMessage}</p>
             </div>
             <button 
               onClick={() => setSuccessMessage(null)}
-              className="ml-4 text-green-200 hover:text-white transition-colors"
+              className="ml-4 text-green-400 hover:text-green-600 transition-colors"
             >
               ✕
             </button>
@@ -325,47 +325,48 @@ const Home = () => {
         </div>
       )}
       
-      {/* Professional Navigation */}
-      <nav className="bg-white border-b border-gray-100 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <div className="text-2xl font-bold text-gray-900">
-                Solcraft Nexus
-              </div>
-              <div className="ml-4 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full font-medium">
-                Professional RWA Platform
-              </div>
-            </div>
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#analytics" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Analytics</a>
-              <a href="#assets" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Assets</a>
-              <a href="#marketplace" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Marketplace</a>
-              <a href="#platform" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Platform</a>
-              {connectedWallet ? (
-                <div className="flex items-center space-x-4">
-                  <div className="text-sm text-gray-600 font-medium">
-                    {connectedWallet.address.slice(0, 6)}...{connectedWallet.address.slice(-4)}
-                  </div>
-                  <button
-                    onClick={disconnectWallet}
-                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-all duration-200 font-medium"
-                  >
-                    Disconnect
-                  </button>
+      <div className="min-h-screen bg-white">
+        {/* Professional Navigation */}
+        <nav className="bg-white border-b border-gray-100 sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <div className="text-2xl font-bold text-gray-900">
+                  Solcraft Nexus
                 </div>
-              ) : (
-                <button
-                  onClick={handleOpenPortal}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium"
-                >
-                  View Dashboard
-                </button>
-              )}
+                <div className="ml-4 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full font-medium">
+                  Professional RWA Platform
+                </div>
+              </div>
+              <div className="hidden md:flex items-center space-x-8">
+                <a href="#analytics" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Analytics</a>
+                <a href="#assets" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Assets</a>
+                <a href="#marketplace" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Marketplace</a>
+                <a href="#platform" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Platform</a>
+                {connectedWallet ? (
+                  <div className="flex items-center space-x-4">
+                    <div className="text-sm text-gray-600 font-medium">
+                      {connectedWallet.address.slice(0, 6)}...{connectedWallet.address.slice(-4)}
+                    </div>
+                    <button
+                      onClick={disconnectWallet}
+                      className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-all duration-200 font-medium"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleOpenPortal}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium"
+                  >
+                    View Dashboard
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </nav>
+        </nav>
             
             {/* Mobile Menu */}
             <div className="md:hidden flex items-center space-x-4">

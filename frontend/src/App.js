@@ -210,8 +210,8 @@ const Home = () => {
               <div className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">
                 Solcraft Nexus
               </div>
-              <div className="ml-4 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
-                XRPL Mainnet
+              <div className="ml-4 text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded-full">
+                XRPL Testnet (Real APIs)
               </div>
             </div>
             <div className="hidden md:flex items-center space-x-8">

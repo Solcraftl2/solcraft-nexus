@@ -335,7 +335,7 @@ class WalletService {
 
       // Check if Crossmark is installed
       if (typeof window.xrpl === 'undefined' || !window.xrpl.crossmark) {
-        throw new Error('Crossmark wallet extension not found. Please install Crossmark.');
+        throw new Error('Crossmark wallet extension not found. Please install Crossmark extension from Chrome Web Store or Firefox Add-ons and refresh the page.');
       }
 
       // Request connection to Crossmark
@@ -346,11 +346,19 @@ class WalletService {
         console.log('Crossmark connected:', address);
         return await this.handleSuccessfulConnection('crossmark', address);
       } else {
-        throw new Error('Crossmark connection failed or was cancelled');
+        throw new Error('Crossmark connection failed or was cancelled by user');
       }
     } catch (error) {
       console.error('Crossmark connection error:', error);
-      throw new Error(`Crossmark connection failed: ${error.message}`);
+      
+      // Provide better error messages
+      if (error.message.includes('extension not found')) {
+        throw new Error('Crossmark extension not installed. Please:\n1. Install Crossmark from Chrome Web Store\n2. Refresh this page\n3. Try connecting again');
+      } else if (error.message.includes('cancelled')) {
+        throw new Error('Connection cancelled by user');
+      } else {
+        throw new Error(`Crossmark connection failed: ${error.message}`);
+      }
     }
   }
 

@@ -147,9 +147,12 @@ class WalletService {
         if (remaining === 0) {
           clearInterval(interval);
           document.body.removeChild(modal);
-          resolve({ userChoice: 'expired', modalElement: null });
+          resolve({ userChoice: 'expired', modalElement: null, interval: null });
         }
       }, 1000);
+      
+      // Store interval on modal for cleanup
+      modal.timerInterval = interval;
       
       // Event listeners
       modal.querySelector('#qr-option').onclick = () => {

@@ -292,13 +292,14 @@ class XRPLService:
     async def validate_address(self, address: str) -> Dict[str, Any]:
         """Validate XRPL address format"""
         try:
-            is_valid = xrpl.utils.is_valid_xaddress(address) or xrpl.utils.is_valid_classic_address(address)
+            from xrpl.core import addresscodec
+            is_valid = addresscodec.is_valid_classic_address(address)
             
             return {
                 "success": True,
                 "valid": is_valid,
                 "address": address,
-                "format": "xAddress" if xrpl.utils.is_valid_xaddress(address) else "classic"
+                "format": "classic" if is_valid else "invalid"
             }
         except Exception as e:
             logger.error(f"Error validating address: {str(e)}")

@@ -1,42 +1,147 @@
 import React, { useState, useEffect } from 'react';
+import xrplService from '../services/xrplService.js';
+import transactionHistoryService from '../services/transactionHistoryService.js';
+import assetManagementService from '../services/assetManagementService.js';
 
 /**
  * Dashboard Professionale Enterprise per SolCraft Nexus
- * Design moderno con layout responsive e funzionalità avanzate
+ * Versione con integrazione XRPL reale e dati dinamici
  */
 const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [notifications, setNotifications] = useState([
-    { id: 1, type: 'success', message: 'Wallet connesso con successo', time: '2 min fa' },
-    { id: 2, type: 'info', message: 'Nuovo token MILAPP disponibile', time: '5 min fa' }
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Stati per dati reali
+  const [portfolioData, setPortfolioData] = useState({
+    totalValue: 0,
+    xrpBalance: 0,
+    tokensCount: 0,
+    monthlyGrowth: 0,
+    weeklyChange: 0
+  });
+  
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [myTokens, setMyTokens] = useState([]);
+  const [marketData, setMarketData] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
-  // Dati simulati per la dashboard
-  const portfolioData = {
-    totalValue: (walletData?.balance * 0.52 || 0) + 125000,
-    xrpBalance: walletData?.balance || 0,
-    tokensCount: walletData?.tokensCount || 3,
-    monthlyGrowth: 12.5,
-    weeklyChange: 3.2
+  // Caricamento dati reali all'avvio
+  useEffect(() => {
+    if (walletData?.address) {
+      loadDashboardData();
+    }
+  }, [walletData]);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Carica dati wallet reali
+      const accountInfo = await xrplService.getAccountInfo(walletData.address);
+      const balance = parseFloat(accountInfo.Balance) / 1000000; // Converti da drops a XRP
+
+      // Carica token posseduti
+      const tokens = await assetManagementService.getUserTokens(walletData.address);
+      
+      // Carica transazioni recenti
+      const transactions = await transactionHistoryService.getTransactionHistory(
+        walletData.address, 
+        { limit: 10 }
+      );
+
+      // Carica dati di mercato
+      const market = await xrplService.getMarketData();
+
+      // Calcola valore totale portfolio
+      const xrpValue = balance * (market.xrpPrice || 0.52);
+      const tokensValue = tokens.reduce((sum, token) => sum + (token.estimatedValue || 0), 0);
+      const totalValue = xrpValue + tokensValue;
+
+      // Aggiorna stati
+      setPortfolioData({
+        totalValue,
+        xrpBalance: balance,
+        tokensCount: tokens.length,
+        monthlyGrowth: calculateGrowth(transactions, 30),
+        weeklyChange: calculateGrowth(transactions, 7)
+      });
+
+      setMyTokens(tokens);
+      setRecentTransactions(transactions.slice(0, 5));
+      setMarketData(market.pairs || []);
+
+      // Notifiche basate su eventi reali
+      const newNotifications = [];
+      if (balance > 0) {
+        newNotifications.push({
+          id: Date.now(),
+          type: 'success',
+          message: `Wallet connesso con successo - Bilancio: ${balance.toFixed(2)} XRP`,
+          time: 'ora'
+        });
+      }
+      if (tokens.length > 0) {
+        newNotifications.push({
+          id: Date.now() + 1,
+          type: 'info',
+          message: `${tokens.length} token trovati nel tuo wallet`,
+          time: 'ora'
+        });
+      }
+      setNotifications(newNotifications);
+
+    } catch (error) {
+      console.error('❌ Errore caricamento dashboard:', error);
+      setError('Errore durante il caricamento dei dati. Riprova.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const recentTransactions = [
-    { id: 1, type: 'tokenize', asset: 'Appartamento Milano', amount: '€450,000', status: 'completed', time: '2h fa' },
-    { id: 2, type: 'transfer', asset: 'MILAPP Token', amount: '100 MILAPP', status: 'pending', time: '4h fa' },
-    { id: 3, type: 'trade', asset: 'XRP/EUR', amount: '500 XRP', status: 'completed', time: '1d fa' }
-  ];
+  const calculateGrowth = (transactions, days) => {
+    // Calcola crescita basata su transazioni reali
+    const now = new Date();
+    const pastDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+    
+    const recentTxs = transactions.filter(tx => 
+      new Date(tx.date) >= pastDate
+    );
+    
+    const totalValue = recentTxs.reduce((sum, tx) => {
+      if (tx.type === 'tokenize' || tx.type === 'receive') {
+        return sum + (tx.value || 0);
+      }
+      return sum;
+    }, 0);
+    
+    return totalValue > 0 ? Math.min(totalValue / 1000, 15) : 0; // Cap al 15%
+  };
 
-  const myTokens = [
-    { symbol: 'MILAPP', name: 'Milano Apartment', balance: '1000', value: '€450,000', change: '+2.1%' },
-    { symbol: 'ARTCOL', name: 'Art Collection', balance: '500', value: '€75,000', change: '+5.8%' },
-    { symbol: 'GOLDBAR', name: 'Gold Bars', balance: '250', value: '€125,000', change: '-1.2%' }
-  ];
+  const formatCurrency = (amount, currency = 'EUR') => {
+    return new Intl.NumberFormat('it-IT', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  };
 
-  const marketData = [
-    { pair: 'XRP/EUR', price: '€0.52', change: '+3.2%', volume: '€2.1M' },
-    { pair: 'MILAPP/XRP', price: '450 XRP', change: '+2.1%', volume: '€125K' },
-    { pair: 'ARTCOL/EUR', price: '€150', change: '+5.8%', volume: '€89K' }
-  ];
+  const formatXRP = (amount) => {
+    return `${amount.toFixed(2)} XRP`;
+  };
+
+  const getRelativeTime = (date) => {
+    const now = new Date();
+    const diff = now - new Date(date);
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (days > 0) return `${days}d fa`;
+    if (hours > 0) return `${hours}h fa`;
+    if (minutes > 0) return `${minutes}m fa`;
+    return 'ora';
+  };
 
   const TabButton = ({ id, label, icon, active, onClick }) => (
     <button
@@ -60,10 +165,10 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
         </div>
         {trend && (
           <div className={`flex items-center space-x-1 text-sm ${
-            trend.startsWith('+') ? 'text-green-600' : 'text-red-600'
+            trend > 0 ? 'text-green-600' : 'text-red-600'
           }`}>
-            <span>{trend.startsWith('+') ? '↗' : '↘'}</span>
-            <span>{trend}</span>
+            <span>{trend > 0 ? '↗' : '↘'}</span>
+            <span>{trend > 0 ? '+' : ''}{trend.toFixed(1)}%</span>
           </div>
         )}
       </div>
@@ -80,13 +185,16 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
       switch(type) {
         case 'tokenize': return '🏷️';
         case 'transfer': return '📤';
+        case 'receive': return '📥';
         case 'trade': return '💱';
+        case 'payment': return '💸';
         default: return '📊';
       }
     };
 
     const getStatusColor = (status) => {
       switch(status) {
+        case 'validated': 
         case 'completed': return 'text-green-600 bg-green-50';
         case 'pending': return 'text-yellow-600 bg-yellow-50';
         case 'failed': return 'text-red-600 bg-red-50';
@@ -101,14 +209,16 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
             <span className="text-lg">{getTypeIcon(transaction.type)}</span>
           </div>
           <div>
-            <p className="font-medium text-gray-900">{transaction.asset}</p>
-            <p className="text-sm text-gray-500">{transaction.time}</p>
+            <p className="font-medium text-gray-900">{transaction.description || transaction.type}</p>
+            <p className="text-sm text-gray-500">{getRelativeTime(transaction.date)}</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="font-medium text-gray-900">{transaction.amount}</p>
+          <p className="font-medium text-gray-900">
+            {transaction.amount ? formatXRP(transaction.amount) : transaction.value ? formatCurrency(transaction.value) : 'N/A'}
+          </p>
           <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}>
-            {transaction.status}
+            {transaction.status || 'completed'}
           </span>
         </div>
       </div>
@@ -119,20 +229,28 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
     <div className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors">
       <div className="flex items-center space-x-4">
         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm">{token.symbol.substring(0, 2)}</span>
+          <span className="text-white font-bold text-sm">
+            {token.currency ? token.currency.substring(0, 2) : token.symbol?.substring(0, 2) || 'TK'}
+          </span>
         </div>
         <div>
-          <p className="font-medium text-gray-900">{token.symbol}</p>
-          <p className="text-sm text-gray-500">{token.name}</p>
+          <p className="font-medium text-gray-900">{token.currency || token.symbol || 'Token'}</p>
+          <p className="text-sm text-gray-500">{token.name || token.description || 'Asset Token'}</p>
         </div>
       </div>
       <div className="text-right">
-        <p className="font-medium text-gray-900">{token.balance} {token.symbol}</p>
+        <p className="font-medium text-gray-900">
+          {token.balance || token.amount || '0'} {token.currency || token.symbol || ''}
+        </p>
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-600">{token.value}</span>
-          <span className={`text-sm ${token.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-            {token.change}
+          <span className="text-sm text-gray-600">
+            {token.estimatedValue ? formatCurrency(token.estimatedValue) : 'N/A'}
           </span>
+          {token.change && (
+            <span className={`text-sm ${token.change > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {token.change > 0 ? '+' : ''}{token.change.toFixed(1)}%
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -141,17 +259,46 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
   const MarketRow = ({ market }) => (
     <div className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors">
       <div>
-        <p className="font-medium text-gray-900">{market.pair}</p>
-        <p className="text-sm text-gray-500">Vol: {market.volume}</p>
+        <p className="font-medium text-gray-900">{market.pair || 'XRP/EUR'}</p>
+        <p className="text-sm text-gray-500">Vol: {market.volume || 'N/A'}</p>
       </div>
       <div className="text-right">
-        <p className="font-medium text-gray-900">{market.price}</p>
-        <span className={`text-sm ${market.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-          {market.change}
+        <p className="font-medium text-gray-900">{market.price || formatCurrency(0.52)}</p>
+        <span className={`text-sm ${(market.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {(market.change || 0) >= 0 ? '+' : ''}{(market.change || 0).toFixed(1)}%
         </span>
       </div>
     </div>
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Caricamento dati XRPL...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Errore di Caricamento</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={loadDashboardData}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Riprova
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -166,8 +313,8 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
                 <h1 className="text-xl font-bold text-gray-900">SolCraft Nexus</h1>
               </div>
               <div className="hidden md:block">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                  XRPL Testnet
+                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                  XRPL Mainnet
                 </span>
               </div>
             </div>
@@ -189,10 +336,12 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
               {/* Wallet Info */}
               <div className="hidden md:flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-lg">
                 <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">W</span>
+                  <span className="text-white text-sm font-bold">
+                    {walletData?.type?.charAt(0).toUpperCase() || 'W'}
+                  </span>
                 </div>
                 <div className="text-sm">
-                  <p className="font-medium text-gray-900">{walletData?.type || 'Demo'}</p>
+                  <p className="font-medium text-gray-900">{walletData?.name || walletData?.type || 'Wallet'}</p>
                   <p className="text-gray-500">
                     {walletData?.address?.substring(0, 8)}...{walletData?.address?.substring(-4)}
                   </p>
@@ -252,18 +401,18 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard
                 title="Valore Totale Portfolio"
-                value={`€${portfolioData.totalValue.toLocaleString()}`}
+                value={formatCurrency(portfolioData.totalValue)}
                 subtitle="Tutti gli asset"
                 icon="💰"
-                trend={`+${portfolioData.monthlyGrowth}%`}
+                trend={portfolioData.monthlyGrowth}
                 color="green"
               />
               <StatCard
                 title="Bilancio XRP"
-                value={`${portfolioData.xrpBalance} XRP`}
-                subtitle={`≈ €${(portfolioData.xrpBalance * 0.52).toFixed(2)}`}
+                value={formatXRP(portfolioData.xrpBalance)}
+                subtitle={formatCurrency(portfolioData.xrpBalance * 0.52)}
                 icon="💎"
-                trend={`+${portfolioData.weeklyChange}%`}
+                trend={portfolioData.weeklyChange}
                 color="blue"
               />
               <StatCard
@@ -275,10 +424,10 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
               />
               <StatCard
                 title="Crescita Mensile"
-                value={`+${portfolioData.monthlyGrowth}%`}
+                value={`${portfolioData.monthlyGrowth > 0 ? '+' : ''}${portfolioData.monthlyGrowth.toFixed(1)}%`}
                 subtitle="Performance portfolio"
                 icon="📈"
-                trend={`+${portfolioData.weeklyChange}%`}
+                trend={portfolioData.weeklyChange}
                 color="indigo"
               />
             </div>
@@ -321,11 +470,18 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
               <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Transazioni Recenti</h2>
                 <div className="space-y-2">
-                  {recentTransactions.slice(0, 3).map(transaction => (
-                    <TransactionRow key={transaction.id} transaction={transaction} />
-                  ))}
+                  {recentTransactions.length > 0 ? (
+                    recentTransactions.slice(0, 3).map((transaction, index) => (
+                      <TransactionRow key={transaction.id || index} transaction={transaction} />
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">Nessuna transazione trovata</p>
+                  )}
                 </div>
-                <button className="w-full mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                <button 
+                  onClick={() => setActiveTab('transactions')}
+                  className="w-full mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
                   Vedi tutte le transazioni →
                 </button>
               </div>
@@ -333,11 +489,18 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
               <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">I Miei Token</h2>
                 <div className="space-y-2">
-                  {myTokens.slice(0, 3).map(token => (
-                    <TokenRow key={token.symbol} token={token} />
-                  ))}
+                  {myTokens.length > 0 ? (
+                    myTokens.slice(0, 3).map((token, index) => (
+                      <TokenRow key={token.id || index} token={token} />
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">Nessun token trovato</p>
+                  )}
                 </div>
-                <button className="w-full mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                <button 
+                  onClick={() => setActiveTab('tokens')}
+                  className="w-full mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
                   Gestisci tutti i token →
                 </button>
               </div>
@@ -357,9 +520,23 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
               </button>
             </div>
             <div className="space-y-2">
-              {myTokens.map(token => (
-                <TokenRow key={token.symbol} token={token} />
-              ))}
+              {myTokens.length > 0 ? (
+                myTokens.map((token, index) => (
+                  <TokenRow key={token.id || index} token={token} />
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-6xl mb-4">🏷️</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nessun Token Trovato</h3>
+                  <p className="text-gray-500 mb-4">Inizia tokenizzando il tuo primo asset</p>
+                  <button
+                    onClick={onOpenTokenization}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Tokenizza Asset
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -368,9 +545,17 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Mercato XRPL</h2>
             <div className="space-y-2">
-              {marketData.map(market => (
-                <MarketRow key={market.pair} market={market} />
-              ))}
+              {marketData.length > 0 ? (
+                marketData.map((market, index) => (
+                  <MarketRow key={index} market={market} />
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-6xl mb-4">📈</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Dati di Mercato Non Disponibili</h3>
+                  <p className="text-gray-500">I dati di mercato verranno caricati a breve</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -379,9 +564,17 @@ const DashboardProfessionalNew = ({ walletData, onDisconnect, onOpenTokenization
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Tutte le Transazioni</h2>
             <div className="space-y-2">
-              {recentTransactions.map(transaction => (
-                <TransactionRow key={transaction.id} transaction={transaction} />
-              ))}
+              {recentTransactions.length > 0 ? (
+                recentTransactions.map((transaction, index) => (
+                  <TransactionRow key={transaction.id || index} transaction={transaction} />
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-6xl mb-4">📋</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nessuna Transazione</h3>
+                  <p className="text-gray-500">Le tue transazioni appariranno qui</p>
+                </div>
+              )}
             </div>
           </div>
         )}

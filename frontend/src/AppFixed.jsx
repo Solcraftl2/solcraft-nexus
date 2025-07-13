@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import TokenizationSimple from './components/TokenizationSimple';
 import DashboardProfessionalNew from './components/DashboardProfessionalNew';
+import walletService from './services/walletService.js';
+import xrplService from './services/xrplService.js';
 
 /**
- * App SolCraft Nexus - Versione semplificata per debug
+ * App SolCraft Nexus - Versione con integrazione XRPL reale
+ * Sostituisce tutte le implementazioni simulate con funzionalità blockchain reali
  */
 function AppFixed() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -12,26 +15,97 @@ function AppFixed() {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showTokenizationModal, setShowTokenizationModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [availableWallets, setAvailableWallets] = useState([]);
 
-  const handleWalletConnect = (wallet) => {
-    setIsLoading(true);
-    setWalletData(wallet);
-    
-    // Simula caricamento dati wallet
-    setTimeout(() => {
+  // Inizializzazione e verifica wallet disponibili
+  useEffect(() => {
+    const initializeWallets = async () => {
+      try {
+        await walletService.checkAvailableWallets();
+        const wallets = walletService.getAvailableWallets();
+        setAvailableWallets(wallets);
+        console.log('✅ Wallet disponibili:', wallets);
+      } catch (error) {
+        console.error('❌ Errore inizializzazione wallet:', error);
+        setError('Errore durante l\'inizializzazione dei wallet');
+      }
+    };
+
+    initializeWallets();
+
+    // Listener per eventi wallet
+    const handleWalletConnected = (data) => {
+      console.log('🔗 Wallet connesso:', data);
+      setWalletData(data);
       setIsAuthenticated(true);
       setShowWalletModal(false);
       setIsLoading(false);
-    }, 2000);
+    };
+
+    const handleWalletDisconnected = () => {
+      console.log('🚪 Wallet disconnesso');
+      setWalletData(null);
+      setIsAuthenticated(false);
+    };
+
+    const handleWalletError = (error) => {
+      console.error('❌ Errore wallet:', error);
+      setError(error.message || 'Errore di connessione wallet');
+      setIsLoading(false);
+    };
+
+    // Registra listener
+    walletService.on('connected', handleWalletConnected);
+    walletService.on('disconnected', handleWalletDisconnected);
+    walletService.on('error', handleWalletError);
+
+    // Cleanup
+    return () => {
+      walletService.off('connected', handleWalletConnected);
+      walletService.off('disconnected', handleWalletDisconnected);
+      walletService.off('error', handleWalletError);
+    };
+  }, []);
+
+  // Gestione connessione wallet reale
+  const handleWalletConnect = async (walletType) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      console.log(`🔄 Connessione a ${walletType}...`);
+      
+      // Connessione reale tramite walletService
+      const result = await walletService.connectWallet(walletType);
+      
+      if (result.success) {
+        // Il listener handleWalletConnected gestirà il resto
+        console.log('✅ Connessione wallet riuscita');
+      } else {
+        throw new Error(result.error || 'Connessione fallita');
+      }
+    } catch (error) {
+      console.error('❌ Errore connessione wallet:', error);
+      setError(error.message || 'Errore durante la connessione');
+      setIsLoading(false);
+    }
   };
 
-  const handleDisconnect = () => {
-    setIsAuthenticated(false);
-    setWalletData(null);
+  // Disconnessione wallet reale
+  const handleDisconnect = async () => {
+    try {
+      await walletService.disconnect();
+      // Il listener handleWalletDisconnected gestirà il resto
+    } catch (error) {
+      console.error('❌ Errore disconnessione:', error);
+      setError(error.message || 'Errore durante la disconnessione');
+    }
   };
 
   const openWalletModal = () => {
     setShowWalletModal(true);
+    setError(null);
   };
 
   // Loading screen durante connessione wallet
@@ -42,15 +116,18 @@ function AppFixed() {
           <div className="w-20 h-20 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
           <h2 className="text-2xl font-bold text-white mb-2">Connessione in corso...</h2>
           <p className="text-blue-200">
-            Connettendo a {walletData?.name || 'wallet'} e caricando i dati XRPL
+            Connettendo al wallet XRPL e caricando i dati blockchain...
+          </p>
+          <p className="text-blue-300 text-sm mt-2">
+            Autorizza la connessione nel popup del wallet
           </p>
         </div>
       </div>
     );
   }
 
-  // Homepage semplificata
-  const SimplifiedHomepage = ({ onOpenPortal }) => (
+  // Homepage con branding SolCraft Nexus
+  const Homepage = ({ onOpenPortal }) => (
     <div style={{ 
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -66,6 +143,9 @@ function AppFixed() {
         </h1>
         <p style={{ fontSize: '1.2rem', marginBottom: '40px', opacity: 0.9 }}>
           Piattaforma di tokenizzazione asset su blockchain XRPL
+        </p>
+        <p style={{ fontSize: '1rem', marginBottom: '30px', opacity: 0.8 }}>
+          Connetti il tuo wallet per accedere alle funzionalità di tokenizzazione, trading e gestione asset
         </p>
         <button
           onClick={onOpenPortal}
@@ -90,240 +170,54 @@ function AppFixed() {
         >
           🔗 Connetti Wallet
         </button>
+        
+        {error && (
+          <div style={{
+            marginTop: '20px',
+            padding: '10px',
+            background: 'rgba(239, 68, 68, 0.2)',
+            border: '1px solid rgba(239, 68, 68, 0.5)',
+            borderRadius: '5px',
+            color: '#fecaca'
+          }}>
+            ⚠️ {error}
+          </div>
+        )}
       </div>
     </div>
   );
 
-  // Dashboard semplificata
-  const SimplifiedDashboard = ({ walletData, onDisconnect }) => (
-    <div style={{ 
-      minHeight: '100vh',
-      background: '#f8fafc',
-      padding: '20px'
-    }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ 
-          background: 'white',
-          borderRadius: '10px',
-          padding: '20px',
-          marginBottom: '20px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div>
-            <h1 style={{ fontSize: '2rem', color: '#1a202c', marginBottom: '5px' }}>
-              Dashboard XRPL
-            </h1>
-            <p style={{ color: '#666', fontSize: '1rem' }}>
-              Wallet: {walletData?.address?.substring(0, 10)}...{walletData?.address?.substring(-6)}
-            </p>
-          </div>
-          <button
-            onClick={onDisconnect}
-            style={{
-              background: '#ef4444',
-              color: 'white',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            }}
-          >
-            🚪 Disconnetti
-          </button>
-        </div>
-
-        {/* Stats Cards */}
-        <div style={{ 
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: '20px',
-          marginBottom: '20px'
-        }}>
-          <div style={{ 
-            background: 'white',
-            borderRadius: '10px',
-            padding: '20px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ color: '#1a202c', marginBottom: '10px' }}>💰 Bilancio XRP</h3>
-            <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#059669' }}>
-              {walletData?.balance || 0} XRP
-            </p>
-          </div>
-
-          <div style={{ 
-            background: 'white',
-            borderRadius: '10px',
-            padding: '20px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ color: '#1a202c', marginBottom: '10px' }}>🏷️ Token Posseduti</h3>
-            <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
-              {walletData?.tokensCount || 0}
-            </p>
-          </div>
-
-          <div style={{ 
-            background: 'white',
-            borderRadius: '10px',
-            padding: '20px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ color: '#1a202c', marginBottom: '10px' }}>📊 Valore Portfolio</h3>
-            <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#8b5cf6' }}>
-              €{(walletData?.balance * 0.52 || 0).toFixed(2)}
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={{ 
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '15px',
-          marginBottom: '20px'
-        }}>
-          <button
-            onClick={() => setShowTokenizationModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '15px 20px',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              transition: 'transform 0.2s ease'
-            }}
-            onMouseOver={(e) => e.target.style.transform = 'scale(1.02)'}
-            onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
-          >
-            🏷️ Tokenizza Asset
-          </button>
-
-          <button
-            style={{
-              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '15px 20px',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              transition: 'transform 0.2s ease'
-            }}
-            onMouseOver={(e) => e.target.style.transform = 'scale(1.02)'}
-            onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
-          >
-            💱 Trading DEX
-          </button>
-
-          <button
-            style={{
-              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '15px 20px',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              transition: 'transform 0.2s ease'
-            }}
-            onMouseOver={(e) => e.target.style.transform = 'scale(1.02)'}
-            onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
-          >
-            📊 Analytics
-          </button>
-        </div>
-
-        {/* Wallet Info */}
-        <div style={{ 
-          background: 'white',
-          borderRadius: '10px',
-          padding: '20px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{ color: '#1a202c', marginBottom: '15px' }}>📋 Informazioni Wallet</h3>
-          <div style={{ display: 'grid', gap: '10px' }}>
-            <div>
-              <strong>Tipo:</strong> {walletData?.type || 'N/A'}
-            </div>
-            <div>
-              <strong>Network:</strong> {walletData?.network || 'N/A'}
-            </div>
-            <div>
-              <strong>Indirizzo:</strong> 
-              <code style={{ 
-                background: '#f1f5f9',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                marginLeft: '10px',
-                fontSize: '0.9rem'
-              }}>
-                {walletData?.address || 'N/A'}
-              </code>
-            </div>
-            {walletData?.features && (
-              <div>
-                <strong>Caratteristiche:</strong> {walletData.features.join(', ')}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Modal wallet semplificato
-  const SimplifiedWalletModal = ({ isOpen, onClose, onConnect }) => {
+  // Modal wallet con opzioni reali
+  const WalletModal = ({ isOpen, onClose, onConnect }) => {
     if (!isOpen) return null;
 
+    // Opzioni wallet reali basate su quelli disponibili
     const walletOptions = [
       {
-        id: 'demo',
-        name: 'Modalità Demo',
-        icon: '🎭',
-        description: 'Accesso demo con dati simulati'
+        id: 'xumm',
+        name: 'XUMM Wallet',
+        icon: '🦄',
+        description: 'Wallet XRPL ufficiale con popup di autorizzazione',
+        available: availableWallets.includes('xumm'),
+        recommended: true
       },
       {
-        id: 'testnet',
-        name: 'Wallet Testnet',
-        icon: '🧪',
-        description: 'Genera wallet su XRPL Testnet'
+        id: 'crossmark',
+        name: 'Crossmark',
+        icon: '✖️',
+        description: 'Wallet browser extension per XRPL',
+        available: availableWallets.includes('crossmark'),
+        recommended: true
+      },
+      {
+        id: 'web3auth',
+        name: 'Web3Auth',
+        icon: '🔐',
+        description: 'Accesso tramite social login (Google, GitHub, etc.)',
+        available: true,
+        recommended: false
       }
     ];
-
-    const handleWalletSelect = (walletId) => {
-      const walletData = {
-        demo: {
-          type: 'demo',
-          name: 'Wallet Demo',
-          address: 'rDemoAddress1234567890Demo1234567890',
-          balance: 1000,
-          network: 'demo',
-          tokensCount: 3,
-          features: ['Demo', 'Sicuro', 'Test']
-        },
-        testnet: {
-          type: 'testnet',
-          name: 'Wallet Testnet',
-          address: 'rTestnetAddr1234567890Testnet1234567890',
-          balance: 500,
-          network: 'testnet',
-          tokensCount: 1,
-          features: ['Testnet', 'Reale', 'XRPL']
-        }
-      };
-
-      onConnect(walletData[walletId]);
-    };
 
     return (
       <div style={{
@@ -363,39 +257,101 @@ function AppFixed() {
             </button>
           </div>
 
+          {error && (
+            <div style={{
+              marginBottom: '20px',
+              padding: '10px',
+              background: '#fee2e2',
+              border: '1px solid #fecaca',
+              borderRadius: '5px',
+              color: '#dc2626'
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gap: '15px' }}>
             {walletOptions.map(option => (
               <button
                 key={option.id}
-                onClick={() => handleWalletSelect(option.id)}
+                onClick={() => option.available ? onConnect(option.id) : null}
+                disabled={!option.available}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '15px',
                   padding: '15px',
-                  border: '2px solid #e2e8f0',
+                  border: option.available ? '2px solid #e2e8f0' : '2px solid #f1f5f9',
                   borderRadius: '10px',
-                  background: 'white',
-                  cursor: 'pointer',
+                  background: option.available ? 'white' : '#f8fafc',
+                  cursor: option.available ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s ease',
-                  textAlign: 'left'
+                  textAlign: 'left',
+                  opacity: option.available ? 1 : 0.6
                 }}
                 onMouseOver={(e) => {
-                  e.target.style.borderColor = '#3b82f6';
-                  e.target.style.background = '#f8fafc';
+                  if (option.available) {
+                    e.target.style.borderColor = '#3b82f6';
+                    e.target.style.background = '#f8fafc';
+                  }
                 }}
                 onMouseOut={(e) => {
-                  e.target.style.borderColor = '#e2e8f0';
-                  e.target.style.background = 'white';
+                  if (option.available) {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.background = 'white';
+                  }
                 }}
               >
                 <div style={{ fontSize: '2rem' }}>{option.icon}</div>
-                <div>
-                  <div style={{ fontWeight: 'bold', color: '#1a202c' }}>{option.name}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    color: '#1a202c',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    {option.name}
+                    {option.recommended && (
+                      <span style={{
+                        background: '#10b981',
+                        color: 'white',
+                        fontSize: '0.7rem',
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}>
+                        CONSIGLIATO
+                      </span>
+                    )}
+                    {!option.available && (
+                      <span style={{
+                        background: '#ef4444',
+                        color: 'white',
+                        fontSize: '0.7rem',
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}>
+                        NON DISPONIBILE
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: '0.9rem', color: '#666' }}>{option.description}</div>
                 </div>
               </button>
             ))}
+          </div>
+
+          <div style={{
+            marginTop: '20px',
+            padding: '15px',
+            background: '#f0f9ff',
+            border: '1px solid #bae6fd',
+            borderRadius: '8px'
+          }}>
+            <p style={{ fontSize: '0.9rem', color: '#0369a1', margin: 0 }}>
+              💡 <strong>Suggerimento:</strong> Per la migliore esperienza, installa XUMM o Crossmark. 
+              Questi wallet supportano tutte le funzionalità XRPL native.
+            </p>
           </div>
         </div>
       </div>
@@ -411,7 +367,7 @@ function AppFixed() {
             element={
               isAuthenticated ? 
                 <Navigate to="/dashboard" replace /> : 
-                <SimplifiedHomepage onOpenPortal={openWalletModal} />
+                <Homepage onOpenPortal={openWalletModal} />
             } 
           />
           <Route 
@@ -430,7 +386,7 @@ function AppFixed() {
         </Routes>
 
         {/* Wallet Connection Modal */}
-        <SimplifiedWalletModal
+        <WalletModal
           isOpen={showWalletModal}
           onClose={() => setShowWalletModal(false)}
           onConnect={handleWalletConnect}

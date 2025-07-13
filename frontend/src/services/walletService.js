@@ -50,8 +50,8 @@ class WalletService {
       const xummData = await response.json();
       console.log('XUMM payload created:', xummData);
 
-      // Show QR code and deep link to user
-      const userChoice = await this.showXummConnectionModal(xummData);
+      // Show QR code and deep link to user with modal reference
+      const { userChoice, modalElement } = await this.showXummConnectionModal(xummData);
       
       if (userChoice === 'qr') {
         // User wants to scan QR code
@@ -59,12 +59,13 @@ class WalletService {
       } else if (userChoice === 'deeplink') {
         // User wants to use deep link
         window.open(xummData.deep_link, '_self');
-      } else {
+      } else if (userChoice === 'cancel') {
+        // User cancelled - modal already closed
         throw new Error('User cancelled XUMM connection');
       }
 
-      // Poll for connection result
-      const connectionResult = await this.pollXummConnection(xummData.payload_uuid);
+      // Poll for connection result with modal cleanup
+      const connectionResult = await this.pollXummConnection(xummData.payload_uuid, modalElement);
       
       if (connectionResult.success && connectionResult.connected) {
         return await this.handleSuccessfulConnection('xumm', connectionResult.address, null, connectionResult);
@@ -120,6 +121,7 @@ class WalletService {
           
           <div style="margin-top: 1rem; font-size: 0.875rem; color: #64748b;">
             <p>Expires in: <span id="timer">${Math.floor((new Date(xummData.expires_at) - new Date()) / 1000)}s</span></p>
+            <p id="status-message" style="color: #10b981; margin-top: 0.5rem; display: none;">✅ Waiting for wallet confirmation...</p>
           </div>
         </div>
       `;
@@ -135,35 +137,56 @@ class WalletService {
         if (remaining === 0) {
           clearInterval(interval);
           document.body.removeChild(modal);
-          resolve('expired');
+          resolve({ userChoice: 'expired', modalElement: null });
         }
       }, 1000);
       
       // Event listeners
       modal.querySelector('#qr-option').onclick = () => {
-        clearInterval(interval);
-        document.body.removeChild(modal);
-        resolve('qr');
+        // Show status message and disable buttons
+        const statusMsg = modal.querySelector('#status-message');
+        statusMsg.style.display = 'block';
+        statusMsg.textContent = '✅ QR Code opened - scan with XUMM app...';
+        
+        // Disable buttons to prevent multiple clicks
+        modal.querySelector('#qr-option').disabled = true;
+        modal.querySelector('#deeplink-option').disabled = true;
+        
+        resolve({ userChoice: 'qr', modalElement: modal, interval: interval });
       };
       
       modal.querySelector('#deeplink-option').onclick = () => {
-        clearInterval(interval);
-        document.body.removeChild(modal);
-        resolve('deeplink');
+        // Show status message and disable buttons
+        const statusMsg = modal.querySelector('#status-message');
+        statusMsg.style.display = 'block';
+        statusMsg.textContent = '✅ Opening XUMM app - confirm the transaction...';
+        
+        // Disable buttons to prevent multiple clicks
+        modal.querySelector('#qr-option').disabled = true;
+        modal.querySelector('#deeplink-option').disabled = true;
+        
+        resolve({ userChoice: 'deeplink', modalElement: modal, interval: interval });
       };
       
       modal.querySelector('#cancel-option').onclick = () => {
         clearInterval(interval);
         document.body.removeChild(modal);
-        resolve('cancel');
+        resolve({ userChoice: 'cancel', modalElement: null });
       };
     });
   }
 
-  // Poll XUMM connection status
-  async pollXummConnection(payloadUuid, maxAttempts = 30) {
+  // Poll XUMM connection status with modal cleanup
+  async pollXummConnection(payloadUuid, modalElement, maxAttempts = 60) {
     return new Promise((resolve, reject) => {
       let attempts = 0;
+      
+      const cleanupModal = () => {
+        if (modalElement && document.body.contains(modalElement)) {
+          document.body.removeChild(modalElement);
+          console.log('✅ XUMM modal automatically closed');
+        }
+      };
       
       const poll = async () => {
         try {
@@ -177,28 +200,57 @@ class WalletService {
           }
           
           const result = await response.json();
+          console.log('XUMM poll result:', result);
+          
+          // Update modal status message if modal is still open
+          if (modalElement && document.body.contains(modalElement)) {
+            const statusMsg = modalElement.querySelector('#status-message');
+            if (statusMsg) {
+              statusMsg.style.display = 'block';
+              if (result.signed) {
+                statusMsg.textContent = '✅ Transaction signed! Connecting wallet...';
+                statusMsg.style.color = '#10b981';
+              } else {
+                statusMsg.textContent = '⏳ Waiting for wallet confirmation...';
+                statusMsg.style.color = '#f59e0b';
+              }
+            }
+          }
           
           if (result.success && result.connected) {
-            console.log('XUMM wallet connected:', result);
+            console.log('✅ XUMM wallet connected successfully:', result);
+            cleanupModal(); // Close modal automatically
             resolve(result);
-          } else if (result.cancelled || result.expired) {
-            reject(new Error('XUMM connection was cancelled or expired'));
+          } else if (result.cancelled) {
+            console.log('❌ XUMM connection cancelled by user');
+            cleanupModal();
+            reject(new Error('XUMM connection was cancelled by user'));
+          } else if (result.expired) {
+            console.log('⏰ XUMM connection expired');
+            cleanupModal();
+            reject(new Error('XUMM connection expired'));
           } else if (attempts >= maxAttempts) {
-            reject(new Error('XUMM connection timeout'));
+            console.log('⏰ XUMM connection polling timeout');
+            cleanupModal();
+            reject(new Error('XUMM connection timeout - please try again'));
           } else {
-            // Continue polling
+            // Continue polling every 2 seconds
+            console.log(`XUMM status: signed=${result.signed}, connected=${result.connected} - continuing to poll...`);
             setTimeout(poll, 2000);
           }
         } catch (error) {
+          console.error('XUMM polling error:', error);
           if (attempts >= maxAttempts) {
-            reject(error);
+            cleanupModal();
+            reject(new Error('Failed to check XUMM status - please try again'));
           } else {
             // Retry on error
-            setTimeout(poll, 2000);
+            setTimeout(poll, 3000);
           }
         }
       };
       
+      // Start polling immediately
       poll();
     });
   }

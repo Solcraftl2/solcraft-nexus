@@ -300,7 +300,7 @@
     margin-right: auto;
 }
 
-/* Mobile responsive */
+/* Mobile responsive improvements */
 @media (max-width: 768px) {
     .nav-menu {
         display: none;
@@ -308,6 +308,7 @@
     
     .hero-section {
         padding: 2rem 1rem;
+        min-height: 80vh; /* Reduced for mobile */
     }
     
     .section-title {
@@ -323,11 +324,39 @@
     .asset-card {
         padding: 1.5rem;
     }
+    
+    /* Better mobile text sizing */
+    .hero-title {
+        font-size: 2.5rem !important;
+        line-height: 1.2 !important;
+    }
+    
+    .hero-subtitle {
+        font-size: 1.1rem !important;
+        line-height: 1.4 !important;
+    }
+    
+    /* Mobile modal improvements */
+    .modal-content {
+        width: 95% !important;
+        max-width: none !important;
+        margin: 1rem !important;
+    }
+    
+    /* Mobile button improvements */
+    .cta-button {
+        padding: 0.875rem 1.5rem !important;
+        font-size: 0.975rem !important;
+    }
 }
 
 @media (max-width: 480px) {
-    .section-title {
-        font-size: 1.8rem;
+    .hero-title {
+        font-size: 2rem !important;
+    }
+    
+    .hero-subtitle {
+        font-size: 1rem !important;
     }
     
     .stats-grid {
@@ -336,5 +365,65 @@
     
     .stat-value {
         font-size: 1.5rem;
+    }
+    
+    /* Very small screen optimizations */
+    .feature-card,
+    .asset-card {
+        padding: 1rem;
+    }
+    
+    .modal-content {
+        padding: 1.5rem !important;
+    }
+    
+    /* Navigation improvements for very small screens */
+    .nav-container {
+        padding: 0 0.5rem;
+    }
+    
+    .nav-logo {
+        font-size: 1.25rem;
+    }
+}
+
+/* Tablet optimizations */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+    }
+    
+    .feature-card,
+    .asset-card {
+        padding: 1.75rem;
+    }
+}
+
+/* Touch device optimizations */
+@media (hover: none) {
+    .cta-button:hover,
+    .feature-card:hover,
+    .asset-card:hover {
+        transform: none; /* Disable hover transforms on touch devices */
+    }
+    
+    /* Make touch targets larger */
+    button, .nav-link {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+/* Landscape mobile optimization */
+@media (max-width: 768px) and (orientation: landscape) {
+    .hero-section {
+        min-height: 60vh;
+        padding: 1rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
     }
 }

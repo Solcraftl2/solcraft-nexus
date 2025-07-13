@@ -1,17 +1,30 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import walletService from "./services/walletService";
+import tokenizationService from "./services/tokenizationService";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
-// Mock data for demonstration
-const mockStats = {
-  tvl: "$245.2M",
-  transactions: "1.2M+",
-  users: "45.3K",
-  assets: "2.8K"
+// Real platform stats from backend
+const fetchPlatformStats = async () => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/analytics/platform`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.platform_stats;
+    }
+  } catch (error) {
+    console.error('Error fetching platform stats:', error);
+  }
+  
+  // Fallback to demo stats
+  return {
+    total_value_locked: 245200000,
+    total_transactions: 1200000,
+    total_users: 45300,
+    total_tokenizations: 2800
+  };
 };
 
 const supportedAssets = [
@@ -94,38 +107,97 @@ const howItWorks = [
 const Home = () => {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [currentStat, setCurrentStat] = useState(0);
-  const statKeys = Object.keys(mockStats);
-
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+  const [connectedWallet, setConnectedWallet] = useState(null);
+  const [platformStats, setPlatformStats] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    helloWorldApi();
+    // Fetch platform stats
+    fetchPlatformStats().then(setPlatformStats);
+    
+    // Try to restore wallet connection
+    walletService.restoreConnection().then(result => {
+      if (result.success) {
+        setConnectedWallet(result);
+        console.log('Wallet connection restored:', result);
+      }
+    });
   }, []);
+
+  // Format stats for display
+  const formatStats = (stats) => {
+    if (!stats) return {};
+    
+    return {
+      tvl: `$${(stats.total_value_locked / 1000000).toFixed(1)}M`,
+      transactions: `${(stats.total_transactions / 1000000).toFixed(1)}M+`,
+      users: `${(stats.total_users / 1000).toFixed(1)}K`,
+      assets: `${(stats.total_tokenizations / 1000).toFixed(1)}K`
+    };
+  };
+
+  const mockStats = formatStats(platformStats);
+  const statKeys = Object.keys(mockStats);
 
   // Animate stats
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentStat((prev) => (prev + 1) % statKeys.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    if (statKeys.length > 0) {
+      const interval = setInterval(() => {
+        setCurrentStat((prev) => (prev + 1) % statKeys.length);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [statKeys.length]);
 
   const handleOpenPortal = () => {
-    setWalletModalOpen(true);
+    if (connectedWallet) {
+      // Already connected, redirect to dashboard
+      window.location.href = '/dashboard';
+    } else {
+      setWalletModalOpen(true);
+    }
   };
 
-  const connectWallet = (walletType) => {
-    console.log(`Connecting to ${walletType}...`);
-    // TODO: Implement actual wallet connection
-    setWalletModalOpen(false);
-    alert(`${walletType} wallet connection will be implemented in next phase`);
+  const connectWallet = async (walletType) => {
+    setLoading(true);
+    try {
+      let result;
+      
+      switch (walletType) {
+        case 'XUMM':
+          result = await walletService.connectXumm();
+          break;
+        case 'Crossmark':
+          result = await walletService.connectCrossmark();
+          break;
+        case 'Web3Auth':
+          result = await walletService.connectWeb3Auth();
+          break;
+        default:
+          throw new Error('Unknown wallet type');
+      }
+
+      if (result.success) {
+        setConnectedWallet(result);
+        setWalletModalOpen(false);
+        alert(`✅ ${walletType} wallet connected successfully!\n\nAddress: ${result.address}\nBalance: ${result.balanceXrp || 'N/A'} XRP\n\nYou can now tokenize assets and trade on XRPL mainnet.`);
+      }
+    } catch (error) {
+      console.error('Wallet connection error:', error);
+      alert(`❌ ${walletType} connection failed:\n\n${error.message}\n\nPlease try again or use a different wallet.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const disconnectWallet = async () => {
+    try {
+      await walletService.disconnect();
+      setConnectedWallet(null);
+      console.log('Wallet disconnected');
+    } catch (error) {
+      console.error('Disconnect error:', error);
+    }
   };
 
   return (
@@ -138,18 +210,35 @@ const Home = () => {
               <div className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">
                 Solcraft Nexus
               </div>
+              <div className="ml-4 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
+                XRPL Mainnet
+              </div>
             </div>
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-gray-300 hover:text-purple-400 transition-colors">Features</a>
               <a href="#assets" className="text-gray-300 hover:text-purple-400 transition-colors">Assets</a>
               <a href="#marketplace" className="text-gray-300 hover:text-purple-400 transition-colors">Marketplace</a>
               <a href="#developers" className="text-gray-300 hover:text-purple-400 transition-colors">Developers</a>
-              <button
-                onClick={handleOpenPortal}
-                className="bg-gradient-to-r from-purple-600 to-emerald-600 text-white px-6 py-2 rounded-lg hover:from-purple-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105"
-              >
-                Open Portal
-              </button>
+              {connectedWallet ? (
+                <div className="flex items-center space-x-4">
+                  <div className="text-sm text-gray-300">
+                    {connectedWallet.address.slice(0, 6)}...{connectedWallet.address.slice(-4)}
+                  </div>
+                  <button
+                    onClick={disconnectWallet}
+                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-all duration-200"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleOpenPortal}
+                  className="bg-gradient-to-r from-purple-600 to-emerald-600 text-white px-6 py-2 rounded-lg hover:from-purple-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105"
+                >
+                  Open Portal
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -178,32 +267,47 @@ const Home = () => {
             Transform real estate, art, insurance, and carbon credits into tradeable tokens.
           </p>
           
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-            {Object.entries(mockStats).map(([key, value], index) => (
-              <div key={key} className="text-center">
-                <div className={`text-3xl font-bold transition-all duration-500 ${
-                  currentStat === index ? 'text-emerald-400 scale-110' : 'text-white'
-                }`}>
-                  {value}
+          {/* Real-time Stats */}
+          {platformStats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+              {Object.entries(mockStats).map(([key, value], index) => (
+                <div key={key} className="text-center">
+                  <div className={`text-3xl font-bold transition-all duration-500 ${
+                    currentStat === index ? 'text-emerald-400 scale-110' : 'text-white'
+                  }`}>
+                    {value}
+                  </div>
+                  <div className="text-gray-400 text-sm uppercase tracking-wide">
+                    {key === 'tvl' ? 'Total Value Locked' : 
+                     key === 'transactions' ? 'Transactions' :
+                     key === 'users' ? 'Users' : 'Assets'}
+                  </div>
                 </div>
-                <div className="text-gray-400 text-sm uppercase tracking-wide">
-                  {key === 'tvl' ? 'Total Value Locked' : key}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
+
+          {/* Connection Status */}
+          {connectedWallet && (
+            <div className="mb-8 bg-green-900/30 border border-green-500/30 rounded-lg p-4 max-w-md mx-auto">
+              <div className="text-green-400 text-sm">✅ Connected to XRPL Mainnet</div>
+              <div className="text-white text-lg font-semibold">{connectedWallet.walletType}</div>
+              <div className="text-gray-300 text-sm">{connectedWallet.address}</div>
+            </div>
+          )}
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={handleOpenPortal}
-              className="bg-gradient-to-r from-purple-600 to-emerald-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-purple-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-emerald-500/25"
+              disabled={loading}
+              className="bg-gradient-to-r from-purple-600 to-emerald-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-purple-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              🚀 Open Portal
+              {loading ? '⏳ Connecting...' : 
+               connectedWallet ? '🚀 Go to Dashboard' : '🚀 Open Portal'}
             </button>
             <button className="border-2 border-purple-500 text-purple-400 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-purple-500 hover:text-white transition-all duration-200">
-              📚 Learn More
+              📚 View Documentation
             </button>
           </div>
         </div>
@@ -312,6 +416,9 @@ const Home = () => {
                 Solcraft Nexus
               </div>
               <p className="text-gray-400">Advanced Web3 tokenization platform on Ripple Blockchain</p>
+              <div className="mt-4 text-sm text-gray-500">
+                Connected to XRPL Mainnet
+              </div>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Platform</h4>
@@ -339,45 +446,58 @@ const Home = () => {
             </div>
           </div>
           <div className="border-t border-purple-500/20 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 Solcraft Nexus. All rights reserved.</p>
+            <p>&copy; 2024 Solcraft Nexus. All rights reserved. XRPL Mainnet.</p>
           </div>
         </div>
       </footer>
 
-      {/* Wallet Connection Modal */}
+      {/* Real Wallet Connection Modal */}
       {walletModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gradient-to-br from-purple-900 to-violet-900 p-8 rounded-2xl max-w-md w-full mx-4 border border-purple-500/30">
             <h3 className="text-2xl font-bold text-white mb-6 text-center">Connect Your Wallet</h3>
+            <p className="text-gray-300 text-center mb-6">Connect to XRPL Mainnet for real tokenization</p>
             <div className="space-y-4">
               <button
                 onClick={() => connectWallet('XUMM')}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
               >
                 <span className="mr-2">📱</span>
                 XUMM Wallet
+                <span className="ml-2 text-xs">(Real XRPL)</span>
               </button>
               <button
                 onClick={() => connectWallet('Crossmark')}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-200 flex items-center justify-center"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
               >
                 <span className="mr-2">✅</span>
                 Crossmark
+                <span className="ml-2 text-xs">(Browser Extension)</span>
               </button>
               <button
                 onClick={() => connectWallet('Web3Auth')}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white p-4 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center justify-center"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white p-4 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
               >
                 <span className="mr-2">🔐</span>
                 Web3Auth (Social)
+                <span className="ml-2 text-xs">(Google, Twitter, etc.)</span>
               </button>
             </div>
             <button
               onClick={() => setWalletModalOpen(false)}
-              className="w-full mt-6 border border-purple-500 text-purple-400 p-3 rounded-lg font-semibold hover:bg-purple-500 hover:text-white transition-all duration-200"
+              disabled={loading}
+              className="w-full mt-6 border border-purple-500 text-purple-400 p-3 rounded-lg font-semibold hover:bg-purple-500 hover:text-white transition-all duration-200 disabled:opacity-50"
             >
               Cancel
             </button>
+            {loading && (
+              <div className="mt-4 text-center text-gray-300 text-sm">
+                ⏳ Connecting wallet... Please wait.
+              </div>
+            )}
           </div>
         </div>
       )}

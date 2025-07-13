@@ -47,8 +47,8 @@ class WalletService {
       const xummData = await response.json();
       console.log('XUMM payload created:', xummData);
 
-      // Show QR code and deep link to user
-      const userChoice = await this.showXummConnectionModal(xummData);
+      // Show QR code and deep link to user with modal reference
+      const { userChoice, modalElement } = await this.showXummConnectionModal(xummData);
       
       if (userChoice === 'qr') {
         // User wants to scan QR code
@@ -56,12 +56,13 @@ class WalletService {
       } else if (userChoice === 'deeplink') {
         // User wants to use deep link
         window.open(xummData.deep_link, '_self');
-      } else {
+      } else if (userChoice === 'cancel') {
+        // User cancelled - modal already closed
         throw new Error('User cancelled XUMM connection');
       }
 
-      // Poll for connection result
-      const connectionResult = await this.pollXummConnection(xummData.payload_uuid);
+      // Poll for connection result with modal cleanup
+      const connectionResult = await this.pollXummConnection(xummData.payload_uuid, modalElement);
       
       if (connectionResult.success && connectionResult.connected) {
         return await this.handleSuccessfulConnection('xumm', connectionResult.address, null, connectionResult);

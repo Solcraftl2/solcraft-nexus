@@ -758,9 +758,11 @@ function App() {
     // Try to restore wallet connection
     const restoreConnection = async () => {
       try {
-        const result = await walletService.restoreConnection();
-        if (result.success) {
-          setConnectedWallet(result);
+        if (!connectedWallet) {  // Only restore if not already connected
+          const result = await walletService.restoreConnection();
+          if (result.success) {
+            setConnectedWallet(result);
+          }
         }
       } catch (error) {
         console.log('No previous connection to restore');

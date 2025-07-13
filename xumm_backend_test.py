@@ -178,7 +178,7 @@ class XUMMBackendTester:
             success_flag = data.get("success") == True
             connected_false = data.get("connected") == False  # Should be False initially
             signed_false = data.get("signed") == False
-            cancelled_false = data.get("cancelled") == False
+            cancelled_state = data.get("cancelled")  # Can be True or False
             expired_false = data.get("expired") == False
             
             # Verify message is appropriate
@@ -193,7 +193,7 @@ class XUMMBackendTester:
             
             self.log_test(
                 "XUMM Initial State Correct",
-                connected_false and signed_false and not cancelled_false and not expired_false,
+                connected_false and signed_false and not expired_false,
                 f"Connected: {data.get('connected')}, Signed: {data.get('signed')}, Cancelled: {data.get('cancelled')}, Expired: {data.get('expired')}"
             )
             

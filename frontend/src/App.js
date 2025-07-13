@@ -310,9 +310,9 @@ const Home = () => {
           </p>
           
           {/* Real-time Stats */}
-          {platformStats && (
+          {platformStats && displayStats && Object.keys(displayStats).length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-              {Object.entries(mockStats).map(([key, value], index) => (
+              {Object.entries(displayStats).map(([key, value], index) => (
                 <div key={key} className="text-center">
                   <div className={`text-3xl font-bold transition-all duration-500 ${
                     currentStat === index ? 'text-emerald-400 scale-110' : 'text-white'

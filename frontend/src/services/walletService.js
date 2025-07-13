@@ -367,37 +367,75 @@ class WalletService {
     try {
       console.log('Connecting with Web3Auth...');
       
-      // For now, simulate Web3Auth connection
-      // In real implementation, you'd integrate Web3Auth SDK
-      const socialProvider = prompt('Choose social provider:\n1. Google\n2. Twitter\n3. GitHub\n4. Discord\n\nEnter number (1-4):');
+      // For now, show that this feature is not yet fully implemented
+      const userConfirmed = window.confirm(
+        'Web3Auth Social Login\n\n' +
+        'This feature is coming soon! It will support:\n' +
+        '• Google Sign-In\n' +
+        '• Twitter/X Login\n' +
+        '• GitHub Authentication\n' +
+        '• Discord Login\n\n' +
+        'For now, please use XUMM Wallet or Crossmark.\n\n' +
+        'Click OK to continue with demo mode, or Cancel to go back.'
+      );
+      
+      if (!userConfirmed) {
+        throw new Error('User cancelled Web3Auth connection');
+      }
+      
+      // Demo mode - show what will be available
+      const socialProvider = prompt(
+        'Demo Mode: Choose social provider:\n' +
+        '1. Google\n' +
+        '2. Twitter/X\n' +
+        '3. GitHub\n' +
+        '4. Discord\n\n' +
+        'Enter number (1-4) for demo:'
+      );
       
       if (!socialProvider || !['1', '2', '3', '4'].includes(socialProvider)) {
-        throw new Error('Invalid social provider selected');
+        throw new Error('Invalid selection or cancelled');
       }
 
       const providers = {
         '1': 'Google',
-        '2': 'Twitter', 
+        '2': 'Twitter/X', 
         '3': 'GitHub',
         '4': 'Discord'
       };
 
       const providerName = providers[socialProvider];
-      console.log(`Connecting with ${providerName}...`);
+      console.log(`Demo: Connecting with ${providerName}...`);
 
-      // Simulate successful social login
-      const userConfirmed = window.confirm(`Login with ${providerName}?\n\nThis will create a new XRPL address for you.`);
+      // Simulate social login process
+      const finalConfirm = window.confirm(
+        `Demo: ${providerName} Login\n\n` +
+        'In production, this would:\n' +
+        '1. Open social login popup\n' +
+        '2. Authenticate with ' + providerName + '\n' +
+        '3. Generate XRPL wallet\n' +
+        '4. Connect securely\n\n' +
+        'Continue with demo simulation?'
+      );
       
-      if (userConfirmed) {
-        // Generate a new XRPL address for the user (testnet format)
-        const simulatedAddress = `rSolcraft${providerName}Test${Date.now().toString().slice(-6)}`;
+      if (finalConfirm) {
+        // Generate a demo address
+        const simulatedAddress = `rDemo${providerName}${Date.now().toString().slice(-6)}`;
         return await this.handleSuccessfulConnection('web3auth', simulatedAddress, providerName);
       } else {
-        throw new Error('User cancelled Web3Auth connection');
+        throw new Error('Demo cancelled by user');
       }
     } catch (error) {
       console.error('Web3Auth connection error:', error);
-      throw new Error(`Web3Auth connection failed: ${error.message}`);
+      
+      // Provide better error messages
+      if (error.message.includes('cancelled')) {
+        throw new Error('Social login cancelled by user');
+      } else if (error.message.includes('Invalid selection')) {
+        throw new Error('Invalid provider selection');
+      } else {
+        throw new Error(`Web3Auth demo failed: ${error.message}`);
+      }
     }
   }
 

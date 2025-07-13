@@ -15,10 +15,10 @@ from typing import Dict, Any, Optional
 BACKEND_URL = "https://8c8b6f48-76cf-4c30-ade7-0e13c26055cb.preview.emergentagent.com/api"
 
 # Test data - using real XRPL mainnet addresses
-TEST_WALLET_ADDRESS = "rHsMGQEkVNJmpGWs8XUBoTBiAAbwxZN5v3"  # Valid XRPL mainnet address
+TEST_WALLET_ADDRESS = "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY"  # Well-known XRPL address
 INVALID_WALLET_ADDRESS = "invalid_address_format"
 TEST_TOKEN_SYMBOL = "TST"
-TEST_ISSUER_ADDRESS = "rHsMGQEkVNJmpGWs8XUBoTBiAAbwxZN5v3"
+TEST_ISSUER_ADDRESS = "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY"
 
 class BackendTester:
     def __init__(self):

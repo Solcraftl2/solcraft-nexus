@@ -67,7 +67,7 @@ class BackendTester:
                 method, url, 
                 json=data if data else None,
                 headers=request_headers,
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=60)  # Increased timeout for XRPL calls
             ) as response:
                 try:
                     response_data = await response.json()

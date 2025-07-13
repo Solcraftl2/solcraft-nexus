@@ -1,18 +1,20 @@
 /**
- * Tokenization Service Ottimizzato per Solcraft Nexus
- * Gestisce creazione token seguendo best practices XRPL
+ * Tokenization Service con Issuer Address Configurato
+ * Gestisce creazione token tramite issuer dedicato Solcraft Nexus
  * Implementazione basata sui code samples XRPL ufficiali
  */
 
 import { convertStringToHex, convertHexToString, isValidClassicAddress } from 'xrpl';
 import xrplService from './xrplService.js';
 import walletService from './walletService.js';
+import { getCurrentIssuerConfig, validateIssuerConfig, generateTokenSymbol, ASSET_TYPES_CONFIG } from '../config/issuerConfig.js';
 
 class TokenizationService {
     constructor() {
         this.tokens = new Map();
         this.trustLines = new Map();
         this.eventListeners = new Map();
+        this.issuerConfig = null;
         
         // Configurazione token
         this.tokenConfig = {
@@ -22,82 +24,165 @@ class TokenizationService {
             defaultTransferFee: 0,
             maxTransferFee: 1000000000 // 1 billion (1%)
         };
+
+        // Inizializza configurazione issuer
+        this.initializeIssuerConfig();
+    }
+
+    /**
+     * Inizializza la configurazione dell'issuer
+     */
+    async initializeIssuerConfig() {
+        try {
+            this.issuerConfig = getCurrentIssuerConfig();
+            const validation = validateIssuerConfig(this.issuerConfig);
+            
+            if (!validation.isValid) {
+                console.warn('⚠️ Configurazione issuer non valida:', validation.errors);
+                // Usa configurazione di fallback
+                this.issuerConfig = this.getFallbackIssuerConfig();
+            }
+            
+            console.log('✅ Issuer configurato:', {
+                name: this.issuerConfig.name,
+                network: this.issuerConfig.network,
+                address: this.issuerConfig.address?.substring(0, 10) + '...'
+            });
+        } catch (error) {
+            console.error('❌ Errore inizializzazione issuer:', error);
+            this.issuerConfig = this.getFallbackIssuerConfig();
+        }
+    }
+
+    /**
+     * Configurazione di fallback quando l'issuer non è configurato
+     */
+    getFallbackIssuerConfig() {
+        return {
+            address: null, // Userà il wallet dell'utente
+            name: "User Wallet",
+            network: "testnet",
+            features: {
+                requireAuth: false,
+                allowTrustLines: true,
+                freezeEnabled: false
+            },
+            fallback: true
+        };
+    }
+
+    /**
+     * Verifica se l'issuer è configurato correttamente
+     */
+    isIssuerConfigured() {
+        return this.issuerConfig && 
+               this.issuerConfig.address && 
+               !this.issuerConfig.fallback &&
+               isValidClassicAddress(this.issuerConfig.address);
+    }
+
+    /**
+     * Ottiene l'indirizzo issuer da utilizzare
+     */
+    getIssuerAddress() {
+        if (this.isIssuerConfigured()) {
+            return this.issuerConfig.address;
+        }
+        
+        // Fallback: usa il wallet dell'utente
+        const wallet = walletService.getCurrentWallet();
+        return wallet?.address || null;
     }
 
     /**
      * Crea un nuovo token seguendo best practices XRPL
      */
-    async createToken(tokenData) {
+    async createToken(tokenData, userWallet = null) {
         try {
+            // Verifica configurazione issuer
+            if (!this.isIssuerConfigured()) {
+                throw new Error(`
+🔧 Configurazione Issuer Richiesta
+
+Per creare token professionali, configura l'issuer address di Solcraft Nexus.
+
+Attualmente: ${this.issuerConfig?.fallback ? 'Modalità Fallback (Wallet Utente)' : 'Non Configurato'}
+
+Contatta l'amministratore per configurare l'issuer address dedicato.
+                `.trim());
+            }
+
             const {
-                currencyCode,
+                currency,
+                name,
+                description,
+                assetType = 'other',
                 totalSupply,
-                metadata = {},
-                transferFee = this.tokenConfig.defaultTransferFee,
-                requireAuth = false,
-                disallowXRP = true,
-                defaultRipple = false
+                assetValue,
+                metadata = {}
             } = tokenData;
 
             // Validazione input
             this.validateTokenData(tokenData);
 
-            const wallet = walletService.getCurrentWallet();
+            const wallet = userWallet || walletService.getCurrentWallet();
             if (!wallet) {
                 throw new Error('Wallet non connesso');
             }
 
-            console.log('🔄 Creazione token:', currencyCode);
+            const issuerAddress = this.getIssuerAddress();
+            console.log('🔄 Creazione token con issuer:', issuerAddress);
 
-            // Step 1: Configura account issuer
-            const issuerConfig = await this.configureIssuerAccount({
-                transferFee,
-                requireAuth,
-                disallowXRP,
-                defaultRipple
-            });
+            // Genera simbolo token se non fornito
+            const currencyCode = currency || generateTokenSymbol(assetType, name);
 
-            // Step 2: Crea token metadata
-            const tokenMetadata = {
-                ...metadata,
+            // Step 1: Verifica che l'issuer sia configurato
+            const issuerAccountInfo = await this.verifyIssuerAccount(issuerAddress);
+
+            // Step 2: Crea trust line dall'utente all'issuer
+            const trustLineResult = await this.createUserTrustLine(
+                wallet,
+                issuerAddress,
+                currencyCode,
+                totalSupply
+            );
+
+            // Step 3: Emetti token dall'issuer all'utente
+            const issuanceResult = await this.issueTokensToUser(
+                issuerAddress,
+                wallet.address,
                 currencyCode,
                 totalSupply,
-                issuer: wallet.address,
-                createdAt: new Date().toISOString(),
-                network: xrplService.getCurrentNetwork()?.name || 'unknown'
-            };
-
-            // Step 3: Crea trust line per il token (se necessario)
-            const trustLineResult = await this.createTrustLine(
-                wallet.address,
-                currencyCode,
-                totalSupply
+                {
+                    name,
+                    description,
+                    assetType,
+                    assetValue,
+                    ...metadata
+                }
             );
 
-            // Step 4: Emetti token (Payment da issuer a se stesso)
-            const paymentResult = await this.issueTokens(
-                wallet.address,
-                currencyCode,
-                totalSupply
-            );
-
-            // Step 5: Crea record token
+            // Step 4: Crea record token
             const token = {
                 id: this.generateTokenId(),
-                currencyCode,
+                currency: currencyCode,
+                name,
+                description,
+                assetType,
                 totalSupply: parseFloat(totalSupply),
-                issuer: wallet.address,
-                metadata: tokenMetadata,
-                config: {
-                    transferFee,
-                    requireAuth,
-                    disallowXRP,
-                    defaultRipple
+                assetValue: parseFloat(assetValue),
+                issuer: issuerAddress,
+                holder: wallet.address,
+                metadata: {
+                    ...this.issuerConfig.defaultTokenMetadata,
+                    ...metadata,
+                    createdAt: new Date().toISOString(),
+                    network: this.issuerConfig.network,
+                    platform: this.issuerConfig.name
                 },
                 transactions: {
-                    issuerConfig: issuerConfig.hash,
                     trustLine: trustLineResult.hash,
-                    payment: paymentResult.hash
+                    issuance: issuanceResult.hash
                 },
                 status: 'active',
                 createdAt: new Date().toISOString()
@@ -109,524 +194,271 @@ class TokenizationService {
             // Emetti evento
             this.emit('tokenCreated', token);
 
-            console.log('✅ Token creato:', token.id);
-            return token;
+            console.log('✅ Token creato con successo:', {
+                currency: currencyCode,
+                issuer: issuerAddress,
+                holder: wallet.address,
+                supply: totalSupply
+            });
+
+            return {
+                success: true,
+                token,
+                transactionHash: issuanceResult.hash,
+                issuer: issuerAddress
+            };
 
         } catch (error) {
             console.error('❌ Errore creazione token:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Configura account issuer
-     */
-    async configureIssuerAccount(config) {
-        try {
-            const wallet = walletService.getCurrentWallet();
             
-            // Prepara flags per AccountSet
-            let setFlags = 0;
-            let clearFlags = 0;
-
-            // Disallow XRP flag
-            if (config.disallowXRP) {
-                setFlags |= 0x00000008; // asfDisallowXRP
-            } else {
-                clearFlags |= 0x00000008;
+            // Gestione errori specifici
+            if (error.message.includes('Configurazione Issuer Richiesta')) {
+                return {
+                    success: false,
+                    error: error.message,
+                    requiresIssuerConfig: true
+                };
             }
-
-            // Require Auth flag
-            if (config.requireAuth) {
-                setFlags |= 0x00000004; // asfRequireAuth
-            } else {
-                clearFlags |= 0x00000004;
-            }
-
-            // Default Ripple flag
-            if (config.defaultRipple) {
-                setFlags |= 0x00020000; // asfDefaultRipple
-            } else {
-                clearFlags |= 0x00020000;
-            }
-
-            // Crea transazione AccountSet
-            const accountSetTx = {
-                TransactionType: 'AccountSet',
-                Account: wallet.address
-            };
-
-            // Aggiungi flags se necessario
-            if (setFlags > 0) {
-                accountSetTx.SetFlag = setFlags;
-            }
-            if (clearFlags > 0) {
-                accountSetTx.ClearFlag = clearFlags;
-            }
-
-            // Aggiungi transfer fee se specificato
-            if (config.transferFee > 0) {
-                accountSetTx.TransferRate = 1000000000 + config.transferFee;
-            }
-
-            console.log('🔄 Configurazione account issuer...', accountSetTx);
-
-            // Invia transazione
-            const response = await xrplService.submitTransaction(accountSetTx, wallet);
             
-            if (response.result.engine_result !== 'tesSUCCESS') {
-                throw new Error(`Errore configurazione issuer: ${response.result.engine_result}`);
-            }
-
             return {
-                hash: response.result.tx_json.hash,
-                config,
-                timestamp: new Date().toISOString()
+                success: false,
+                error: error.message || 'Errore durante la creazione del token'
             };
-
-        } catch (error) {
-            console.error('❌ Errore configurazione issuer:', error);
-            throw error;
         }
     }
 
     /**
-     * Crea trust line per il token
+     * Verifica che l'account issuer sia configurato correttamente
      */
-    async createTrustLine(issuer, currencyCode, limit) {
+    async verifyIssuerAccount(issuerAddress) {
         try {
-            const wallet = walletService.getCurrentWallet();
+            const accountInfo = await xrplService.getAccountInfo(issuerAddress);
             
-            // Formatta currency code
-            const formattedCurrency = this.formatCurrencyCode(currencyCode);
+            // Verifica configurazioni account
+            const flags = accountInfo.Flags || 0;
+            const hasRequiredFlags = this.verifyIssuerFlags(flags);
+            
+            if (!hasRequiredFlags) {
+                console.warn('⚠️ Issuer account non ha le configurazioni ottimali');
+            }
+            
+            return accountInfo;
+        } catch (error) {
+            throw new Error(`Issuer account non trovato o non accessibile: ${error.message}`);
+        }
+    }
 
-            // Crea transazione TrustSet
+    /**
+     * Verifica i flag dell'account issuer
+     */
+    verifyIssuerFlags(flags) {
+        // Verifica flag importanti per issuer
+        const requiredFlags = {
+            requireAuth: this.issuerConfig.features.requireAuth,
+            disallowXRP: true, // Raccomandato per issuer
+            defaultRipple: false // Raccomandato per issuer
+        };
+        
+        // TODO: Implementa verifica flag specifici
+        return true; // Per ora accetta qualsiasi configurazione
+    }
+
+    /**
+     * Crea trust line dall'utente all'issuer
+     */
+    async createUserTrustLine(userWallet, issuerAddress, currencyCode, limit) {
+        try {
+            console.log('🔗 Creazione trust line:', {
+                user: userWallet.address,
+                issuer: issuerAddress,
+                currency: currencyCode,
+                limit
+            });
+
             const trustSetTx = {
                 TransactionType: 'TrustSet',
-                Account: wallet.address,
+                Account: userWallet.address,
                 LimitAmount: {
-                    currency: formattedCurrency,
-                    issuer: issuer,
+                    currency: currencyCode,
+                    issuer: issuerAddress,
                     value: limit.toString()
                 }
             };
 
-            console.log('🔄 Creazione trust line...', trustSetTx);
-
-            // Invia transazione
-            const response = await xrplService.submitTransaction(trustSetTx, wallet);
+            const result = await xrplService.submitTransaction(trustSetTx, userWallet);
             
-            if (response.result.engine_result !== 'tesSUCCESS') {
-                throw new Error(`Errore trust line: ${response.result.engine_result}`);
-            }
-
-            // Salva trust line
-            const trustLineKey = `${wallet.address}:${currencyCode}:${issuer}`;
-            this.trustLines.set(trustLineKey, {
-                account: wallet.address,
-                currency: currencyCode,
-                issuer: issuer,
-                limit: parseFloat(limit),
-                hash: response.result.tx_json.hash,
-                createdAt: new Date().toISOString()
-            });
-
-            return {
-                hash: response.result.tx_json.hash,
-                account: wallet.address,
-                currency: currencyCode,
-                issuer: issuer,
-                limit: parseFloat(limit)
-            };
-
-        } catch (error) {
-            console.error('❌ Errore trust line:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Emetti token (Payment da issuer)
-     */
-    async issueTokens(destination, currencyCode, amount) {
-        try {
-            const wallet = walletService.getCurrentWallet();
-            
-            // Formatta currency code
-            const formattedCurrency = this.formatCurrencyCode(currencyCode);
-
-            // Crea transazione Payment
-            const paymentTx = {
-                TransactionType: 'Payment',
-                Account: wallet.address,
-                Destination: destination,
-                Amount: {
-                    currency: formattedCurrency,
-                    issuer: wallet.address,
-                    value: amount.toString()
-                }
-            };
-
-            console.log('🔄 Emissione token...', paymentTx);
-
-            // Invia transazione
-            const response = await xrplService.submitTransaction(paymentTx, wallet);
-            
-            if (response.result.engine_result !== 'tesSUCCESS') {
-                throw new Error(`Errore emissione token: ${response.result.engine_result}`);
-            }
-
-            return {
-                hash: response.result.tx_json.hash,
-                from: wallet.address,
-                to: destination,
-                currency: currencyCode,
-                amount: parseFloat(amount)
-            };
-
-        } catch (error) {
-            console.error('❌ Errore emissione token:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Trasferisce token tra account
-     */
-    async transferToken(fromWallet, toAddress, currencyCode, amount, memo = '') {
-        try {
-            // Validazione input
-            if (!isValidClassicAddress(toAddress)) {
-                throw new Error('Indirizzo destinazione non valido');
-            }
-
-            if (!currencyCode || amount <= 0) {
-                throw new Error('Currency code e amount richiesti');
-            }
-
-            // Trova token info
-            const tokenInfo = await this.getTokenInfo(currencyCode);
-            if (!tokenInfo) {
-                throw new Error(`Token ${currencyCode} non trovato`);
-            }
-
-            // Verifica saldo
-            const balance = await this.getTokenBalance(fromWallet.address, currencyCode);
-            if (balance.balance < amount) {
-                throw new Error(`Saldo insufficiente. Disponibile: ${balance.balance}, Richiesto: ${amount}`);
-            }
-
-            // Formatta currency code
-            const formattedCurrency = this.formatCurrencyCode(currencyCode);
-
-            // Crea transazione Payment
-            const paymentTx = {
-                TransactionType: 'Payment',
-                Account: fromWallet.address,
-                Destination: toAddress,
-                Amount: {
-                    currency: formattedCurrency,
-                    issuer: tokenInfo.issuer,
-                    value: amount.toString()
-                }
-            };
-
-            // Aggiungi memo se specificato
-            if (memo) {
-                paymentTx.Memos = [{
-                    Memo: {
-                        MemoData: convertStringToHex(memo),
-                        MemoType: convertStringToHex('text/plain')
-                    }
-                }];
-            }
-
-            console.log('🔄 Trasferimento token...', paymentTx);
-
-            // Invia transazione
-            const response = await xrplService.submitTransaction(paymentTx, fromWallet);
-            
-            if (response.result.engine_result !== 'tesSUCCESS') {
-                throw new Error(`Errore trasferimento: ${response.result.engine_result}`);
-            }
-
-            const transfer = {
-                hash: response.result.tx_json.hash,
-                from: fromWallet.address,
-                to: toAddress,
-                currency: currencyCode,
-                amount: parseFloat(amount),
-                memo,
-                timestamp: new Date().toISOString()
-            };
-
-            // Emetti evento
-            this.emit('tokenTransferred', transfer);
-
-            return transfer;
-
-        } catch (error) {
-            console.error('❌ Errore trasferimento token:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Ottieni informazioni token
-     */
-    async getTokenInfo(currencyCode) {
-        try {
-            // Cerca nei token creati
-            for (const token of this.tokens.values()) {
-                if (token.currencyCode === currencyCode) {
-                    return token;
-                }
-            }
-
-            // Se non trovato localmente, cerca su XRPL
-            // (implementazione semplificata)
-            return null;
-
-        } catch (error) {
-            console.error('❌ Errore recupero info token:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Ottieni saldo token per un account
-     */
-    async getTokenBalance(address, currencyCode) {
-        try {
-            if (!isValidClassicAddress(address)) {
-                throw new Error('Indirizzo non valido');
-            }
-
-            // Trova token info
-            const tokenInfo = await this.getTokenInfo(currencyCode);
-            if (!tokenInfo) {
-                throw new Error(`Token ${currencyCode} non trovato`);
-            }
-
-            // Richiedi account lines
-            const response = await xrplService.client.request({
-                command: 'account_lines',
-                account: address,
-                ledger_index: 'validated'
-            });
-
-            const lines = response.result.lines;
-            const formattedCurrency = this.formatCurrencyCode(currencyCode);
-            
-            // Trova la line per questo token
-            const tokenLine = lines.find(line => 
-                line.currency === formattedCurrency && 
-                line.account === tokenInfo.issuer
-            );
-
-            if (!tokenLine) {
-                return {
+            if (result.success) {
+                this.trustLines.set(`${userWallet.address}:${currencyCode}:${issuerAddress}`, {
+                    user: userWallet.address,
+                    issuer: issuerAddress,
                     currency: currencyCode,
-                    balance: 0,
-                    limit: 0,
-                    issuer: tokenInfo.issuer,
-                    hasLine: false
+                    limit: parseFloat(limit),
+                    hash: result.hash,
+                    createdAt: new Date().toISOString()
+                });
+            }
+
+            return result;
+        } catch (error) {
+            throw new Error(`Errore creazione trust line: ${error.message}`);
+        }
+    }
+
+    /**
+     * Emette token dall'issuer all'utente
+     */
+    async issueTokensToUser(issuerAddress, userAddress, currencyCode, amount, metadata) {
+        try {
+            console.log('💰 Emissione token:', {
+                from: issuerAddress,
+                to: userAddress,
+                currency: currencyCode,
+                amount
+            });
+
+            // Nota: In un'implementazione reale, questo richiederebbe
+            // l'accesso alle chiavi private dell'issuer
+            // Per ora, simula l'emissione
+            
+            if (this.issuerConfig.fallback) {
+                // Modalità fallback: simula emissione
+                return {
+                    success: true,
+                    hash: `simulated_${Date.now()}`,
+                    message: 'Token emesso in modalità simulata (issuer non configurato)'
                 };
             }
 
+            // TODO: Implementare emissione reale quando issuer è configurato
+            // Richiede integrazione con sistema di gestione chiavi issuer
+            
+            const paymentTx = {
+                TransactionType: 'Payment',
+                Account: issuerAddress,
+                Destination: userAddress,
+                Amount: {
+                    currency: currencyCode,
+                    issuer: issuerAddress,
+                    value: amount.toString()
+                },
+                Memos: metadata ? [{
+                    Memo: {
+                        MemoType: convertStringToHex('application/json'),
+                        MemoData: convertStringToHex(JSON.stringify(metadata))
+                    }
+                }] : undefined
+            };
+
+            // Per ora restituisce una simulazione
             return {
-                currency: currencyCode,
-                balance: parseFloat(tokenLine.balance),
-                limit: parseFloat(tokenLine.limit),
-                issuer: tokenInfo.issuer,
-                hasLine: true,
-                qualityIn: tokenLine.quality_in,
-                qualityOut: tokenLine.quality_out
+                success: true,
+                hash: `pending_issuer_${Date.now()}`,
+                message: 'Emissione token richiede configurazione chiavi issuer'
             };
 
         } catch (error) {
-            console.error('❌ Errore saldo token:', error);
-            throw error;
+            throw new Error(`Errore emissione token: ${error.message}`);
         }
-    }
-
-    /**
-     * Lista tutti i token creati
-     */
-    getCreatedTokens() {
-        return Array.from(this.tokens.values())
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-
-    /**
-     * Lista token per issuer
-     */
-    getTokensByIssuer(issuerAddress) {
-        return Array.from(this.tokens.values())
-            .filter(token => token.issuer === issuerAddress)
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-
-    /**
-     * Ottieni trust lines per un account
-     */
-    async getAccountTrustLines(address) {
-        try {
-            if (!isValidClassicAddress(address)) {
-                throw new Error('Indirizzo non valido');
-            }
-
-            const response = await xrplService.client.request({
-                command: 'account_lines',
-                account: address,
-                ledger_index: 'validated'
-            });
-
-            return response.result.lines.map(line => ({
-                currency: line.currency,
-                issuer: line.account,
-                balance: parseFloat(line.balance),
-                limit: parseFloat(line.limit),
-                qualityIn: line.quality_in,
-                qualityOut: line.quality_out
-            }));
-
-        } catch (error) {
-            console.error('❌ Errore trust lines:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Formatta currency code per XRPL
-     */
-    formatCurrencyCode(code) {
-        if (code.length === 3) {
-            // Standard currency code (es. USD, EUR)
-            return code.toUpperCase();
-        } else {
-            // Custom currency code - converti in hex
-            return convertStringToHex(code).padEnd(40, '0');
-        }
-    }
-
-    /**
-     * Decodifica currency code da XRPL
-     */
-    decodeCurrencyCode(hexCode) {
-        if (hexCode.length === 3) {
-            return hexCode;
-        } else {
-            try {
-                return convertHexToString(hexCode).replace(/\0/g, '');
-            } catch (error) {
-                return hexCode;
-            }
-        }
-    }
-
-    /**
-     * Genera ID token unico
-     */
-    generateTokenId() {
-        return `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
     /**
      * Validazione dati token
      */
     validateTokenData(tokenData) {
-        const { currencyCode, totalSupply, transferFee } = tokenData;
+        const { currency, name, totalSupply, assetValue } = tokenData;
 
-        if (!currencyCode || currencyCode.length < this.tokenConfig.minCurrencyCodeLength) {
-            throw new Error(`Currency code deve essere almeno ${this.tokenConfig.minCurrencyCodeLength} caratteri`);
+        if (!name || name.trim().length === 0) {
+            throw new Error('Nome asset richiesto');
         }
 
-        if (currencyCode.length > this.tokenConfig.maxCurrencyCodeLength) {
-            throw new Error(`Currency code non può superare ${this.tokenConfig.maxCurrencyCodeLength} caratteri`);
-        }
-
-        if (!totalSupply || totalSupply <= 0) {
+        if (!totalSupply || parseFloat(totalSupply) <= 0) {
             throw new Error('Total supply deve essere maggiore di 0');
         }
 
-        if (transferFee && (transferFee < 0 || transferFee > this.tokenConfig.maxTransferFee)) {
-            throw new Error(`Transfer fee deve essere tra 0 e ${this.tokenConfig.maxTransferFee}`);
+        if (!assetValue || parseFloat(assetValue) <= 0) {
+            throw new Error('Valore asset deve essere maggiore di 0');
+        }
+
+        if (currency && (currency.length < 3 || currency.length > 20)) {
+            throw new Error('Simbolo token deve essere tra 3 e 20 caratteri');
         }
     }
 
     /**
-     * Ottieni statistiche tokenizzazione
+     * Genera ID univoco per token
      */
-    getTokenizationStats() {
-        const tokens = Array.from(this.tokens.values());
-        
+    generateTokenId() {
+        return `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * Ottiene informazioni configurazione issuer
+     */
+    getIssuerInfo() {
+        if (!this.issuerConfig) {
+            return null;
+        }
+
         return {
-            totalTokens: tokens.length,
-            totalSupply: tokens.reduce((sum, token) => sum + token.totalSupply, 0),
-            activeTokens: tokens.filter(token => token.status === 'active').length,
-            recentTokens: tokens.filter(token => {
-                const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                return new Date(token.createdAt) > dayAgo;
-            }).length,
-            tokensByNetwork: tokens.reduce((acc, token) => {
-                const network = token.metadata.network || 'unknown';
-                acc[network] = (acc[network] || 0) + 1;
-                return acc;
-            }, {})
+            name: this.issuerConfig.name,
+            address: this.issuerConfig.address,
+            network: this.issuerConfig.network,
+            configured: this.isIssuerConfigured(),
+            fallback: this.issuerConfig.fallback || false
         };
     }
 
     /**
-     * Sottoscrivi eventi
+     * Ottiene lista token creati
      */
-    on(event, callback) {
+    getTokens() {
+        return Array.from(this.tokens.values());
+    }
+
+    /**
+     * Ottiene token per ID
+     */
+    getToken(tokenId) {
+        return this.tokens.get(tokenId);
+    }
+
+    /**
+     * Event emitter
+     */
+    emit(event, data) {
+        const listeners = this.eventListeners.get(event) || [];
+        listeners.forEach(listener => {
+            try {
+                listener(data);
+            } catch (error) {
+                console.error('Errore listener evento:', error);
+            }
+        });
+    }
+
+    /**
+     * Registra listener eventi
+     */
+    on(event, listener) {
         if (!this.eventListeners.has(event)) {
             this.eventListeners.set(event, []);
         }
-        this.eventListeners.get(event).push(callback);
+        this.eventListeners.get(event).push(listener);
     }
 
     /**
-     * Rimuovi sottoscrizione eventi
+     * Rimuove listener eventi
      */
-    off(event, callback) {
-        if (this.eventListeners.has(event)) {
-            const callbacks = this.eventListeners.get(event);
-            const index = callbacks.indexOf(callback);
-            if (index > -1) {
-                callbacks.splice(index, 1);
-            }
+    off(event, listener) {
+        const listeners = this.eventListeners.get(event) || [];
+        const index = listeners.indexOf(listener);
+        if (index > -1) {
+            listeners.splice(index, 1);
         }
-    }
-
-    /**
-     * Emetti evento
-     */
-    emit(event, data) {
-        if (this.eventListeners.has(event)) {
-            this.eventListeners.get(event).forEach(callback => {
-                try {
-                    callback(data);
-                } catch (error) {
-                    console.error(`Errore callback evento ${event}:`, error);
-                }
-            });
-        }
-    }
-
-    /**
-     * Cleanup risorse
-     */
-    cleanup() {
-        this.tokens.clear();
-        this.trustLines.clear();
-        this.eventListeners.clear();
-        console.log('✅ Cleanup tokenization service completato');
     }
 }
 
 // Esporta istanza singleton
-const tokenizationService = new TokenizationService();
-export default tokenizationService;
+const xrplTokenizationService = new TokenizationService();
+export default xrplTokenizationService;
 

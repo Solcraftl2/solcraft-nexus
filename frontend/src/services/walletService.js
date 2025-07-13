@@ -59,6 +59,9 @@ class WalletService {
       } else if (userChoice === 'cancel') {
         // User cancelled - modal already closed
         throw new Error('User cancelled XUMM connection');
+      } else if (userChoice === 'expired') {
+        // Timer expired - modal already closed
+        throw new Error('XUMM connection expired');
       }
 
       // Poll for connection result with modal cleanup
@@ -71,7 +74,17 @@ class WalletService {
       }
     } catch (error) {
       console.error('XUMM connection error:', error);
-      throw new Error(`XUMM connection failed: ${error.message}`);
+      
+      // Show user-friendly error message
+      if (error.message.includes('cancelled')) {
+        throw new Error('Connection cancelled by user');
+      } else if (error.message.includes('expired')) {
+        throw new Error('Connection expired. Please try again.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('Connection timeout. Please check your XUMM app and try again.');
+      } else {
+        throw new Error(`Connection failed: ${error.message}`);
+      }
     }
   }
 

@@ -188,28 +188,29 @@ class XRPLService:
     async def get_orderbook(self, taker_gets: Dict, taker_pays: Dict) -> Dict[str, Any]:
         """Get orderbook for token pair"""
         try:
-            book_offers = self.client.request(xrpl.models.requests.BookOffers(
-                taker_gets=taker_gets,
-                taker_pays=taker_pays,
-                ledger_index="validated",
-                limit=20
-            ))
-            
-            offers = []
-            for offer in book_offers.result.get("offers", []):
-                offers.append({
-                    "account": offer["Account"],
-                    "sequence": offer["Sequence"],
-                    "taker_gets": offer["TakerGets"],
-                    "taker_pays": offer["TakerPays"],
-                    "quality": offer.get("quality")
-                })
-            
-            return {
-                "success": True,
-                "offers": offers,
-                "count": len(offers)
-            }
+            async with JsonRpcClient(self.json_rpc_url) as client:
+                book_offers = await client.request(xrpl.models.requests.BookOffers(
+                    taker_gets=taker_gets,
+                    taker_pays=taker_pays,
+                    ledger_index="validated",
+                    limit=20
+                ))
+                
+                offers = []
+                for offer in book_offers.result.get("offers", []):
+                    offers.append({
+                        "account": offer["Account"],
+                        "sequence": offer["Sequence"],
+                        "taker_gets": offer["TakerGets"],
+                        "taker_pays": offer["TakerPays"],
+                        "quality": offer.get("quality")
+                    })
+                
+                return {
+                    "success": True,
+                    "offers": offers,
+                    "count": len(offers)
+                }
         except Exception as e:
             logger.error(f"Error getting orderbook: {str(e)}")
             return {"success": False, "error": str(e)}

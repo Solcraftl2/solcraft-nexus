@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Dashboard from "./Dashboard";
 import walletService from "./services/walletService";
-import tokenizationService from "./services/tokenizationService";
 
 // Professional platform stats from backend with environment detection
 const getBackendUrl = () => {

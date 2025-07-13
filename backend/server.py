@@ -415,9 +415,153 @@ async def get_xumm_payload_status(payload_uuid: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Analytics endpoints
-@api_router.get("/analytics/platform")
-async def get_platform_analytics():
+# XUMM Proxy endpoints
+@api_router.post("/xumm/payload/create")
+async def create_xumm_payload(transaction: Dict[str, Any], user=Depends(get_current_user)):
+    """Create XUMM payload via backend proxy"""
+    try:
+        result = await xumm_service.create_sign_request(transaction, user.get("token"))
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/xumm/payload/{payload_uuid}")
+async def get_xumm_payload_details(payload_uuid: str):
+    """Get XUMM payload details via backend proxy"""
+    try:
+        result = await xumm_service.get_payload_status(payload_uuid)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail=result["error"])
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/xumm/ping")
+async def send_xumm_ping(user_token: str, subtitle: str, body: str, user=Depends(get_current_user)):
+    """Send XUMM push notification via backend proxy"""
+    try:
+        result = await xumm_service.send_ping(user_token, subtitle, body)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/wallet/xumm/connect")
+async def connect_xumm_wallet():
+    """Initiate XUMM wallet connection"""
+    try:
+        # Create a simple SignIn payload for wallet connection
+        transaction = {
+            "TransactionType": "SignIn"
+        }
+        
+        result = await xumm_service.create_sign_request(transaction)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        return {
+            "success": True,
+            "payload_uuid": result["payload_uuid"],
+            "qr_url": result["qr_url"],
+            "websocket_url": result["websocket_url"],
+            "deep_link": result["deep_link"],
+            "expires_at": result["expires_at"],
+            "message": "Scan QR code with XUMM app to connect wallet"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/wallet/xumm/{payload_uuid}/result")
+async def get_xumm_connection_result(payload_uuid: str):
+    """Get XUMM wallet connection result"""
+    try:
+        result = await xumm_service.get_payload_status(payload_uuid)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail=result["error"])
+        
+        # If signed, process the wallet connection
+        if result.get("signed") and result.get("account"):
+            # Validate and store the wallet connection
+            wallet_data = WalletConnection(
+                wallet_type="xumm",
+                address=result["account"],
+                network="testnet"
+            )
+            
+            # Get account info
+            account_info = await xrpl_service.get_account_info(result["account"])
+            if not account_info["success"]:
+                return {"success": False, "error": "Invalid account"}
+            
+            # Store wallet connection
+            wallet_doc = {
+                "id": str(uuid.uuid4()),
+                "address": result["account"],
+                "wallet_type": "xumm",
+                "network": "testnet",
+                "balance_xrp": account_info["balance_xrp"],
+                "connected_at": datetime.utcnow(),
+                "last_active": datetime.utcnow(),
+                "xumm_user_token": result.get("user_token")
+            }
+            
+            await db.wallets.update_one(
+                {"address": result["account"]},
+                {"$set": wallet_doc},
+                upsert=True
+            )
+            
+            # Generate JWT token
+            token_payload = {
+                "address": result["account"],
+                "wallet_type": "xumm",
+                "exp": datetime.utcnow().timestamp() + 86400  # 24 hours
+            }
+            token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
+            
+            return {
+                "success": True,
+                "connected": True,
+                "address": result["account"],
+                "wallet_type": "xumm",
+                "balance_xrp": account_info["balance_xrp"],
+                "network": "testnet",
+                "token": token,
+                "message": "XUMM wallet connected successfully"
+            }
+        else:
+            return {
+                "success": True,
+                "connected": False,
+                "signed": result.get("signed", False),
+                "cancelled": result.get("cancelled", False),
+                "expired": result.get("expired", False),
+                "message": "Waiting for user to sign with XUMM app"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     """Get platform analytics and statistics"""
     try:
         # Get tokenization statistics

@@ -237,6 +237,8 @@ const Home = () => {
 
   const connectWallet = async (walletType) => {
     setLoading(true);
+    setError(null);
+    
     try {
       let result;
       
@@ -253,15 +255,25 @@ const Home = () => {
         default:
           throw new Error('Unknown wallet type');
       }
-
+      
       if (result.success) {
         setConnectedWallet(result);
         setWalletModalOpen(false);
-        alert(`✅ ${walletType} wallet connected successfully!\n\nAddress: ${result.address}\nBalance: ${result.balanceXrp || 'N/A'} XRP\n\nYou can now tokenize assets and trade on XRPL mainnet.`);
+        
+        // Show success message
+        setSuccessMessage(`✅ ${walletType} wallet connected successfully!\n\nAddress: ${result.address}\nBalance: ${result.balanceXrp || 'N/A'} XRP`);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(null), 5000);
       }
     } catch (error) {
       console.error('Wallet connection error:', error);
-      alert(`❌ ${walletType} connection failed:\n\n${error.message}\n\nPlease try again or use a different wallet.`);
+      
+      // Set error message instead of alert
+      setError(`${walletType} connection failed: ${error.message}`);
+      
+      // Clear error message after 8 seconds
+      setTimeout(() => setError(null), 8000);
     } finally {
       setLoading(false);
     }
@@ -279,6 +291,43 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900">
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/90 border border-red-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md w-full mx-4 backdrop-blur-md">
+          <div className="flex items-center">
+            <span className="mr-2">❌</span>
+            <div className="flex-1">
+              <p className="font-semibold">Connection Error</p>
+              <p className="text-sm text-red-200">{error}</p>
+            </div>
+            <button 
+              onClick={() => setError(null)}
+              className="ml-4 text-red-200 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {successMessage && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-green-900/90 border border-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md w-full mx-4 backdrop-blur-md">
+          <div className="flex items-center">
+            <span className="mr-2">✅</span>
+            <div className="flex-1">
+              <p className="font-semibold">Success!</p>
+              <p className="text-sm text-green-200 whitespace-pre-line">{successMessage}</p>
+            </div>
+            <button 
+              onClick={() => setSuccessMessage(null)}
+              className="ml-4 text-green-200 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* Navigation */}
       <nav className="fixed top-0 w-full bg-black/20 backdrop-blur-md z-50 border-b border-purple-500/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

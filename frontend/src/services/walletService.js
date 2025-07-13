@@ -62,6 +62,9 @@ class WalletService {
       } else if (userChoice === 'cancel') {
         // User cancelled - modal already closed
         throw new Error('User cancelled XUMM connection');
+      } else if (userChoice === 'expired') {
+        // Timer expired - modal already closed
+        throw new Error('XUMM connection expired');
       }
 
       // Poll for connection result with modal cleanup
@@ -74,7 +77,17 @@ class WalletService {
       }
     } catch (error) {
       console.error('XUMM connection error:', error);
-      throw new Error(`XUMM connection failed: ${error.message}`);
+      
+      // Show user-friendly error message
+      if (error.message.includes('cancelled')) {
+        throw new Error('Connection cancelled by user');
+      } else if (error.message.includes('expired')) {
+        throw new Error('Connection expired. Please try again.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('Connection timeout. Please check your XUMM app and try again.');
+      } else {
+        throw new Error(`Connection failed: ${error.message}`);
+      }
     }
   }
 
@@ -137,9 +150,12 @@ class WalletService {
         if (remaining === 0) {
           clearInterval(interval);
           document.body.removeChild(modal);
-          resolve({ userChoice: 'expired', modalElement: null });
+          resolve({ userChoice: 'expired', modalElement: null, interval: null });
         }
       }, 1000);
+      
+      // Store interval on modal for cleanup
+      modal.timerInterval = interval;
       
       // Event listeners
       modal.querySelector('#qr-option').onclick = () => {
@@ -171,7 +187,7 @@ class WalletService {
       modal.querySelector('#cancel-option').onclick = () => {
         clearInterval(interval);
         document.body.removeChild(modal);
-        resolve({ userChoice: 'cancel', modalElement: null });
+        resolve({ userChoice: 'cancel', modalElement: null, interval: null });
       };
     });
   }
@@ -180,13 +196,42 @@ class WalletService {
   async pollXummConnection(payloadUuid, modalElement, maxAttempts = 60) {
     return new Promise((resolve, reject) => {
       let attempts = 0;
+      let pollInterval = null;
+      
+      // Also get the countdown timer interval to clean it up
+      const timerInterval = modalElement ? modalElement.timerInterval : null;
       
       const cleanupModal = () => {
         if (modalElement && document.body.contains(modalElement)) {
+          // Clear both timer and poll intervals
+          if (timerInterval) clearInterval(timerInterval);
+          if (pollInterval) clearInterval(pollInterval);
+          
           document.body.removeChild(modalElement);
           console.log('✅ XUMM modal automatically closed');
         }
       };
+      
+      const updateModalStatus = (message, color = '#f59e0b') => {
+        if (modalElement && document.body.contains(modalElement)) {
+          const statusMsg = modalElement.querySelector('#status-message');
+          if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = message;
+            statusMsg.style.color = color;
+          }
+        }
+      };
+      
+      // Auto-close modal after 5 minutes if no response
+      const autoCloseTimeout = setTimeout(() => {
+        console.log('⏰ Auto-closing XUMM modal due to timeout');
+        updateModalStatus('⏰ Session expired - closing automatically', '#ef4444');
+        setTimeout(() => {
+          cleanupModal();
+          reject(new Error('XUMM connection timeout - modal auto-closed'));
+        }, 2000);
+      }, 300000); // 5 minutes
       
       const poll = async () => {
         try {
@@ -196,56 +241,87 @@ class WalletService {
           const response = await fetch(`${this.backendUrl}/api/wallet/xumm/${payloadUuid}/result`);
           
           if (!response.ok) {
-            throw new Error('Failed to check XUMM status');
-          }
-          
-          const result = await response.json();
-          console.log('XUMM poll result:', result);
-          
-          // Update modal status message if modal is still open
-          if (modalElement && document.body.contains(modalElement)) {
-            const statusMsg = modalElement.querySelector('#status-message');
-            if (statusMsg) {
-              statusMsg.style.display = 'block';
-              if (result.signed) {
-                statusMsg.textContent = '✅ Transaction signed! Connecting wallet...';
-                statusMsg.style.color = '#10b981';
-              } else {
-                statusMsg.textContent = '⏳ Waiting for wallet confirmation...';
-                statusMsg.style.color = '#f59e0b';
+            if (response.status === 404) {
+              updateModalStatus('⏳ Waiting for wallet confirmation...', '#f59e0b');
+            } else {
+              throw new Error(`HTTP ${response.status}: Failed to check XUMM status`);
+            }
+          } else {
+            const result = await response.json();
+            console.log('XUMM poll result:', result);
+            
+            // Update modal status message if modal is still open
+            if (modalElement && document.body.contains(modalElement)) {
+              const statusMsg = modalElement.querySelector('#status-message');
+              if (statusMsg) {
+                statusMsg.style.display = 'block';
+                if (result.connected) {
+                  statusMsg.textContent = '✅ Wallet connected successfully!';
+                  statusMsg.style.color = '#10b981';
+                } else if (result.signed) {
+                  statusMsg.textContent = '✅ Transaction signed! Connecting wallet...';
+                  statusMsg.style.color = '#10b981';
+                } else {
+                  statusMsg.textContent = '⏳ Waiting for wallet confirmation...';
+                  statusMsg.style.color = '#f59e0b';
+                }
               }
+            }
+            
+            // Check if wallet is fully connected (signed + processed)
+            if (result.success && result.connected) {
+              console.log('✅ XUMM wallet connected successfully:', result);
+              clearTimeout(autoCloseTimeout);
+              cleanupModal(); // Close modal automatically
+              resolve(result);
+              return;
+            } else if (result.cancelled) {
+              console.log('❌ XUMM connection cancelled by user');
+              clearTimeout(autoCloseTimeout);
+              cleanupModal();
+              reject(new Error('XUMM connection was cancelled by user'));
+              return;
+            } else if (result.expired) {
+              console.log('⏰ XUMM connection expired');
+              clearTimeout(autoCloseTimeout);
+              cleanupModal();
+              reject(new Error('XUMM connection expired'));
+              return;
             }
           }
           
-          if (result.success && result.connected) {
-            console.log('✅ XUMM wallet connected successfully:', result);
-            cleanupModal(); // Close modal automatically
-            resolve(result);
-          } else if (result.cancelled) {
-            console.log('❌ XUMM connection cancelled by user');
-            cleanupModal();
-            reject(new Error('XUMM connection was cancelled by user'));
-          } else if (result.expired) {
-            console.log('⏰ XUMM connection expired');
-            cleanupModal();
-            reject(new Error('XUMM connection expired'));
-          } else if (attempts >= maxAttempts) {
+          // Check if we've reached max attempts
+          if (attempts >= maxAttempts) {
             console.log('⏰ XUMM connection polling timeout');
-            cleanupModal();
-            reject(new Error('XUMM connection timeout - please try again'));
-          } else {
-            // Continue polling every 2 seconds
-            console.log(`XUMM status: signed=${result.signed}, connected=${result.connected} - continuing to poll...`);
-            setTimeout(poll, 2000);
+            updateModalStatus('⏰ Connection timeout - closing in 3 seconds...', '#ef4444');
+            setTimeout(() => {
+              clearTimeout(autoCloseTimeout);
+              cleanupModal();
+              reject(new Error('XUMM connection timeout - please try again'));
+            }, 3000); // Show timeout message for 3 seconds
+            return;
           }
+          
+          // Continue polling every 2 seconds
+          console.log(`XUMM status: continuing to poll in 2s (attempt ${attempts}/${maxAttempts})...`);
+          pollInterval = setTimeout(poll, 2000);
+          
         } catch (error) {
           console.error('XUMM polling error:', error);
+          
+          // Update modal with error message
+          updateModalStatus(`❌ Error: ${error.message}`, '#ef4444');
+          
           if (attempts >= maxAttempts) {
-            cleanupModal();
-            reject(new Error('Failed to check XUMM status - please try again'));
+            setTimeout(() => {
+              clearTimeout(autoCloseTimeout);
+              cleanupModal();
+              reject(new Error('Failed to check XUMM status - please try again'));
+            }, 3000);
+            return;
           } else {
-            // Retry on error
-            setTimeout(poll, 3000);
+            // Retry on error with longer delay
+            pollInterval = setTimeout(poll, 3000);
           }
         }
       };
@@ -262,7 +338,7 @@ class WalletService {
 
       // Check if Crossmark is installed
       if (typeof window.xrpl === 'undefined' || !window.xrpl.crossmark) {
-        throw new Error('Crossmark wallet extension not found. Please install Crossmark.');
+        throw new Error('Crossmark wallet extension not found. Please install Crossmark extension from Chrome Web Store or Firefox Add-ons and refresh the page.');
       }
 
       // Request connection to Crossmark
@@ -273,11 +349,19 @@ class WalletService {
         console.log('Crossmark connected:', address);
         return await this.handleSuccessfulConnection('crossmark', address);
       } else {
-        throw new Error('Crossmark connection failed or was cancelled');
+        throw new Error('Crossmark connection failed or was cancelled by user');
       }
     } catch (error) {
       console.error('Crossmark connection error:', error);
-      throw new Error(`Crossmark connection failed: ${error.message}`);
+      
+      // Provide better error messages
+      if (error.message.includes('extension not found')) {
+        throw new Error('Crossmark extension not installed. Please:\n1. Install Crossmark from Chrome Web Store\n2. Refresh this page\n3. Try connecting again');
+      } else if (error.message.includes('cancelled')) {
+        throw new Error('Connection cancelled by user');
+      } else {
+        throw new Error(`Crossmark connection failed: ${error.message}`);
+      }
     }
   }
 
@@ -286,37 +370,75 @@ class WalletService {
     try {
       console.log('Connecting with Web3Auth...');
       
-      // For now, simulate Web3Auth connection
-      // In real implementation, you'd integrate Web3Auth SDK
-      const socialProvider = prompt('Choose social provider:\n1. Google\n2. Twitter\n3. GitHub\n4. Discord\n\nEnter number (1-4):');
+      // For now, show that this feature is not yet fully implemented
+      const userConfirmed = window.confirm(
+        'Web3Auth Social Login\n\n' +
+        'This feature is coming soon! It will support:\n' +
+        '• Google Sign-In\n' +
+        '• Twitter/X Login\n' +
+        '• GitHub Authentication\n' +
+        '• Discord Login\n\n' +
+        'For now, please use XUMM Wallet or Crossmark.\n\n' +
+        'Click OK to continue with demo mode, or Cancel to go back.'
+      );
+      
+      if (!userConfirmed) {
+        throw new Error('User cancelled Web3Auth connection');
+      }
+      
+      // Demo mode - show what will be available
+      const socialProvider = prompt(
+        'Demo Mode: Choose social provider:\n' +
+        '1. Google\n' +
+        '2. Twitter/X\n' +
+        '3. GitHub\n' +
+        '4. Discord\n\n' +
+        'Enter number (1-4) for demo:'
+      );
       
       if (!socialProvider || !['1', '2', '3', '4'].includes(socialProvider)) {
-        throw new Error('Invalid social provider selected');
+        throw new Error('Invalid selection or cancelled');
       }
 
       const providers = {
         '1': 'Google',
-        '2': 'Twitter', 
+        '2': 'Twitter/X', 
         '3': 'GitHub',
         '4': 'Discord'
       };
 
       const providerName = providers[socialProvider];
-      console.log(`Connecting with ${providerName}...`);
+      console.log(`Demo: Connecting with ${providerName}...`);
 
-      // Simulate successful social login
-      const userConfirmed = window.confirm(`Login with ${providerName}?\n\nThis will create a new XRPL address for you.`);
+      // Simulate social login process
+      const finalConfirm = window.confirm(
+        `Demo: ${providerName} Login\n\n` +
+        'In production, this would:\n' +
+        '1. Open social login popup\n' +
+        '2. Authenticate with ' + providerName + '\n' +
+        '3. Generate XRPL wallet\n' +
+        '4. Connect securely\n\n' +
+        'Continue with demo simulation?'
+      );
       
-      if (userConfirmed) {
-        // Generate a new XRPL address for the user (testnet format)
-        const simulatedAddress = `rSolcraft${providerName}Test${Date.now().toString().slice(-6)}`;
+      if (finalConfirm) {
+        // Generate a demo address
+        const simulatedAddress = `rDemo${providerName}${Date.now().toString().slice(-6)}`;
         return await this.handleSuccessfulConnection('web3auth', simulatedAddress, providerName);
       } else {
-        throw new Error('User cancelled Web3Auth connection');
+        throw new Error('Demo cancelled by user');
       }
     } catch (error) {
       console.error('Web3Auth connection error:', error);
-      throw new Error(`Web3Auth connection failed: ${error.message}`);
+      
+      // Provide better error messages
+      if (error.message.includes('cancelled')) {
+        throw new Error('Social login cancelled by user');
+      } else if (error.message.includes('Invalid selection')) {
+        throw new Error('Invalid provider selection');
+      } else {
+        throw new Error(`Web3Auth demo failed: ${error.message}`);
+      }
     }
   }
 

@@ -359,9 +359,9 @@ test_plan:
 
   - task: "XUMM Modal Auto-Close Fix"
     implemented: true
-    working: true
-    file: "/app/backend/server.py"
-    stuck_count: 0
+    working: false
+    file: "/app/frontend/src/services/walletService.js"
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -371,6 +371,39 @@ test_plan:
         -working: true
         -agent: "testing"
         -comment: "✅ XUMM BACKEND TESTING COMPLETED: Fixed critical XUMM service bug - removed non-existent 'submitted' and 'opened' attributes from XummPayloadMeta object. Backend endpoints working correctly: /api/wallet/xumm/connect creates payloads properly with real XUMM URLs (https://xumm.app/sign/{UUID}_q.png format), /api/wallet/xumm/{payload_uuid}/result returns proper polling responses with connected:false for unsigned transactions and connected:true when fully processed. Error handling working for invalid UUIDs (HTTP 404), proper HTTP status codes returned. Polling mechanism tested and working consistently. Backend properly handles signed vs connected states as required by frontend. 25/26 tests passed (96.2% success rate). Minor: One test failed on cancelled state validation but core functionality verified working."
+        -working: false
+        -agent: "testing"
+        -comment: "❌ CRITICAL ISSUE CONFIRMED: XUMM modal auto-close functionality is NOT working. Comprehensive testing revealed that after clicking QR Code or Deep Link buttons, the XUMM custom modal remains open indefinitely and does not close automatically even after 60+ seconds of polling. Backend polling is working correctly (returns connected:false for unsigned transactions), but frontend modal cleanup logic in pollXummConnection() is not triggering. The modal shows 'Waiting for wallet confirmation...' status but never auto-closes. This exactly matches user report: 'ancora non si chiude il qr code' (QR code still doesn't close). Screenshots captured showing persistent modal. Backend integration working (real XUMM URLs generated), but frontend modal management needs fixing."
+
+  - task: "Crossmark Wallet Connection"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/services/walletService.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Need to test Crossmark wallet connection functionality, verify browser extension detection, test error handling for missing extension"
+        -working: false
+        -agent: "testing"
+        -comment: "❌ CROSSMARK CONNECTION NOT WORKING: Testing confirmed that Crossmark wallet connection fails. The connectCrossmark() function checks for window.xrpl.crossmark but this extension is not available in the test environment. Users without Crossmark extension installed will see connection failures. This matches user report: 'ho provato le altre connessioni e non funzionano' (tried other connections and they don't work). Error handling needs improvement to show user-friendly messages when extension is not installed."
+
+  - task: "Web3Auth Social Login"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/services/walletService.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Need to test Web3Auth social login functionality, verify social provider integration, test wallet generation"
+        -working: false
+        -agent: "testing"
+        -comment: "❌ WEB3AUTH CONNECTION NOT WORKING: Testing confirmed that Web3Auth connection is only a simulation using browser prompts. The connectWeb3Auth() function uses prompt() and confirm() dialogs instead of real Web3Auth SDK integration. This provides poor user experience and doesn't actually connect to real social login providers. Users clicking Web3Auth will see basic browser prompts instead of proper social login flow. This matches user report about other connections not working. Needs proper Web3Auth SDK integration."
 
 agent_communication:
     -agent: "testing"

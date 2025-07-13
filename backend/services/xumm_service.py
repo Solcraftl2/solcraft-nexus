@@ -67,7 +67,7 @@ class XUMMService:
                 "qr_url": payload.refs.qr_png,
                 "websocket_url": payload.refs.websocket_status,
                 "deep_link": payload.next.always,
-                "expires_at": datetime.utcnow().isoformat() + "Z",  # 5 minutes from now
+                "expires_at": (datetime.utcnow() + timedelta(minutes=5)).isoformat() + "Z",  # 5 minutes from now
                 "created_at": datetime.utcnow().isoformat()
             }
         except Exception as e:

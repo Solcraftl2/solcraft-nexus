@@ -256,39 +256,40 @@ class XRPLService:
     async def get_token_metrics(self, currency: str, issuer: str) -> Dict[str, Any]:
         """Get token metrics and statistics"""
         try:
-            # Get gateway balances (total issued tokens)
-            gateway_balances = self.client.request(xrpl.models.requests.GatewayBalances(
-                account=issuer,
-                ledger_index="validated"
-            ))
-            
-            # Get account lines to count holders
-            account_lines = self.client.request(xrpl.models.requests.AccountLines(
-                account=issuer,
-                ledger_index="validated"
-            ))
-            
-            total_supply = 0
-            holder_count = 0
-            
-            # Calculate metrics from gateway balances
-            obligations = gateway_balances.result.get("obligations", {})
-            if currency in obligations:
-                total_supply = float(obligations[currency])
-            
-            # Count token holders from account lines
-            for line in account_lines.result.get("lines", []):
-                if line["currency"] == currency and float(line["balance"]) > 0:
-                    holder_count += 1
-            
-            return {
-                "success": True,
-                "currency": currency,
-                "issuer": issuer,
-                "total_supply": total_supply,
-                "holder_count": holder_count,
-                "circulating_supply": total_supply  # For tokens, this is typically the same
-            }
+            async with JsonRpcClient(self.json_rpc_url) as client:
+                # Get gateway balances (total issued tokens)
+                gateway_balances = await client.request(xrpl.models.requests.GatewayBalances(
+                    account=issuer,
+                    ledger_index="validated"
+                ))
+                
+                # Get account lines to count holders
+                account_lines = await client.request(xrpl.models.requests.AccountLines(
+                    account=issuer,
+                    ledger_index="validated"
+                ))
+                
+                total_supply = 0
+                holder_count = 0
+                
+                # Calculate metrics from gateway balances
+                obligations = gateway_balances.result.get("obligations", {})
+                if currency in obligations:
+                    total_supply = float(obligations[currency])
+                
+                # Count token holders from account lines
+                for line in account_lines.result.get("lines", []):
+                    if line["currency"] == currency and float(line["balance"]) > 0:
+                        holder_count += 1
+                
+                return {
+                    "success": True,
+                    "currency": currency,
+                    "issuer": issuer,
+                    "total_supply": total_supply,
+                    "holder_count": holder_count,
+                    "circulating_supply": total_supply  # For tokens, this is typically the same
+                }
         except Exception as e:
             logger.error(f"Error getting token metrics: {str(e)}")
             return {"success": False, "error": str(e)}

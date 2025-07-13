@@ -114,7 +114,8 @@ const howItWorks = [
   }
 ];
 
-const Home = () => {
+// Estraggo Home come componente separato per il nuovo routing
+const Home = ({ connectedWallet, setConnectedWallet }) => {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [currentStat, setCurrentStat] = useState(0);
   const [connectedWallet, setConnectedWallet] = useState(null);

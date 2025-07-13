@@ -2,7 +2,6 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
@@ -15,15 +14,11 @@ import jwt
 # Import services
 from services.xrpl_service import xrpl_service
 from services.xumm_service import xumm_service
-from services.tokenization_service import TokenizationService
+from services.tokenization_service import tokenization_service
+from services.supabase_service import supabase_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
 app = FastAPI(title="Solcraft Nexus API", version="1.0.0")
@@ -33,16 +28,13 @@ api_router = APIRouter(prefix="/api")
 
 # Security
 security = HTTPBearer()
-JWT_SECRET = os.getenv("JWT_SECRET_KEY", "your-super-secret-jwt-key-here")
-
-# Initialize services
-tokenization_service = TokenizationService(db)
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "solcraft-nexus-super-secret-jwt-key-2024")
 
 # Pydantic models
 class WalletConnection(BaseModel):
     wallet_type: str  # xumm, crossmark, web3auth
     address: str
-    network: str = "mainnet"
+    network: str = "testnet"
 
 class AssetTokenizationRequest(BaseModel):
     asset_name: str
@@ -86,24 +78,28 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 # Basic endpoints
 @api_router.get("/")
 async def root():
+    db_health = await supabase_service.health_check()
     return {
         "message": "Solcraft Nexus - Advanced Web3 Tokenization Platform",
-        "version": "1.0.0",
-        "network": "XRPL Mainnet",
+        "version": "1.0.0", 
+        "network": "XRPL Testnet",
         "services": {
             "xrpl": xrpl_service.network,
             "xumm": xumm_service.is_available(),
-            "tokenization": True
+            "tokenization": True,
+            "database": "supabase",
+            "db_status": db_health["status"]
         }
     }
 
 @api_router.get("/health")
 async def health_check():
+    db_health = await supabase_service.health_check()
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "services": {
-            "database": "connected",
+            "database": db_health["status"],
             "xrpl": "connected",
             "xumm": "available" if xumm_service.is_available() else "unavailable"
         }
@@ -124,22 +120,20 @@ async def connect_wallet(wallet_data: WalletConnection):
         if not account_info["success"]:
             raise HTTPException(status_code=400, detail="Account not found on XRPL")
         
-        # Store wallet connection in database
+        # Store wallet connection in Supabase
         wallet_doc = {
             "id": str(uuid.uuid4()),
             "address": wallet_data.address,
             "wallet_type": wallet_data.wallet_type,
             "network": wallet_data.network,
             "balance_xrp": account_info["balance_xrp"],
-            "connected_at": datetime.utcnow(),
-            "last_active": datetime.utcnow()
+            "connected_at": datetime.utcnow().isoformat(),
+            "last_active": datetime.utcnow().isoformat()
         }
         
-        await db.wallets.update_one(
-            {"address": wallet_data.address},
-            {"$set": wallet_doc},
-            upsert=True
-        )
+        result = await supabase_service.create_wallet(wallet_doc)
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["error"])
         
         # Generate JWT token
         token_payload = {
@@ -211,256 +205,7 @@ async def get_wallet_transactions(address: str, limit: int = 20):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Tokenization endpoints
-@api_router.post("/tokenize/asset")
-async def tokenize_asset(request: AssetTokenizationRequest, user=Depends(get_current_user)):
-    """Create new asset tokenization"""
-    try:
-        result = await tokenization_service.create_asset_tokenization(
-            request.dict(),
-            user["address"]
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/tokenize/{tokenization_id}/trustline")
-async def create_token_trustline(tokenization_id: str, request: TokenTrustlineRequest):
-    """Create trustline for token"""
-    try:
-        result = await tokenization_service.create_trustline_for_token(
-            tokenization_id,
-            request.user_address
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/tokenize/{tokenization_id}/issue")
-async def issue_tokens(tokenization_id: str, recipient_address: str, amount: int, user=Depends(get_current_user)):
-    """Issue tokens to recipient"""
-    try:
-        result = await tokenization_service.issue_tokens(
-            tokenization_id,
-            recipient_address,
-            amount
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.get("/tokenize/{tokenization_id}")
-async def get_tokenization_details(tokenization_id: str):
-    """Get tokenization details"""
-    try:
-        result = await tokenization_service.get_tokenization_details(tokenization_id)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=404, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Token transfer endpoints
-@api_router.post("/tokens/transfer")
-async def transfer_tokens(request: TokenTransferRequest, user=Depends(get_current_user)):
-    """Transfer tokens between addresses"""
-    try:
-        result = await tokenization_service.transfer_tokens(
-            request.from_address,
-            request.to_address,
-            request.token_symbol,
-            request.issuer_address,
-            request.amount
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/tokens/xrp/transfer")
-async def transfer_xrp(from_address: str, to_address: str, amount_xrp: float, user=Depends(get_current_user)):
-    """Transfer XRP between addresses"""
-    try:
-        result = await xrpl_service.create_xrp_payment_transaction(
-            from_address,
-            to_address,
-            amount_xrp
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        # Create XUMM sign request
-        xumm_result = await xumm_service.create_sign_request(result["transaction"])
-        
-        if not xumm_result["success"]:
-            raise HTTPException(status_code=500, detail=xumm_result["error"])
-        
-        return {
-            "success": True,
-            "transaction": result,
-            "xumm": xumm_result,
-            "message": "XRP transfer ready for signing"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Trading endpoints
-@api_router.post("/trading/offer")
-async def create_trading_offer(request: TradingOfferRequest, user=Depends(get_current_user)):
-    """Create trading offer"""
-    try:
-        result = await xrpl_service.create_token_offer_transaction(
-            request.account,
-            request.taker_gets,
-            request.taker_pays
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        # Create XUMM sign request
-        xumm_result = await xumm_service.create_sign_request(result["transaction"])
-        
-        if not xumm_result["success"]:
-            raise HTTPException(status_code=500, detail=xumm_result["error"])
-        
-        return {
-            "success": True,
-            "transaction": result,
-            "xumm": xumm_result,
-            "message": "Trading offer ready for signing"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.get("/trading/orderbook")
-async def get_orderbook(taker_gets_currency: str, taker_gets_issuer: str,
-                       taker_pays_currency: str, taker_pays_issuer: str):
-    """Get orderbook for token pair"""
-    try:
-        taker_gets = {"currency": taker_gets_currency, "issuer": taker_gets_issuer}
-        taker_pays = {"currency": taker_pays_currency, "issuer": taker_pays_issuer}
-        
-        result = await xrpl_service.get_orderbook(taker_gets, taker_pays)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=500, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Transaction status endpoints
-@api_router.get("/transactions/{transaction_id}/status")
-async def get_transaction_status(transaction_id: str):
-    """Get transaction status"""
-    try:
-        result = await tokenization_service.check_transaction_status(transaction_id)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=404, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.get("/xumm/{payload_uuid}/status")
-async def get_xumm_payload_status(payload_uuid: str):
-    """Get XUMM payload status"""
-    try:
-        result = await xumm_service.get_payload_status(payload_uuid)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=404, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 # XUMM Proxy endpoints
-@api_router.post("/xumm/payload/create")
-async def create_xumm_payload(transaction: Dict[str, Any], user=Depends(get_current_user)):
-    """Create XUMM payload via backend proxy"""
-    try:
-        result = await xumm_service.create_sign_request(transaction, user.get("token"))
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.get("/xumm/payload/{payload_uuid}")
-async def get_xumm_payload_details(payload_uuid: str):
-    """Get XUMM payload details via backend proxy"""
-    try:
-        result = await xumm_service.get_payload_status(payload_uuid)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=404, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/xumm/ping")
-async def send_xumm_ping(user_token: str, subtitle: str, body: str, user=Depends(get_current_user)):
-    """Send XUMM push notification via backend proxy"""
-    try:
-        result = await xumm_service.send_ping(user_token, subtitle, body)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @api_router.post("/wallet/xumm/connect")
 async def connect_xumm_wallet():
     """Initiate XUMM wallet connection"""
@@ -519,16 +264,14 @@ async def get_xumm_connection_result(payload_uuid: str):
                 "wallet_type": "xumm",
                 "network": "testnet",
                 "balance_xrp": account_info["balance_xrp"],
-                "connected_at": datetime.utcnow(),
-                "last_active": datetime.utcnow(),
+                "connected_at": datetime.utcnow().isoformat(),
+                "last_active": datetime.utcnow().isoformat(),
                 "xumm_user_token": result.get("user_token")
             }
             
-            await db.wallets.update_one(
-                {"address": result["account"]},
-                {"$set": wallet_doc},
-                upsert=True
-            )
+            supabase_result = await supabase_service.create_wallet(wallet_doc)
+            if not supabase_result["success"]:
+                raise HTTPException(status_code=500, detail=supabase_result["error"])
             
             # Generate JWT token
             token_payload = {
@@ -563,41 +306,67 @@ async def get_xumm_connection_result(payload_uuid: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Tokenization endpoints
+@api_router.post("/tokenize/asset")
+async def tokenize_asset(request: AssetTokenizationRequest, user=Depends(get_current_user)):
+    """Create new asset tokenization"""
+    try:
+        result = await tokenization_service.create_asset_tokenization(
+            request.dict(),
+            user["address"]
+        )
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/tokenize/{tokenization_id}")
+async def get_tokenization_details(tokenization_id: str):
+    """Get tokenization details"""
+    try:
+        result = await tokenization_service.get_tokenization_details(tokenization_id)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail=result["error"])
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Analytics endpoints
 @api_router.get("/analytics/platform")
 async def get_platform_analytics():
     """Get platform analytics and statistics"""
     try:
-        # Get tokenization statistics
-        total_tokenizations = await db.tokenizations.count_documents({})
-        active_tokenizations = await db.tokenizations.count_documents({"status": "active"})
+        stats_result = await supabase_service.get_platform_stats()
+        if not stats_result["success"]:
+            raise HTTPException(status_code=500, detail=stats_result["error"])
         
-        # Get transaction statistics
-        total_transactions = await db.token_transactions.count_documents({})
-        successful_transactions = await db.token_transactions.count_documents({"status": "validated"})
-        
-        # Get user statistics
-        total_wallets = await db.wallets.count_documents({})
-        active_wallets = await db.wallets.count_documents({
-            "last_active": {"$gte": datetime.utcnow() - timedelta(days=30)}
-        })
-        
-        # Calculate total value locked (mock data for now)
-        tvl_usd = 245200000  # This would be calculated from real data
+        stats = stats_result["data"]
         
         return {
             "success": True,
             "platform_stats": {
-                "total_value_locked": tvl_usd,
-                "total_tokenizations": total_tokenizations,
-                "active_tokenizations": active_tokenizations,
-                "total_transactions": total_transactions,
-                "successful_transactions": successful_transactions,
-                "total_users": total_wallets,
-                "active_users": active_wallets,
-                "success_rate": (successful_transactions / total_transactions * 100) if total_transactions > 0 else 0
+                "total_value_locked": stats.get("total_value_locked", 245200000),
+                "total_tokenizations": stats.get("total_tokenizations", 0),
+                "active_tokenizations": stats.get("active_tokenizations", 0),
+                "total_transactions": stats.get("total_transactions", 0),
+                "successful_transactions": stats.get("successful_transactions", 0),
+                "total_users": stats.get("total_users", 0),
+                "active_users": stats.get("active_users", 0),
+                "success_rate": (stats.get("successful_transactions", 0) / max(stats.get("total_transactions", 1), 1)) * 100
             },
             "last_updated": datetime.utcnow().isoformat()
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -621,10 +390,16 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Solcraft Nexus API started")
+    logger.info("Solcraft Nexus API started with Supabase")
     logger.info(f"XRPL Network: {xrpl_service.network}")
     logger.info(f"XUMM Available: {xumm_service.is_available()}")
+    
+    # Initialize database tables
+    await supabase_service.initialize_tables()
+    
+    db_health = await supabase_service.health_check()
+    logger.info(f"Supabase Status: {db_health['status']}")
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def shutdown_event():
+    logger.info("Solcraft Nexus API shutting down")

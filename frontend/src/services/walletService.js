@@ -268,7 +268,7 @@ class WalletService {
   }
 
   // Handle successful wallet connection
-  async handleSuccessfulConnection(walletType, address, provider = null) {
+  async handleSuccessfulConnection(walletType, address, provider = null, connectionData = null) {
     try {
       // Validate address format (basic check)
       if (!address || address.length < 25) {
@@ -277,7 +277,28 @@ class WalletService {
 
       console.log(`${walletType} wallet connected successfully:`, address);
 
-      // Send connection to backend
+      // If we already have connection data from XUMM backend, use it
+      if (connectionData && connectionData.token) {
+        this.connectedWallet = walletType;
+        this.userAddress = address;
+        this.authToken = connectionData.token;
+
+        // Store in localStorage for persistence
+        localStorage.setItem('solcraft_wallet_type', walletType);
+        localStorage.setItem('solcraft_wallet_address', address);
+        localStorage.setItem('solcraft_auth_token', connectionData.token);
+
+        return {
+          success: true,
+          walletType: walletType,
+          address: address,
+          balanceXrp: connectionData.balance_xrp,
+          message: connectionData.message,
+          provider: provider
+        };
+      }
+
+      // Otherwise, send connection to backend (for non-XUMM wallets)
       const response = await fetch(`${this.backendUrl}/api/wallet/connect`, {
         method: 'POST',
         headers: {
@@ -286,7 +307,7 @@ class WalletService {
         body: JSON.stringify({
           wallet_type: walletType,
           address: address,
-          network: 'mainnet',
+          network: 'testnet',
           provider: provider
         }),
       });
@@ -296,24 +317,24 @@ class WalletService {
         throw new Error(errorData.detail || 'Backend connection failed');
       }
 
-      const connectionData = await response.json();
+      const backendConnectionData = await response.json();
       
       // Store connection data
       this.connectedWallet = walletType;
       this.userAddress = address;
-      this.authToken = connectionData.token;
+      this.authToken = backendConnectionData.token;
 
       // Store in localStorage for persistence
       localStorage.setItem('solcraft_wallet_type', walletType);
       localStorage.setItem('solcraft_wallet_address', address);
-      localStorage.setItem('solcraft_auth_token', connectionData.token);
+      localStorage.setItem('solcraft_auth_token', backendConnectionData.token);
 
       return {
         success: true,
         walletType: walletType,
         address: address,
-        balanceXrp: connectionData.balance_xrp,
-        message: connectionData.message,
+        balanceXrp: backendConnectionData.balance_xrp,
+        message: backendConnectionData.message,
         provider: provider
       };
     } catch (error) {

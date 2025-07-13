@@ -602,140 +602,122 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-20 bg-black/30">
+      {/* Blog Section */}
+      <section className="bg-white py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-4xl font-bold text-center mb-16">
-            <span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">
-              Platform Features
-            </span>
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
-              <div key={index} className="bg-gradient-to-br from-purple-900/50 to-violet-900/50 p-6 rounded-xl backdrop-blur-sm border border-purple-500/20 hover:border-purple-400/50 transition-all duration-300 transform hover:scale-105">
-                <div className="text-4xl mb-4">{feature.icon}</div>
-                <h3 className="text-xl font-semibold text-white mb-3">{feature.title}</h3>
-                <p className="text-gray-300">{feature.description}</p>
-              </div>
-            ))}
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Our latest articles & research
+            </h2>
           </div>
-        </div>
-      </section>
-
-      {/* Supported Assets */}
-      <section id="assets" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-4xl font-bold text-center mb-16">
-            <span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">
-              Supported Assets
-            </span>
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {supportedAssets.map((asset, index) => (
-              <div key={index} className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-900/50 to-violet-900/50 p-8 backdrop-blur-sm border border-purple-500/20 hover:border-purple-400/50 transition-all duration-300 transform hover:scale-105">
-                <div className={`absolute inset-0 bg-gradient-to-br ${asset.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
-                <div className="relative">
-                  <div className="text-5xl mb-4">{asset.icon}</div>
-                  <h3 className="text-2xl font-semibold text-white mb-3">{asset.title}</h3>
-                  <p className="text-gray-300">{asset.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-20 bg-black/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-4xl font-bold text-center mb-16">
-            <span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">
-              How It Works
-            </span>
-          </h2>
+          
           <div className="grid md:grid-cols-3 gap-8">
-            {howItWorks.map((step, index) => (
-              <div key={index} className="text-center">
-                <div className="bg-gradient-to-br from-purple-600 to-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <span className="text-white font-bold text-lg">{step.step}</span>
-                </div>
-                <div className="text-4xl mb-4">{step.icon}</div>
-                <h3 className="text-xl font-semibold text-white mb-3">{step.title}</h3>
-                <p className="text-gray-300">{step.description}</p>
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-200">
+              <img
+                src="/api/placeholder/400/200"
+                alt="Article preview"
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-6">
+                <div className="text-sm text-blue-600 font-medium mb-2">RESEARCH</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  The Future of Asset Tokenization
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Comprehensive analysis of tokenization trends and institutional adoption
+                </p>
+                <div className="text-sm text-gray-500">5 minutes read</div>
               </div>
-            ))}
+            </div>
+            
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-200">
+              <img
+                src="/api/placeholder/400/200"
+                alt="Article preview"
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-6">
+                <div className="text-sm text-blue-600 font-medium mb-2">ANALYSIS</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  Real Estate Tokenization Report
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Market insights and regulatory developments in property tokenization
+                </p>
+                <div className="text-sm text-gray-500">8 minutes read</div>
+              </div>
+            </div>
+            
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-200">
+              <img
+                src="/api/placeholder/400/200"
+                alt="Article preview"
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-6">
+                <div className="text-sm text-blue-600 font-medium mb-2">GUIDE</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  Getting Started with Tokenization
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Step-by-step guide to tokenizing your first asset on our platform
+                </p>
+                <div className="text-sm text-gray-500">10 minutes read</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Security & Compliance */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold mb-16">
-            <span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">
-              Enterprise-Grade Security
-            </span>
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-gradient-to-br from-purple-900/50 to-violet-900/50 p-8 rounded-xl backdrop-blur-sm border border-purple-500/20">
-              <div className="text-4xl mb-4">🔒</div>
-              <h3 className="text-xl font-semibold text-white mb-3">Security Audits</h3>
-              <p className="text-gray-300">Complete security audits and compliance certifications</p>
-            </div>
-            <div className="bg-gradient-to-br from-purple-900/50 to-violet-900/50 p-8 rounded-xl backdrop-blur-sm border border-purple-500/20">
-              <div className="text-4xl mb-4">⚡</div>
-              <h3 className="text-xl font-semibold text-white mb-3">Instant Settlement</h3>
-              <p className="text-gray-300">XRPL transactions settle in under 3 seconds</p>
-            </div>
-            <div className="bg-gradient-to-br from-purple-900/50 to-violet-900/50 p-8 rounded-xl backdrop-blur-sm border border-purple-500/20">
-              <div className="text-4xl mb-4">🌍</div>
-              <h3 className="text-xl font-semibold text-white mb-3">Global Access</h3>
-              <p className="text-gray-300">24/7 cross-border trading and accessibility</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-black/50 py-12 border-t border-purple-500/20">
+      {/* Professional Footer */}
+      <footer className="bg-gray-900 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent mb-4">
+              <div className="text-2xl font-bold text-white mb-4">
                 Solcraft Nexus
               </div>
-              <p className="text-gray-400">Advanced Web3 tokenization platform on Ripple Blockchain</p>
-              <div className="mt-4 text-sm text-gray-500">
-                Connected to XRPL Testnet (Real APIs)
+              <p className="text-gray-400 mb-6">
+                The industry-standard data platform for tokenized real-world assets (RWAs). 
+                Used by institutions, regulators, investors, and asset issuers.
+              </p>
+              <div className="text-sm text-gray-500">
+                Contact: team@solcraft-nexus.com
               </div>
             </div>
+            
+            <div>
+              <h4 className="text-white font-semibold mb-4">Company</h4>
+              <div className="space-y-2">
+                <a href="#about" className="text-gray-400 hover:text-white block transition-colors">About</a>
+                <a href="#careers" className="text-gray-400 hover:text-white block transition-colors">Careers</a>
+                <a href="#privacy" className="text-gray-400 hover:text-white block transition-colors">Privacy Policy</a>
+                <a href="#terms" className="text-gray-400 hover:text-white block transition-colors">Terms of Use</a>
+              </div>
+            </div>
+            
             <div>
               <h4 className="text-white font-semibold mb-4">Platform</h4>
               <div className="space-y-2">
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">Features</a>
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">Marketplace</a>
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">Analytics</a>
+                <a href="#dashboard" className="text-gray-400 hover:text-white block transition-colors">View Dashboard</a>
+                <a href="#api" className="text-gray-400 hover:text-white block transition-colors">Data Downloads & API</a>
+                <a href="#citations" className="text-gray-400 hover:text-white block transition-colors">Media & Citations</a>
+                <a href="#community" className="text-gray-400 hover:text-white block transition-colors">Community Chat</a>
               </div>
             </div>
+            
             <div>
-              <h4 className="text-white font-semibold mb-4">Resources</h4>
+              <h4 className="text-white font-semibold mb-4">For Issuers</h4>
               <div className="space-y-2">
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">Documentation</a>
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">API Reference</a>
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">Support</a>
-              </div>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Community</h4>
-              <div className="space-y-2">
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">Discord</a>
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">Twitter</a>
-                <a href="#" className="text-gray-400 hover:text-purple-400 block">GitHub</a>
+                <a href="#list" className="text-gray-400 hover:text-white block transition-colors">List Your Assets</a>
+                <a href="#contact" className="text-gray-400 hover:text-white block transition-colors">Contact Team</a>
+                <a href="#twitter" className="text-gray-400 hover:text-white block transition-colors">X / Twitter</a>
               </div>
             </div>
           </div>
-          <div className="border-t border-purple-500/20 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 Solcraft Nexus. All rights reserved. XRPL Testnet (Real APIs).</p>
+          
+          <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
+            <p>Copyright © Castle Labs, Inc. dba Solcraft Nexus</p>
           </div>
         </div>
       </footer>

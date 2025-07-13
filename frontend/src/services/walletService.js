@@ -158,7 +158,7 @@ class WalletService {
   }
 
   // Poll XUMM connection status
-  async pollXummConnection(payloadUuid, maxAttempts = 30) {
+  async pollXummConnection(payloadUuid, maxAttempts = 60) {
     return new Promise((resolve, reject) => {
       let attempts = 0;
       
@@ -174,28 +174,37 @@ class WalletService {
           }
           
           const result = await response.json();
+          console.log('XUMM poll result:', result);
           
           if (result.success && result.connected) {
-            console.log('XUMM wallet connected:', result);
+            console.log('XUMM wallet connected successfully:', result);
             resolve(result);
-          } else if (result.cancelled || result.expired) {
-            reject(new Error('XUMM connection was cancelled or expired'));
+          } else if (result.cancelled) {
+            console.log('XUMM connection cancelled by user');
+            reject(new Error('XUMM connection was cancelled by user'));
+          } else if (result.expired) {
+            console.log('XUMM connection expired');
+            reject(new Error('XUMM connection expired'));
           } else if (attempts >= maxAttempts) {
-            reject(new Error('XUMM connection timeout'));
+            console.log('XUMM connection polling timeout');
+            reject(new Error('XUMM connection timeout - please try again'));
           } else {
-            // Continue polling
+            // Continue polling every 2 seconds
+            console.log(`XUMM status: signed=${result.signed}, connected=${result.connected} - continuing to poll...`);
             setTimeout(poll, 2000);
           }
         } catch (error) {
+          console.error('XUMM polling error:', error);
           if (attempts >= maxAttempts) {
-            reject(error);
+            reject(new Error('Failed to check XUMM status - please try again'));
           } else {
             // Retry on error
-            setTimeout(poll, 2000);
+            setTimeout(poll, 3000);
           }
         }
       };
       
+      // Start polling immediately
       poll();
     });
   }

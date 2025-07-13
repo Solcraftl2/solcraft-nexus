@@ -8,9 +8,13 @@
     "build": "cd frontend && npm install && npm run build",
     "lint": "cd frontend && npm run lint",
     "preview": "cd frontend && npm run preview",
+    "test": "vitest",
     "vercel:dev": "vercel dev",
     "vercel:build": "npm run build",
-    "vercel:deploy": "vercel --prod"
+    "vercel:deploy": "vercel --prod",
+    "netlify:dev": "netlify dev",
+    "netlify:build": "npm run build && netlify build",
+    "netlify:deploy": "netlify deploy --prod"
   },
   "dependencies": {
     "@crossmarkio/sdk": "^0.4.0",
@@ -99,7 +103,8 @@
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "netlify-cli": "^17.38.1",
-    "tw-animate-css": "^1.2.9"
+    "tw-animate-css": "^1.2.9",
+    "vitest": "^1.5.1"
   },
   "packageManager": "npm@10.9.2"
 }

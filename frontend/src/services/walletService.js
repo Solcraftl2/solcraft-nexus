@@ -173,10 +173,17 @@ class WalletService {
     });
   }
 
-  // Poll XUMM connection status
-  async pollXummConnection(payloadUuid, maxAttempts = 60) {
+  // Poll XUMM connection status with modal cleanup
+  async pollXummConnection(payloadUuid, modalElement, maxAttempts = 60) {
     return new Promise((resolve, reject) => {
       let attempts = 0;
+      
+      const cleanupModal = () => {
+        if (modalElement && document.body.contains(modalElement)) {
+          document.body.removeChild(modalElement);
+          console.log('✅ XUMM modal automatically closed');
+        }
+      };
       
       const poll = async () => {
         try {
@@ -192,17 +199,36 @@ class WalletService {
           const result = await response.json();
           console.log('XUMM poll result:', result);
           
+          // Update modal status message if modal is still open
+          if (modalElement && document.body.contains(modalElement)) {
+            const statusMsg = modalElement.querySelector('#status-message');
+            if (statusMsg) {
+              statusMsg.style.display = 'block';
+              if (result.signed) {
+                statusMsg.textContent = '✅ Transaction signed! Connecting wallet...';
+                statusMsg.style.color = '#10b981';
+              } else {
+                statusMsg.textContent = '⏳ Waiting for wallet confirmation...';
+                statusMsg.style.color = '#f59e0b';
+              }
+            }
+          }
+          
           if (result.success && result.connected) {
-            console.log('XUMM wallet connected successfully:', result);
+            console.log('✅ XUMM wallet connected successfully:', result);
+            cleanupModal(); // Close modal automatically
             resolve(result);
           } else if (result.cancelled) {
-            console.log('XUMM connection cancelled by user');
+            console.log('❌ XUMM connection cancelled by user');
+            cleanupModal();
             reject(new Error('XUMM connection was cancelled by user'));
           } else if (result.expired) {
-            console.log('XUMM connection expired');
+            console.log('⏰ XUMM connection expired');
+            cleanupModal();
             reject(new Error('XUMM connection expired'));
           } else if (attempts >= maxAttempts) {
-            console.log('XUMM connection polling timeout');
+            console.log('⏰ XUMM connection polling timeout');
+            cleanupModal();
             reject(new Error('XUMM connection timeout - please try again'));
           } else {
             // Continue polling every 2 seconds
@@ -212,6 +238,7 @@ class WalletService {
         } catch (error) {
           console.error('XUMM polling error:', error);
           if (attempts >= maxAttempts) {
+            cleanupModal();
             reject(new Error('Failed to check XUMM status - please try again'));
           } else {
             // Retry on error

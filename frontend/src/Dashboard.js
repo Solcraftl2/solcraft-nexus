@@ -443,8 +443,12 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
                       <button className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
                         Trade
                       </button>
-                      <button className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium">
-                        Details
+                      <button 
+                        onClick={() => analyzeAsset(asset)}
+                        disabled={aiLoading}
+                        className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        {aiLoading ? '🤖 ...' : '🤖 AI Analysis'}
                       </button>
                     </div>
                   </div>

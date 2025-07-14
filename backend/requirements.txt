@@ -4,5 +4,5 @@ python-dotenv==0.21.1
 xrpl-py==4.3.0b0
 xumm-sdk-py==1.0.4
 PyJWT==2.10.1
-supabase==2.11.3
+supabase==2.16.0
 emergentintegrations

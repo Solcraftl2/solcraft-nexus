@@ -3,6 +3,12 @@ import { Web3Auth } from "@web3auth/modal";
 import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
 import { XrplPrivateKeyProvider } from "@web3auth/xrpl-provider";
 
+// Add Buffer polyfill for browser compatibility
+if (typeof window !== 'undefined' && !window.Buffer) {
+  const { Buffer } = require('buffer');
+  window.Buffer = Buffer;
+}
+
 // Demo configuration - replace with real client ID for production
 const clientId = "BPi5PB_UiIZ-cPz1GtV5i1I2iOSOHuimiXBI0e-Oe_u6X3oVAbCiAZOTEBtTXw4tsluTITPqA8zMsfxIKMjiqNQ";
 

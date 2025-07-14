@@ -133,6 +133,27 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
     loadDashboardData();
   }, []);
 
+  // Load marketplace data
+  useEffect(() => {
+    const loadMarketplaceData = async () => {
+      try {
+        const [assets, orders] = await Promise.all([
+          marketplaceService.getMarketplaceAssets({ limit: 20 }),
+          marketplaceService.getUserOrders(connectedWallet?.address || 'demo_user')
+        ]);
+        
+        setMarketplaceAssets(assets.assets || []);
+        setUserOrders(orders.orders || []);
+      } catch (error) {
+        console.error('Error loading marketplace data:', error);
+      }
+    };
+
+    if (connectedWallet) {
+      loadMarketplaceData();
+    }
+  }, [connectedWallet]);
+
   // Load AI insights
   const loadAIInsights = async (section, data) => {
     setAiLoading(true);

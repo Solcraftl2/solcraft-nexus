@@ -121,6 +121,38 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
     loadDashboardData();
   }, []);
 
+  // Load AI insights
+  const loadAIInsights = async (section, data) => {
+    setAiLoading(true);
+    try {
+      const insights = await aiAnalysisService.generateInsights(section, data, 'en');
+      setAiInsights(prev => ({
+        ...prev,
+        [section]: insights
+      }));
+    } catch (error) {
+      console.error('Error loading AI insights:', error);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Quick analyze asset
+  const analyzeAsset = async (asset) => {
+    setAiLoading(true);
+    try {
+      const analysis = await aiAnalysisService.analyzeAsset(asset, 'comprehensive', 'en');
+      setAiInsights(prev => ({
+        ...prev,
+        [`asset_${asset.id}`]: analysis
+      }));
+    } catch (error) {
+      console.error('Error analyzing asset:', error);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   // Chart configurations
   const portfolioChartData = {
     labels: portfolioData?.assets?.map(asset => asset.name) || [],

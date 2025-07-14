@@ -1,5 +1,6 @@
 // Load configuration from environment or config file
 const path = require('path');
+const webpack = require('webpack');
 
 // Environment variable overrides
 const config = {
@@ -11,36 +12,76 @@ module.exports = {
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
-    configure: (webpackConfig) => {
+    configure: (webpackConfig, { env, paths }) => {
       
-      // Add Node.js polyfills for Web3Auth and crypto libraries
+      // Complete Node.js polyfills for Web3Auth, crypto libraries, and all dependencies
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,
+        // Core polyfills
         stream: require.resolve("stream-browserify"),
         crypto: require.resolve("crypto-browserify"),
         buffer: require.resolve("buffer"),
         process: require.resolve("process/browser"),
         util: require.resolve("util"),
         assert: require.resolve("assert"),
+        events: require.resolve("events"),
+        path: require.resolve("path-browserify"),
+        url: require.resolve("url"),
+        querystring: require.resolve("querystring-es3"),
+        os: require.resolve("os-browserify/browser"),
+        
+        // Disable Node.js modules that aren't needed in browser
         http: false,
         https: false,
         net: false,
         tls: false,
         zlib: false,
         fs: false,
-        path: false,
-        os: false,
+        child_process: false,
+        cluster: false,
+        module: false,
+        dgram: false,
+        dns: false,
+        readline: false,
+        repl: false,
+        tty: false,
+        constants: false,
+        vm: false,
       };
 
       // Provide global polyfills
-      const webpack = require('webpack');
       webpackConfig.plugins = [
         ...webpackConfig.plugins,
         new webpack.ProvidePlugin({
           Buffer: ['buffer', 'Buffer'],
           process: 'process/browser',
+          global: 'globalThis',
+        }),
+        // Define globals for better compatibility
+        new webpack.DefinePlugin({
+          global: 'globalThis',
         }),
       ];
+
+      // Fix for production builds and Vercel
+      if (env === 'production') {
+        // Ensure imports work correctly in production
+        webpackConfig.resolve.symlinks = false;
+        
+        // Fix module resolution for production
+        webpackConfig.resolve.alias = {
+          ...webpackConfig.resolve.alias,
+          'process/browser': require.resolve('process/browser'),
+        };
+      }
+
+      // Fix ESM import issues
+      webpackConfig.module.rules.push({
+        test: /\.m?js$/,
+        resolve: {
+          fullySpecified: false,
+        },
+      });
       
       // Disable hot reload completely if environment variable is set
       if (config.disableHotReload) {

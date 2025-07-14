@@ -500,6 +500,94 @@ async def stripe_webhook(http_request: Request):
         logger.error(f"Error processing Stripe webhook: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# AI Analysis Endpoints
+@api_router.get("/ai/analysis-types")
+async def get_ai_analysis_types():
+    """Get available AI analysis types"""
+    try:
+        analysis_types = ai_analysis_service.get_analysis_types()
+        asset_classes = ai_analysis_service.get_supported_asset_classes()
+        
+        return {
+            "status": "success",
+            "analysis_types": analysis_types,
+            "supported_asset_classes": asset_classes
+        }
+    except Exception as e:
+        logger.error(f"Error fetching AI analysis types: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/analyze-asset")
+async def analyze_asset(request: AssetAnalysisRequest):
+    """Analyze a specific asset using AI"""
+    try:
+        analysis = await ai_analysis_service.analyze_asset(
+            asset_data=request.asset_data,
+            analysis_type=request.analysis_type,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "analysis": analysis
+        }
+    except Exception as e:
+        logger.error(f"Error analyzing asset: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/market-prediction")
+async def predict_market_trends(request: MarketPredictionRequest):
+    """Generate market predictions for specific asset class"""
+    try:
+        prediction = await ai_analysis_service.predict_market_trends(
+            asset_class=request.asset_class,
+            time_horizon=request.time_horizon,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "prediction": prediction
+        }
+    except Exception as e:
+        logger.error(f"Error predicting market trends: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/risk-assessment")
+async def assess_portfolio_risk(request: RiskAssessmentRequest):
+    """Assess portfolio risk using AI analysis"""
+    try:
+        assessment = await ai_analysis_service.assess_portfolio_risk(
+            portfolio_data=request.portfolio_data,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "assessment": assessment
+        }
+    except Exception as e:
+        logger.error(f"Error assessing portfolio risk: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/optimize-portfolio")
+async def optimize_portfolio(request: PortfolioOptimizationRequest):
+    """Generate portfolio optimization recommendations"""
+    try:
+        optimization = await ai_analysis_service.optimize_portfolio(
+            portfolio_data=request.portfolio_data,
+            optimization_goals=request.optimization_goals,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "optimization": optimization
+        }
+    except Exception as e:
+        logger.error(f"Error optimizing portfolio: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 

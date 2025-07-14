@@ -354,33 +354,129 @@ async def get_tokenization_details(tokenization_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Analytics endpoints
-@api_router.get("/analytics/platform")
+@api_router.post("/analytics/platform")
 async def get_platform_analytics():
     """Get platform analytics and statistics"""
     try:
-        stats_result = await supabase_service.get_platform_stats()
-        if not stats_result["success"]:
-            raise HTTPException(status_code=500, detail=stats_result["error"])
-        
-        stats = stats_result["data"]
+        # Use tokenization service to get platform statistics
+        stats = await tokenization_service.get_platform_statistics()
         
         return {
-            "success": True,
-            "platform_stats": {
-                "total_value_locked": stats.get("total_value_locked", 245200000),
-                "total_tokenizations": stats.get("total_tokenizations", 0),
-                "active_tokenizations": stats.get("active_tokenizations", 0),
-                "total_transactions": stats.get("total_transactions", 0),
-                "successful_transactions": stats.get("successful_transactions", 0),
-                "total_users": stats.get("total_users", 0),
-                "active_users": stats.get("active_users", 0),
-                "success_rate": (stats.get("successful_transactions", 0) / max(stats.get("total_transactions", 1), 1)) * 100
-            },
-            "last_updated": datetime.utcnow().isoformat()
+            "status": "success",
+            "platform_stats": stats
         }
-    except HTTPException:
-        raise
     except Exception as e:
+        logger.error(f"Error fetching platform analytics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch platform analytics: {str(e)}")
+
+# Payment Endpoints
+@api_router.get("/payments/packages/tokenization")
+async def get_tokenization_packages():
+    """Get available tokenization packages"""
+    try:
+        packages = payment_service.get_tokenization_packages()
+        return {
+            "status": "success",
+            "packages": packages
+        }
+    except Exception as e:
+        logger.error(f"Error fetching tokenization packages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/payments/packages/crypto")
+async def get_crypto_packages():
+    """Get available crypto purchase packages"""
+    try:
+        packages = payment_service.get_crypto_packages()
+        supported_crypto = payment_service.get_supported_crypto()
+        return {
+            "status": "success",
+            "packages": packages,
+            "supported_crypto": supported_crypto
+        }
+    except Exception as e:
+        logger.error(f"Error fetching crypto packages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/tokenization/checkout")
+async def create_tokenization_payment(request: TokenizationPaymentRequest, http_request: Request):
+    """Create Stripe checkout session for tokenization payment"""
+    try:
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        session = await payment_service.create_tokenization_payment(
+            package_id=request.package_id,
+            host_url=host_url,
+            user_id=request.user_id,
+            wallet_address=request.wallet_address
+        )
+        
+        return {
+            "status": "success",
+            "checkout_url": session.url,
+            "session_id": session.session_id
+        }
+    except Exception as e:
+        logger.error(f"Error creating tokenization payment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/crypto/checkout")
+async def create_crypto_purchase_payment(request: CryptoPurchaseRequest, http_request: Request):
+    """Create Stripe checkout session for crypto purchase"""
+    try:
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        session = await payment_service.create_crypto_purchase_payment(
+            package_id=request.package_id,
+            crypto_type=request.crypto_type,
+            host_url=host_url,
+            user_id=request.user_id,
+            wallet_address=request.wallet_address
+        )
+        
+        return {
+            "status": "success",
+            "checkout_url": session.url,
+            "session_id": session.session_id
+        }
+    except Exception as e:
+        logger.error(f"Error creating crypto purchase payment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/payments/status/{session_id}")
+async def get_payment_status(session_id: str, http_request: Request):
+    """Get payment status for a checkout session"""
+    try:
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        status = await payment_service.get_payment_status(session_id, host_url)
+        
+        return {
+            "status": "success",
+            "payment_info": status
+        }
+    except Exception as e:
+        logger.error(f"Error fetching payment status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(http_request: Request):
+    """Handle Stripe webhook events"""
+    try:
+        webhook_body = await http_request.body()
+        stripe_signature = http_request.headers.get("Stripe-Signature", "")
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        webhook_result = await payment_service.handle_webhook(
+            webhook_body, stripe_signature, host_url
+        )
+        
+        return {
+            "status": "success",
+            "webhook_result": webhook_result
+        }
+    except Exception as e:
+        logger.error(f"Error processing Stripe webhook: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Include the router in the main app

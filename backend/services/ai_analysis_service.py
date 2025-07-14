@@ -192,6 +192,8 @@ class AIAnalysisService:
     ) -> Dict[str, Any]:
         """Generate portfolio optimization recommendations"""
         
+        self._check_availability()
+        
         session_id = f"portfolio_optimization_{uuid.uuid4().hex[:8]}"
         
         # Create system message for portfolio optimization

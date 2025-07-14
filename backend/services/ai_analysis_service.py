@@ -106,6 +106,8 @@ class AIAnalysisService:
     ) -> Dict[str, Any]:
         """Generate market predictions for specific asset class"""
         
+        self._check_availability()
+        
         session_id = f"market_prediction_{uuid.uuid4().hex[:8]}"
         
         # Create system message for market prediction

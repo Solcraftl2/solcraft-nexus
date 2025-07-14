@@ -13,8 +13,12 @@ from .supabase_service import get_supabase_client
 class AIAnalysisService:
     def __init__(self):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        if not self.openai_api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment variables")
+        self.is_available = bool(self.openai_api_key and self.openai_api_key.strip())
+        
+        if not self.is_available:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("OPENAI_API_KEY not found - AI features will be disabled")
         
         # AI Analysis types
         self.ANALYSIS_TYPES = {

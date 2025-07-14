@@ -67,9 +67,10 @@ class SupabaseService:
                 
             except Exception as e:
                 logger.error(f"Error accessing tables: {str(e)}")
-                # Tables might not exist - this is expected on first run
-                logger.info("Tables will be created via Supabase dashboard SQL editor")
-                return True  # Return True to allow service to continue
+                # Tables might not exist - create payment tables
+                await self._create_payment_tables()
+                logger.info("Payment tables created")
+                return True
             
         except Exception as e:
             logger.error(f"Error during table initialization check: {str(e)}")

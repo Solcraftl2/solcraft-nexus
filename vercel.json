@@ -1,5 +1,17 @@
 {
   "version": 2,
+  "env": {
+    "GENERATE_SOURCEMAP": "false",
+    "CI": "false",
+    "DISABLE_ESLINT_PLUGIN": "true"
+  },
+  "build": {
+    "env": {
+      "GENERATE_SOURCEMAP": "false",
+      "CI": "false",
+      "DISABLE_ESLINT_PLUGIN": "true"
+    }
+  },
   "builds": [
     {
       "src": "frontend/package.json",

@@ -146,18 +146,8 @@ const Home = ({ connectedWallet, setConnectedWallet }) => {
 
     loadPlatformStats();
 
-    // Initialize Web3Auth in the background
-    const initWeb3Auth = async () => {
-      try {
-        const { initializeWeb3Auth } = await import('./services/web3authConfig.js');
-        await initializeWeb3Auth();
-        console.log('Web3Auth initialized for social logins');
-      } catch (error) {
-        console.log('Web3Auth initialization skipped:', error.message);
-      }
-    };
-
-    initWeb3Auth();
+    // Web3Auth initialization removed temporarily to avoid polyfill issues
+    // Will be re-enabled once polyfills are stable
 
     // Try to restore wallet connection
     const restoreConnection = async () => {

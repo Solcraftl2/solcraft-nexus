@@ -1,0 +1,65 @@
+{
+  "name": "Solcraft Nexus",
+  "short_name": "Solcraft",
+  "description": "Professional RWA tokenization platform for institutional investors",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/api/placeholder/192/192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/api/placeholder/512/512", 
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business", "investment"],
+  "screenshots": [
+    {
+      "src": "/api/placeholder/540/720",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dashboard Overview"
+    },
+    {
+      "src": "/api/placeholder/1024/768",
+      "sizes": "1024x768", 
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Portfolio Analytics"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Portfolio",
+      "short_name": "Portfolio",
+      "description": "View your investment portfolio",
+      "url": "/dashboard?tab=overview",
+      "icons": [{ "src": "/api/placeholder/96/96", "sizes": "96x96" }]
+    },
+    {
+      "name": "Marketplace", 
+      "short_name": "Marketplace",
+      "description": "Browse and trade tokenized assets",
+      "url": "/dashboard?tab=marketplace",
+      "icons": [{ "src": "/api/placeholder/96/96", "sizes": "96x96" }]
+    },
+    {
+      "name": "AI Insights",
+      "short_name": "AI",
+      "description": "Get AI-powered portfolio insights",
+      "url": "/dashboard?tab=ai-insights", 
+      "icons": [{ "src": "/api/placeholder/96/96", "sizes": "96x96" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

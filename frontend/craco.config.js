@@ -64,6 +64,8 @@ module.exports = {
         // Define globals for better compatibility
         new webpack.DefinePlugin({
           global: 'globalThis',
+          'process.env.NODE_ENV': JSON.stringify(env),
+          'typeof globalThis': JSON.stringify('object'),
         }),
       ];
 

@@ -36,6 +36,17 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
   const [loading, setLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState({});
   const [aiLoading, setAiLoading] = useState(false);
+  const [marketplaceAssets, setMarketplaceAssets] = useState([]);
+  const [userOrders, setUserOrders] = useState([]);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [orderForm, setOrderForm] = useState({
+    asset_id: '',
+    order_type: 'market',
+    side: 'buy',
+    quantity: 1,
+    price: null
+  });
 
   // Mock user portfolio data (in production, fetch from backend)
   useEffect(() => {

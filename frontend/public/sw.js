@@ -217,7 +217,7 @@ self.addEventListener('notificationclick', (event) => {
   if (event.action === 'view-dashboard') {
     // Open dashboard
     event.waitUntil(
-      clients.openWindow('/dashboard')
+      self.clients.openWindow('/dashboard')
     );
   } else if (event.action === 'dismiss') {
     // Just close notification
@@ -225,7 +225,7 @@ self.addEventListener('notificationclick', (event) => {
   } else {
     // Default action - open app
     event.waitUntil(
-      clients.openWindow('/')
+      self.clients.openWindow('/')
     );
   }
 });

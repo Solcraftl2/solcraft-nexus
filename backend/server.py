@@ -100,6 +100,16 @@ class PortfolioOptimizationRequest(BaseModel):
     optimization_goals: List[str]
     language: Optional[str] = "en"
 
+# Marketplace Models
+class CreateOrderRequest(BaseModel):
+    asset_id: str
+    order_type: str  # "market", "limit", "stop"
+    side: str        # "buy", "sell"
+    quantity: int
+    price: Optional[float] = None
+    user_id: Optional[str] = None
+    wallet_address: Optional[str] = None
+
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:

@@ -765,11 +765,11 @@ const Home = ({ connectedWallet, setConnectedWallet }) => {
               <button
                 onClick={() => connectWallet('Web3Auth')}
                 disabled={loading}
-                className="w-full bg-gray-100 text-gray-700 p-4 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 flex items-center justify-center disabled:opacity-50"
               >
                 <span className="mr-2">🔐</span>
                 Web3Auth (Social)
-                <span className="ml-2 text-xs">(Coming Soon)</span>
+                <span className="ml-2 text-xs">(Google, Twitter, GitHub, Discord)</span>
               </button>
             </div>
             <button

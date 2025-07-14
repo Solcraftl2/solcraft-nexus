@@ -13,6 +13,7 @@ import {
   BarElement,
 } from 'chart.js';
 import aiAnalysisService from './services/aiAnalysisService';
+import marketplaceService from './services/marketplaceService';
 
 // Register Chart.js components
 ChartJS.register(

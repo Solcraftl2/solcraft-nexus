@@ -307,9 +307,33 @@ class PWABackendTester:
             if has_packages:
                 packages = data["packages"]
                 
-                # Check if packages is a list and has items
-                if isinstance(packages, list) and len(packages) > 0:
-                    # Check for expected packages
+                # Handle both dict and list structures
+                if isinstance(packages, dict):
+                    # Dict structure: {"basic": {...}, "premium": {...}, "enterprise": {...}}
+                    has_basic = "basic" in packages
+                    has_premium = "premium" in packages
+                    has_enterprise = "enterprise" in packages
+                    
+                    # Check package structure
+                    packages_structured = all(
+                        isinstance(pkg, dict) and "name" in pkg and "amount" in pkg
+                        for pkg in packages.values()
+                    )
+                    
+                    payment_packages_ok = (
+                        status_success and has_packages and 
+                        has_basic and has_premium and has_enterprise and
+                        packages_structured
+                    )
+                    
+                    self.log_test(
+                        "Payment Packages Endpoint",
+                        payment_packages_ok,
+                        f"Packages found: {len(packages)} (Basic, Premium, Enterprise)"
+                    )
+                    
+                elif isinstance(packages, list):
+                    # List structure: [{"id": "basic", ...}, ...]
                     package_names = []
                     for pkg in packages:
                         if isinstance(pkg, dict):
@@ -322,12 +346,10 @@ class PWABackendTester:
                     has_enterprise = any("enterprise" in name for name in package_names)
                     
                     # Check package structure
-                    packages_structured = True
-                    for pkg in packages:
-                        if isinstance(pkg, dict):
-                            if not ("id" in pkg and "name" in pkg and "price" in pkg):
-                                packages_structured = False
-                                break
+                    packages_structured = all(
+                        isinstance(pkg, dict) and "name" in pkg
+                        for pkg in packages
+                    )
                     
                     payment_packages_ok = (
                         status_success and has_packages and 

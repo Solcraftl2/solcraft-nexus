@@ -667,8 +667,13 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Payment Integration System Testing Complete"
-  stuck_tasks: []
+    - "OpenAI API Key Configuration"
+    - "Asset Analysis Endpoint"
+    - "Market Prediction Endpoint"
+    - "Risk Assessment Endpoint"
+    - "Portfolio Optimization Endpoint"
+  stuck_tasks:
+    - "OpenAI API Key Configuration"
   test_all: false
   test_priority: "high_first"
 

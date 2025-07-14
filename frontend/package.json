@@ -4,6 +4,9 @@
   "private": true,
   "dependencies": {
     "@crossmarkio/sdk": "^0.4.0",
+    "@web3auth/base": "^9.7.0",
+    "@web3auth/modal": "^10.0.5",
+    "@web3auth/xrpl-provider": "^9.7.0",
     "axios": "^1.8.4",
     "chart.js": "^4.5.0",
     "cra-template": "1.2.0",

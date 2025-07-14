@@ -36,6 +36,15 @@ class AIAnalysisService:
             "equity_securities": "Equity Securities"
         }
 
+    def is_service_available(self) -> bool:
+        """Check if AI service is available (has valid API key)"""
+        return self.is_available
+
+    def _check_availability(self):
+        """Check if service is available, raise exception if not"""
+        if not self.is_available:
+            raise ValueError("AI Analysis service is not available - OPENAI_API_KEY not configured")
+
     def _create_llm_chat(self, session_id: str, system_message: str) -> LlmChat:
         """Create LLM chat instance with OpenAI GPT-4o-mini"""
         chat = LlmChat(

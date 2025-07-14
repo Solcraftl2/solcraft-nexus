@@ -386,7 +386,7 @@ async def get_tokenization_details(tokenization_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Analytics endpoints
-@api_router.post("/analytics/platform")
+@api_router.get("/analytics/platform")
 async def get_platform_analytics():
     """Get platform analytics and statistics"""
     try:

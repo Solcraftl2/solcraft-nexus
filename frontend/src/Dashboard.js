@@ -12,6 +12,7 @@ import {
   ArcElement,
   BarElement,
 } from 'chart.js';
+import aiAnalysisService from './services/aiAnalysisService';
 
 // Register Chart.js components
 ChartJS.register(

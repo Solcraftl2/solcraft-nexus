@@ -351,22 +351,28 @@ class PaymentService:
         
         supabase = get_supabase_client()
         
-        # Create crypto purchase record
-        crypto_purchase_data = {
-            "session_id": session_id,
-            "user_id": metadata.get("user_id"),
-            "wallet_address": metadata.get("wallet_address"),
-            "package_id": metadata.get("package_id"),
-            "package_name": metadata.get("package_name"),
-            "crypto_type": metadata.get("crypto_type"),
-            "crypto_name": metadata.get("crypto_name"),
-            "status": "processing",
-            "created_at": "now()"
-        }
-        
-        result = supabase.table("crypto_purchases").insert(crypto_purchase_data).execute()
-        
-        return result.data[0] if result.data else None
+        try:
+            # Create crypto purchase record
+            crypto_purchase_data = {
+                "session_id": session_id,
+                "user_id": metadata.get("user_id"),
+                "wallet_address": metadata.get("wallet_address"),
+                "package_id": metadata.get("package_id"),
+                "package_name": metadata.get("package_name"),
+                "crypto_type": metadata.get("crypto_type"),
+                "crypto_name": metadata.get("crypto_name"),
+                "status": "processing",
+                "created_at": "now()"
+            }
+            
+            result = supabase.table("crypto_purchases").insert(crypto_purchase_data).execute()
+            
+            return result.data[0] if result.data else None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Could not process crypto purchase payment (table may not exist): {str(e)}")
+            return None
 
     def get_tokenization_packages(self) -> Dict[str, Any]:
         """Get available tokenization packages"""

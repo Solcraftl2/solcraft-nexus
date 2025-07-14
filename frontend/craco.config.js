@@ -30,6 +30,10 @@ module.exports = {
         querystring: require.resolve("querystring-es3"),
         os: require.resolve("os-browserify/browser"),
         
+        // Additional polyfills for edge cases
+        "process/browser": require.resolve("process/browser"),
+        globalThis: false, // Use built-in globalThis
+        
         // Disable Node.js modules that aren't needed in browser
         http: false,
         https: false,

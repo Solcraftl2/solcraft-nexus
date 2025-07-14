@@ -2,7 +2,7 @@ fastapi==0.110.1
 uvicorn==0.25.0
 python-dotenv==0.21.1
 xrpl-py==4.3.0b0
-xumm-sdk-py==1.1.7
+xumm-sdk-py==1.0.4
 PyJWT==2.11.1
 supabase==2.11.3
 emergentintegrations

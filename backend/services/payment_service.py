@@ -300,9 +300,15 @@ class PaymentService:
         
         supabase = get_supabase_client()
         
-        result = supabase.table("payment_transactions").select("*").eq("session_id", session_id).execute()
-        
-        return result.data[0] if result.data else None
+        try:
+            result = supabase.table("payment_transactions").select("*").eq("session_id", session_id).execute()
+            
+            return result.data[0] if result.data else None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Could not get payment transaction (table may not exist): {str(e)}")
+            return None
 
     async def _process_successful_payment(self, session_id: str, metadata: Dict[str, Any]):
         """Process successful payment - tokenization or crypto purchase"""

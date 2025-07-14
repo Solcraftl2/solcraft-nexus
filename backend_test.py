@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Backend URL from environment
-BACKEND_URL = "https://d781ac4e-78f7-4fa2-a4b9-91ed9128a1d1.preview.emergentagent.com/api"
+BACKEND_URL = "https://a6405e2b-f74e-4218-95ed-72a50de34fbe.preview.emergentagent.com/api"
 
 # Test data - using real XRPL testnet addresses for Supabase testing
 TEST_WALLET_ADDRESS = "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY"  # Well-known XRPL address

@@ -290,6 +290,16 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
               >
                 📈 Analytics
               </button>
+              <button
+                onClick={() => setActiveTab('ai-insights')}
+                className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-colors ${
+                  activeTab === 'ai-insights'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                🤖 AI Insights
+              </button>
             </div>
 
             {/* Quick Actions */}

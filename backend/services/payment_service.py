@@ -325,20 +325,26 @@ class PaymentService:
         
         supabase = get_supabase_client()
         
-        # Create tokenization credit/permission for user
-        tokenization_data = {
-            "session_id": session_id,
-            "user_id": metadata.get("user_id"),
-            "wallet_address": metadata.get("wallet_address"),
-            "package_id": metadata.get("package_id"),
-            "package_name": metadata.get("package_name"),
-            "status": "active",
-            "created_at": "now()"
-        }
-        
-        result = supabase.table("tokenization_credits").insert(tokenization_data).execute()
-        
-        return result.data[0] if result.data else None
+        try:
+            # Create tokenization credit/permission for user
+            tokenization_data = {
+                "session_id": session_id,
+                "user_id": metadata.get("user_id"),
+                "wallet_address": metadata.get("wallet_address"),
+                "package_id": metadata.get("package_id"),
+                "package_name": metadata.get("package_name"),
+                "status": "active",
+                "created_at": "now()"
+            }
+            
+            result = supabase.table("tokenization_credits").insert(tokenization_data).execute()
+            
+            return result.data[0] if result.data else None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Could not process tokenization payment (table may not exist): {str(e)}")
+            return None
 
     async def _process_crypto_purchase_payment(self, session_id: str, metadata: Dict[str, Any]):
         """Process successful crypto purchase payment"""

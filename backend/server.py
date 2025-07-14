@@ -599,6 +599,147 @@ async def optimize_portfolio(request: PortfolioOptimizationRequest):
         logger.error(f"Error optimizing portfolio: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Marketplace Endpoints
+@api_router.get("/marketplace/assets")
+async def get_marketplace_assets(
+    category: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    limit: int = 50,
+    offset: int = 0
+):
+    """Get marketplace assets with optional filtering"""
+    try:
+        assets = await marketplace_service.list_marketplace_assets(
+            category=category,
+            min_price=min_price,
+            max_price=max_price,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset
+        )
+        
+        return {
+            "status": "success",
+            "data": assets
+        }
+    except Exception as e:
+        logger.error(f"Error fetching marketplace assets: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/assets/{asset_id}")
+async def get_asset_details(asset_id: str):
+    """Get detailed information about a specific asset"""
+    try:
+        asset_details = await marketplace_service.get_asset_details(asset_id)
+        
+        return {
+            "status": "success",
+            "data": asset_details
+        }
+    except Exception as e:
+        logger.error(f"Error fetching asset details: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/categories")
+async def get_marketplace_categories():
+    """Get available marketplace categories"""
+    try:
+        categories = marketplace_service.get_marketplace_categories()
+        order_types = marketplace_service.get_order_types()
+        
+        return {
+            "status": "success",
+            "categories": categories,
+            "order_types": order_types
+        }
+    except Exception as e:
+        logger.error(f"Error fetching marketplace categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/marketplace/orders")
+async def create_order(request: CreateOrderRequest):
+    """Create a new trading order"""
+    try:
+        order_result = await marketplace_service.create_order(
+            asset_id=request.asset_id,
+            user_id=request.user_id or "anonymous",
+            wallet_address=request.wallet_address or "",
+            order_type=request.order_type,
+            side=request.side,
+            quantity=request.quantity,
+            price=request.price
+        )
+        
+        return {
+            "status": "success",
+            "data": order_result
+        }
+    except Exception as e:
+        logger.error(f"Error creating order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/orders/{user_id}")
+async def get_user_orders(
+    user_id: str,
+    status: Optional[str] = None,
+    limit: int = 50
+):
+    """Get user's trading orders"""
+    try:
+        orders = await marketplace_service.get_user_orders(
+            user_id=user_id,
+            status=status,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "data": orders
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user orders: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/marketplace/orders/{order_id}")
+async def cancel_order(order_id: str, user_id: str):
+    """Cancel a pending order"""
+    try:
+        result = await marketplace_service.cancel_order(order_id, user_id)
+        
+        return {
+            "status": "success",
+            "data": result
+        }
+    except Exception as e:
+        logger.error(f"Error cancelling order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/trading-history")
+async def get_trading_history(
+    user_id: Optional[str] = None,
+    asset_id: Optional[str] = None,
+    limit: int = 100
+):
+    """Get trading history"""
+    try:
+        history = await marketplace_service.get_trading_history(
+            user_id=user_id,
+            asset_id=asset_id,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "data": history
+        }
+    except Exception as e:
+        logger.error(f"Error fetching trading history: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 

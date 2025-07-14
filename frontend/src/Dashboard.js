@@ -186,6 +186,72 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
     }
   };
 
+  // Open order modal
+  const openOrderModal = (asset, side = 'buy') => {
+    setSelectedAsset(asset);
+    setOrderForm({
+      asset_id: asset.id,
+      order_type: 'market',
+      side: side,
+      quantity: 1,
+      price: side === 'buy' ? asset.token_price : null,
+      user_id: connectedWallet?.address || 'demo_user',
+      wallet_address: connectedWallet?.address || ''
+    });
+    setOrderModalOpen(true);
+  };
+
+  // Submit order
+  const submitOrder = async () => {
+    try {
+      setLoading(true);
+      
+      const validation = marketplaceService.validateOrder(orderForm);
+      if (!validation.isValid) {
+        alert('Order validation failed:\n' + validation.errors.join('\n'));
+        return;
+      }
+
+      const result = await marketplaceService.createOrder(orderForm);
+      
+      if (result.success) {
+        alert(`✅ Order created successfully!\nOrder ID: ${result.order_id}`);
+        setOrderModalOpen(false);
+        
+        // Reload user orders
+        const updatedOrders = await marketplaceService.getUserOrders(connectedWallet?.address || 'demo_user');
+        setUserOrders(updatedOrders.orders || []);
+      }
+    } catch (error) {
+      console.error('Error submitting order:', error);
+      alert(`❌ Failed to create order: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel order
+  const cancelOrder = async (orderId) => {
+    try {
+      setLoading(true);
+      
+      const result = await marketplaceService.cancelOrder(orderId, connectedWallet?.address || 'demo_user');
+      
+      if (result.success) {
+        alert('✅ Order cancelled successfully!');
+        
+        // Reload user orders
+        const updatedOrders = await marketplaceService.getUserOrders(connectedWallet?.address || 'demo_user');
+        setUserOrders(updatedOrders.orders || []);
+      }
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      alert(`❌ Failed to cancel order: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Chart configurations
   const portfolioChartData = {
     labels: portfolioData?.assets?.map(asset => asset.name) || [],

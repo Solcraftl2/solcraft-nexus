@@ -1010,6 +1010,97 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
           )}
         </div>
       </div>
+
+      {/* Order Modal */}
+      {orderModalOpen && selectedAsset && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-2xl max-w-md w-full mx-4 border border-gray-200 shadow-2xl">
+            <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+              {orderForm.side === 'buy' ? 'Buy' : 'Sell'} {selectedAsset.name}
+            </h3>
+            
+            <div className="space-y-4">
+              {/* Order Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Order Type</label>
+                <select 
+                  value={orderForm.order_type}
+                  onChange={(e) => setOrderForm({...orderForm, order_type: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                >
+                  <option value="market">Market Order</option>
+                  <option value="limit">Limit Order</option>
+                </select>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={orderForm.quantity}
+                  onChange={(e) => setOrderForm({...orderForm, quantity: parseInt(e.target.value) || 1})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+
+              {/* Price (for limit orders) */}
+              {orderForm.order_type === 'limit' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Price per Token</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={orderForm.price || ''}
+                    onChange={(e) => setOrderForm({...orderForm, price: parseFloat(e.target.value) || null})}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  />
+                </div>
+              )}
+
+              {/* Order Summary */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-2">Order Summary</h4>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Quantity:</span>
+                    <span>{orderForm.quantity} tokens</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Price:</span>
+                    <span>${orderForm.price || selectedAsset.token_price} per token</span>
+                  </div>
+                  <div className="flex justify-between font-semibold">
+                    <span>Total:</span>
+                    <span>${((orderForm.price || selectedAsset.token_price) * orderForm.quantity).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-4 mt-6">
+              <button
+                onClick={() => setOrderModalOpen(false)}
+                className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitOrder}
+                disabled={loading}
+                className={`flex-1 py-3 rounded-lg font-semibold transition-colors text-white ${
+                  orderForm.side === 'buy' 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-red-600 hover:bg-red-700'
+                } disabled:opacity-50`}
+              >
+                {loading ? 'Processing...' : `${orderForm.side === 'buy' ? 'Buy' : 'Sell'} Tokens`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -272,22 +272,28 @@ class PaymentService:
         
         supabase = get_supabase_client()
         
-        # Check if already processed to prevent duplicate processing
-        existing = supabase.table("payment_transactions").select("*").eq("session_id", session_id).execute()
-        
-        if existing.data and existing.data[0]["payment_status"] == "paid":
-            # Already processed, don't update again
-            return existing.data[0]
-        
-        update_data = {
-            "status": status,
-            "payment_status": payment_status,
-            "updated_at": "now()"
-        }
-        
-        result = supabase.table("payment_transactions").update(update_data).eq("session_id", session_id).execute()
-        
-        return result.data[0] if result.data else None
+        try:
+            # Check if already processed to prevent duplicate processing
+            existing = supabase.table("payment_transactions").select("*").eq("session_id", session_id).execute()
+            
+            if existing.data and existing.data[0]["payment_status"] == "paid":
+                # Already processed, don't update again
+                return existing.data[0]
+            
+            update_data = {
+                "status": status,
+                "payment_status": payment_status,
+                "updated_at": "now()"
+            }
+            
+            result = supabase.table("payment_transactions").update(update_data).eq("session_id", session_id).execute()
+            
+            return result.data[0] if result.data else None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Could not update payment status (table may not exist): {str(e)}")
+            return None
 
     async def _get_payment_transaction(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get payment transaction from database"""

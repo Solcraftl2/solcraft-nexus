@@ -57,6 +57,11 @@ class SupabaseService:
                 await self.supabase.table("token_transactions").select("id").limit(1).execute()
                 await self.supabase.table("platform_stats").select("id").limit(1).execute()
                 
+                # Test payment-related tables
+                await self.supabase.table("payment_transactions").select("session_id").limit(1).execute()
+                await self.supabase.table("tokenization_credits").select("id").limit(1).execute()
+                await self.supabase.table("crypto_purchases").select("id").limit(1).execute()
+                
                 logger.info("All required tables exist and are accessible")
                 return True
                 

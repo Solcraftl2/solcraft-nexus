@@ -149,6 +149,8 @@ class AIAnalysisService:
     ) -> Dict[str, Any]:
         """Assess portfolio risk using AI analysis"""
         
+        self._check_availability()
+        
         session_id = f"risk_assessment_{uuid.uuid4().hex[:8]}"
         
         # Create system message for risk assessment

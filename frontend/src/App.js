@@ -811,6 +811,7 @@ function App() {
           />
         </Routes>
       </BrowserRouter>
+      <PWAInstallPrompt />
     </div>
   );
 }

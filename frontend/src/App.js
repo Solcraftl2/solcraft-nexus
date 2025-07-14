@@ -197,16 +197,30 @@ const Home = ({ connectedWallet, setConnectedWallet }) => {
   };
 
   const [displayStats, setDisplayStats] = useState({});
+  const [animatedStats, setAnimatedStats] = useState({});
   
   // Update stats periodically for live feel
   useEffect(() => {
     if (platformStats) {
       const updateStats = () => {
-        setDisplayStats(getDisplayStats());
+        const newStats = getDisplayStats();
+        setDisplayStats(newStats);
+        
+        // Add some random variation to make it feel more live
+        const variationStats = {
+          tvl: formatNumber(platformStats.total_value_locked + Math.floor(Math.random() * 100000)),
+          transactions: formatCount(platformStats.total_transactions + Math.floor(Math.random() * 50)),
+          users: formatCount(platformStats.total_users + Math.floor(Math.random() * 20)),
+          assets: formatCount(platformStats.total_tokenizations + Math.floor(Math.random() * 5)),
+          tracked: formatCount(platformStats.assets_tracked + Math.floor(Math.random() * 10)),
+          projects: formatCount(platformStats.active_projects + Math.floor(Math.random() * 3))
+        };
+        
+        setAnimatedStats(variationStats);
       };
       
       updateStats();
-      const interval = setInterval(updateStats, 5000); // Update every 5 seconds
+      const interval = setInterval(updateStats, 3000); // Update every 3 seconds
       
       return () => clearInterval(interval);
     }
@@ -214,7 +228,7 @@ const Home = ({ connectedWallet, setConnectedWallet }) => {
 
   const statKeys = Object.keys(displayStats);
 
-  // Animate stats
+  // Animate stats with highlight cycling
   useEffect(() => {
     if (statKeys.length > 0) {
       const interval = setInterval(() => {

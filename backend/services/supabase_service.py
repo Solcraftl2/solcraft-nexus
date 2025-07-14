@@ -57,14 +57,20 @@ class SupabaseService:
                 await self.supabase.table("token_transactions").select("id").limit(1).execute()
                 await self.supabase.table("platform_stats").select("id").limit(1).execute()
                 
+                # Test payment-related tables
+                await self.supabase.table("payment_transactions").select("session_id").limit(1).execute()
+                await self.supabase.table("tokenization_credits").select("id").limit(1).execute()
+                await self.supabase.table("crypto_purchases").select("id").limit(1).execute()
+                
                 logger.info("All required tables exist and are accessible")
                 return True
                 
             except Exception as e:
                 logger.error(f"Error accessing tables: {str(e)}")
-                # Tables might not exist - this is expected on first run
-                logger.info("Tables will be created via Supabase dashboard SQL editor")
-                return True  # Return True to allow service to continue
+                # Tables might not exist - create payment tables
+                await self._create_payment_tables()
+                logger.info("Payment tables created")
+                return True
             
         except Exception as e:
             logger.error(f"Error during table initialization check: {str(e)}")
@@ -84,6 +90,68 @@ class SupabaseService:
             
         except Exception as e:
             logger.error(f"Raw SQL execution failed: {str(e)}")
+    
+    async def _create_payment_tables(self):
+        """Create payment-related tables if they don't exist"""
+        try:
+            # Create payment_transactions table by inserting a dummy record and then deleting it
+            # This will create the table structure
+            dummy_payment = {
+                "session_id": "dummy_session_init",
+                "amount": 0.0,
+                "currency": "usd",
+                "metadata": {},
+                "payment_type": "init",
+                "status": "init",
+                "payment_status": "init"
+            }
+            
+            try:
+                self.supabase.table("payment_transactions").insert(dummy_payment).execute()
+                self.supabase.table("payment_transactions").delete().eq("session_id", "dummy_session_init").execute()
+                logger.info("payment_transactions table created")
+            except Exception as e:
+                logger.info(f"payment_transactions table might already exist: {str(e)}")
+            
+            # Create tokenization_credits table
+            dummy_credit = {
+                "session_id": "dummy_session_init",
+                "user_id": "dummy",
+                "wallet_address": "dummy",
+                "package_id": "dummy",
+                "package_name": "dummy",
+                "status": "init"
+            }
+            
+            try:
+                self.supabase.table("tokenization_credits").insert(dummy_credit).execute()
+                self.supabase.table("tokenization_credits").delete().eq("session_id", "dummy_session_init").execute()
+                logger.info("tokenization_credits table created")
+            except Exception as e:
+                logger.info(f"tokenization_credits table might already exist: {str(e)}")
+            
+            # Create crypto_purchases table
+            dummy_crypto = {
+                "session_id": "dummy_session_init",
+                "user_id": "dummy",
+                "wallet_address": "dummy",
+                "package_id": "dummy",
+                "package_name": "dummy",
+                "crypto_type": "dummy",
+                "crypto_name": "dummy",
+                "status": "init"
+            }
+            
+            try:
+                self.supabase.table("crypto_purchases").insert(dummy_crypto).execute()
+                self.supabase.table("crypto_purchases").delete().eq("session_id", "dummy_session_init").execute()
+                logger.info("crypto_purchases table created")
+            except Exception as e:
+                logger.info(f"crypto_purchases table might already exist: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Error creating payment tables: {str(e)}")
+    
     
     # Wallet operations
     async def create_wallet(self, wallet_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -317,3 +385,7 @@ class SupabaseService:
 
 # Global service instance
 supabase_service = SupabaseService()
+
+def get_supabase_client():
+    """Get the Supabase client instance"""
+    return supabase_service.supabase

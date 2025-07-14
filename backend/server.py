@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -16,6 +16,9 @@ from services.xrpl_service import xrpl_service
 from services.xumm_service import xumm_service
 from services.tokenization_service import tokenization_service
 from services.supabase_service import supabase_service
+from services.payment_service import payment_service
+from services.ai_analysis_service import ai_analysis_service
+from services.marketplace_service import marketplace_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -64,6 +67,48 @@ class TradingOfferRequest(BaseModel):
     account: str
     taker_gets: Dict[str, Any]
     taker_pays: Dict[str, Any]
+
+# Payment Models
+class TokenizationPaymentRequest(BaseModel):
+    package_id: str
+    user_id: Optional[str] = None
+    wallet_address: Optional[str] = None
+
+class CryptoPurchaseRequest(BaseModel):
+    package_id: str
+    crypto_type: str
+    user_id: Optional[str] = None
+    wallet_address: Optional[str] = None
+
+# AI Analysis Models
+class AssetAnalysisRequest(BaseModel):
+    asset_data: Dict[str, Any]
+    analysis_type: Optional[str] = "comprehensive"
+    language: Optional[str] = "en"
+
+class MarketPredictionRequest(BaseModel):
+    asset_class: str
+    time_horizon: Optional[str] = "3_months"
+    language: Optional[str] = "en"
+
+class RiskAssessmentRequest(BaseModel):
+    portfolio_data: Dict[str, Any]
+    language: Optional[str] = "en"
+
+class PortfolioOptimizationRequest(BaseModel):
+    portfolio_data: Dict[str, Any]
+    optimization_goals: List[str]
+    language: Optional[str] = "en"
+
+# Marketplace Models
+class CreateOrderRequest(BaseModel):
+    asset_id: str
+    order_type: str  # "market", "limit", "stop"
+    side: str        # "buy", "sell"
+    quantity: int
+    price: Optional[float] = None
+    user_id: Optional[str] = None
+    wallet_address: Optional[str] = None
 
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -341,33 +386,358 @@ async def get_tokenization_details(tokenization_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Analytics endpoints
-@api_router.get("/analytics/platform")
+@api_router.post("/analytics/platform")
 async def get_platform_analytics():
     """Get platform analytics and statistics"""
     try:
-        stats_result = await supabase_service.get_platform_stats()
-        if not stats_result["success"]:
-            raise HTTPException(status_code=500, detail=stats_result["error"])
-        
-        stats = stats_result["data"]
+        # Use tokenization service to get platform statistics
+        stats = await tokenization_service.get_platform_statistics()
         
         return {
-            "success": True,
-            "platform_stats": {
-                "total_value_locked": stats.get("total_value_locked", 245200000),
-                "total_tokenizations": stats.get("total_tokenizations", 0),
-                "active_tokenizations": stats.get("active_tokenizations", 0),
-                "total_transactions": stats.get("total_transactions", 0),
-                "successful_transactions": stats.get("successful_transactions", 0),
-                "total_users": stats.get("total_users", 0),
-                "active_users": stats.get("active_users", 0),
-                "success_rate": (stats.get("successful_transactions", 0) / max(stats.get("total_transactions", 1), 1)) * 100
-            },
-            "last_updated": datetime.utcnow().isoformat()
+            "status": "success",
+            "platform_stats": stats
         }
-    except HTTPException:
-        raise
     except Exception as e:
+        logger.error(f"Error fetching platform analytics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch platform analytics: {str(e)}")
+
+# Payment Endpoints
+@api_router.get("/payments/packages/tokenization")
+async def get_tokenization_packages():
+    """Get available tokenization packages"""
+    try:
+        packages = payment_service.get_tokenization_packages()
+        return {
+            "status": "success",
+            "packages": packages
+        }
+    except Exception as e:
+        logger.error(f"Error fetching tokenization packages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/payments/packages/crypto")
+async def get_crypto_packages():
+    """Get available crypto purchase packages"""
+    try:
+        packages = payment_service.get_crypto_packages()
+        supported_crypto = payment_service.get_supported_crypto()
+        return {
+            "status": "success",
+            "packages": packages,
+            "supported_crypto": supported_crypto
+        }
+    except Exception as e:
+        logger.error(f"Error fetching crypto packages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/tokenization/checkout")
+async def create_tokenization_payment(request: TokenizationPaymentRequest, http_request: Request):
+    """Create Stripe checkout session for tokenization payment"""
+    try:
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        session = await payment_service.create_tokenization_payment(
+            package_id=request.package_id,
+            host_url=host_url,
+            user_id=request.user_id,
+            wallet_address=request.wallet_address
+        )
+        
+        return {
+            "status": "success",
+            "checkout_url": session.url,
+            "session_id": session.session_id
+        }
+    except Exception as e:
+        logger.error(f"Error creating tokenization payment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/crypto/checkout")
+async def create_crypto_purchase_payment(request: CryptoPurchaseRequest, http_request: Request):
+    """Create Stripe checkout session for crypto purchase"""
+    try:
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        session = await payment_service.create_crypto_purchase_payment(
+            package_id=request.package_id,
+            crypto_type=request.crypto_type,
+            host_url=host_url,
+            user_id=request.user_id,
+            wallet_address=request.wallet_address
+        )
+        
+        return {
+            "status": "success",
+            "checkout_url": session.url,
+            "session_id": session.session_id
+        }
+    except Exception as e:
+        logger.error(f"Error creating crypto purchase payment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/payments/status/{session_id}")
+async def get_payment_status(session_id: str, http_request: Request):
+    """Get payment status for a checkout session"""
+    try:
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        status = await payment_service.get_payment_status(session_id, host_url)
+        
+        return {
+            "status": "success",
+            "payment_info": status
+        }
+    except Exception as e:
+        logger.error(f"Error fetching payment status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(http_request: Request):
+    """Handle Stripe webhook events"""
+    try:
+        webhook_body = await http_request.body()
+        stripe_signature = http_request.headers.get("Stripe-Signature", "")
+        host_url = str(http_request.base_url).rstrip('/')
+        
+        webhook_result = await payment_service.handle_webhook(
+            webhook_body, stripe_signature, host_url
+        )
+        
+        return {
+            "status": "success",
+            "webhook_result": webhook_result
+        }
+    except Exception as e:
+        logger.error(f"Error processing Stripe webhook: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# AI Analysis Endpoints
+@api_router.get("/ai/analysis-types")
+async def get_ai_analysis_types():
+    """Get available AI analysis types"""
+    try:
+        analysis_types = ai_analysis_service.get_analysis_types()
+        asset_classes = ai_analysis_service.get_supported_asset_classes()
+        
+        return {
+            "status": "success",
+            "analysis_types": analysis_types,
+            "supported_asset_classes": asset_classes
+        }
+    except Exception as e:
+        logger.error(f"Error fetching AI analysis types: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/analyze-asset")
+async def analyze_asset(request: AssetAnalysisRequest):
+    """Analyze a specific asset using AI"""
+    try:
+        analysis = await ai_analysis_service.analyze_asset(
+            asset_data=request.asset_data,
+            analysis_type=request.analysis_type,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "analysis": analysis
+        }
+    except Exception as e:
+        logger.error(f"Error analyzing asset: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/market-prediction")
+async def predict_market_trends(request: MarketPredictionRequest):
+    """Generate market predictions for specific asset class"""
+    try:
+        prediction = await ai_analysis_service.predict_market_trends(
+            asset_class=request.asset_class,
+            time_horizon=request.time_horizon,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "prediction": prediction
+        }
+    except Exception as e:
+        logger.error(f"Error predicting market trends: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/risk-assessment")
+async def assess_portfolio_risk(request: RiskAssessmentRequest):
+    """Assess portfolio risk using AI analysis"""
+    try:
+        assessment = await ai_analysis_service.assess_portfolio_risk(
+            portfolio_data=request.portfolio_data,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "assessment": assessment
+        }
+    except Exception as e:
+        logger.error(f"Error assessing portfolio risk: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/ai/optimize-portfolio")
+async def optimize_portfolio(request: PortfolioOptimizationRequest):
+    """Generate portfolio optimization recommendations"""
+    try:
+        optimization = await ai_analysis_service.optimize_portfolio(
+            portfolio_data=request.portfolio_data,
+            optimization_goals=request.optimization_goals,
+            language=request.language
+        )
+        
+        return {
+            "status": "success",
+            "optimization": optimization
+        }
+    except Exception as e:
+        logger.error(f"Error optimizing portfolio: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Marketplace Endpoints
+@api_router.get("/marketplace/assets")
+async def get_marketplace_assets(
+    category: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    limit: int = 50,
+    offset: int = 0
+):
+    """Get marketplace assets with optional filtering"""
+    try:
+        assets = await marketplace_service.list_marketplace_assets(
+            category=category,
+            min_price=min_price,
+            max_price=max_price,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset
+        )
+        
+        return {
+            "status": "success",
+            "data": assets
+        }
+    except Exception as e:
+        logger.error(f"Error fetching marketplace assets: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/assets/{asset_id}")
+async def get_asset_details(asset_id: str):
+    """Get detailed information about a specific asset"""
+    try:
+        asset_details = await marketplace_service.get_asset_details(asset_id)
+        
+        return {
+            "status": "success",
+            "data": asset_details
+        }
+    except Exception as e:
+        logger.error(f"Error fetching asset details: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/categories")
+async def get_marketplace_categories():
+    """Get available marketplace categories"""
+    try:
+        categories = marketplace_service.get_marketplace_categories()
+        order_types = marketplace_service.get_order_types()
+        
+        return {
+            "status": "success",
+            "categories": categories,
+            "order_types": order_types
+        }
+    except Exception as e:
+        logger.error(f"Error fetching marketplace categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/marketplace/orders")
+async def create_order(request: CreateOrderRequest):
+    """Create a new trading order"""
+    try:
+        order_result = await marketplace_service.create_order(
+            asset_id=request.asset_id,
+            user_id=request.user_id or "anonymous",
+            wallet_address=request.wallet_address or "",
+            order_type=request.order_type,
+            side=request.side,
+            quantity=request.quantity,
+            price=request.price
+        )
+        
+        return {
+            "status": "success",
+            "data": order_result
+        }
+    except Exception as e:
+        logger.error(f"Error creating order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/orders/{user_id}")
+async def get_user_orders(
+    user_id: str,
+    status: Optional[str] = None,
+    limit: int = 50
+):
+    """Get user's trading orders"""
+    try:
+        orders = await marketplace_service.get_user_orders(
+            user_id=user_id,
+            status=status,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "data": orders
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user orders: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/marketplace/orders/{order_id}")
+async def cancel_order(order_id: str, user_id: str):
+    """Cancel a pending order"""
+    try:
+        result = await marketplace_service.cancel_order(order_id, user_id)
+        
+        return {
+            "status": "success",
+            "data": result
+        }
+    except Exception as e:
+        logger.error(f"Error cancelling order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/marketplace/trading-history")
+async def get_trading_history(
+    user_id: Optional[str] = None,
+    asset_id: Optional[str] = None,
+    limit: int = 100
+):
+    """Get trading history"""
+    try:
+        history = await marketplace_service.get_trading_history(
+            user_id=user_id,
+            asset_id=asset_id,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "data": history
+        }
+    except Exception as e:
+        logger.error(f"Error fetching trading history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Include the router in the main app

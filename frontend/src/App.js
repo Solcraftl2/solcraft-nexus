@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Dashboard from "./Dashboard";
 import walletService from "./services/walletService";
-import tokenizationService from "./services/tokenizationService";
 
 // Professional platform stats from backend with environment detection
 const getBackendUrl = () => {
@@ -114,10 +114,10 @@ const howItWorks = [
   }
 ];
 
-const Home = () => {
+// Estraggo Home come componente separato per il nuovo routing
+const Home = ({ connectedWallet, setConnectedWallet }) => {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [currentStat, setCurrentStat] = useState(0);
-  const [connectedWallet, setConnectedWallet] = useState(null);
   const [platformStats, setPlatformStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -695,6 +695,7 @@ const Home = () => {
           </div>
         </div>
       </footer>
+      </div>
 
       {/* Professional Wallet Connection Modal */}
       {walletModalOpen && (
@@ -751,11 +752,62 @@ const Home = () => {
 };
 
 function App() {
+  const [connectedWallet, setConnectedWallet] = useState(null);
+
+  useEffect(() => {
+    // Try to restore wallet connection
+    const restoreConnection = async () => {
+      try {
+        if (!connectedWallet) {  // Only restore if not already connected
+          const result = await walletService.restoreConnection();
+          if (result.success) {
+            setConnectedWallet(result);
+          }
+        }
+      } catch (error) {
+        console.log('No previous connection to restore');
+      }
+    };
+
+    restoreConnection();
+  }, []);
+
+  const handleDisconnect = async () => {
+    try {
+      await walletService.disconnect();
+      setConnectedWallet(null);
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Disconnect error:', error);
+    }
+  };
+
   return (
     <div className="App">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Home connectedWallet={connectedWallet} setConnectedWallet={setConnectedWallet} />} />
+          <Route 
+            path="/dashboard" 
+            element={
+              connectedWallet ? (
+                <Dashboard connectedWallet={connectedWallet} onDisconnect={handleDisconnect} />
+              ) : (
+                <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                  <div className="text-center">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Connect Your Wallet</h2>
+                    <p className="text-gray-600 mb-6">Please connect your wallet to access the dashboard</p>
+                    <button
+                      onClick={() => window.location.href = '/'}
+                      className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Go Back to Home
+                    </button>
+                  </div>
+                </div>
+              )
+            } 
+          />
         </Routes>
       </BrowserRouter>
     </div>

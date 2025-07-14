@@ -1,7 +1,14 @@
 {
-  "short_name": "SolCraft Nexus",
   "name": "SolCraft Nexus - Tokenizzazione Asset XRPL",
-  "description": "Piattaforma professionale per la tokenizzazione di asset su blockchain XRPL",
+  "short_name": "SolCraft Nexus",
+  "description": "Piattaforma professionale per la tokenizzazione di asset su blockchain XRPL per investitori istituzionali",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f23",
+  "theme_color": "#667eea",
+  "orientation": "portrait-primary",
+  "lang": "it",
+  "scope": "/",
   "icons": [
     {
       "src": "favicon.ico",
@@ -9,23 +16,58 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "/api/placeholder/192/192",
+      "sizes": "192x192",
       "type": "image/png",
-      "sizes": "192x192"
+      "purpose": "any maskable"
     },
     {
-      "src": "logo512.png",
+      "src": "/api/placeholder/512/512", 
+      "sizes": "512x512",
       "type": "image/png",
-      "sizes": "512x512"
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#667eea",
-  "background_color": "#0f0f23",
-  "categories": ["finance", "blockchain", "defi"],
-  "lang": "it",
-  "scope": "/",
-  "orientation": "portrait-primary"
+  "categories": ["finance", "blockchain", "defi", "business", "investment"],
+  "screenshots": [
+    {
+      "src": "/api/placeholder/540/720",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dashboard Overview - Tokenizzazione Asset XRPL"
+    },
+    {
+      "src": "/api/placeholder/1024/768",
+      "sizes": "1024x768", 
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Portfolio Analytics - Gestione Asset Tokenizzati"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Portfolio",
+      "short_name": "Portfolio",
+      "description": "Visualizza il tuo portfolio di asset tokenizzati",
+      "url": "/dashboard?tab=overview",
+      "icons": [{ "src": "/api/placeholder/96/96", "sizes": "96x96" }]
+    },
+    {
+      "name": "Marketplace", 
+      "short_name": "Marketplace",
+      "description": "Esplora e scambia asset tokenizzati su XRPL",
+      "url": "/dashboard?tab=marketplace",
+      "icons": [{ "src": "/api/placeholder/96/96", "sizes": "96x96" }]
+    },
+    {
+      "name": "Tokenizzazione",
+      "short_name": "Tokenizza",
+      "description": "Tokenizza i tuoi asset su blockchain XRPL",
+      "url": "/dashboard?tab=tokenization", 
+      "icons": [{ "src": "/api/placeholder/96/96", "sizes": "96x96" }]
+    }
+  ],
+  "prefer_related_applications": false
 }
 

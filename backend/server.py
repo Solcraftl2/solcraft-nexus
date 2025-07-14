@@ -66,6 +66,18 @@ class TradingOfferRequest(BaseModel):
     taker_gets: Dict[str, Any]
     taker_pays: Dict[str, Any]
 
+# Payment Models
+class TokenizationPaymentRequest(BaseModel):
+    package_id: str
+    user_id: Optional[str] = None
+    wallet_address: Optional[str] = None
+
+class CryptoPurchaseRequest(BaseModel):
+    package_id: str
+    crypto_type: str
+    user_id: Optional[str] = None
+    wallet_address: Optional[str] = None
+
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:

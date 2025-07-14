@@ -670,6 +670,168 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
               </div>
             </div>
           )}
+
+          {/* AI Insights Tab */}
+          {activeTab === 'ai-insights' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-900">🤖 AI-Powered Insights</h2>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => loadAIInsights('risk', { 
+                      total_value: portfolioData?.totalValue,
+                      assets: userAssets,
+                      allocation: portfolioData?.assets 
+                    })}
+                    disabled={aiLoading}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
+                  >
+                    {aiLoading ? 'Analyzing...' : 'Risk Analysis'}
+                  </button>
+                  <button
+                    onClick={() => loadAIInsights('optimization', {
+                      total_value: portfolioData?.totalValue,
+                      assets: userAssets,
+                      allocation: portfolioData?.assets,
+                      risk_profile: 'Moderate'
+                    })}
+                    disabled={aiLoading}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
+                  >
+                    {aiLoading ? 'Optimizing...' : 'Portfolio Optimization'}
+                  </button>
+                  <button
+                    onClick={() => loadAIInsights('market', { asset_class: 'real_estate' })}
+                    disabled={aiLoading}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50"
+                  >
+                    {aiLoading ? 'Predicting...' : 'Market Prediction'}
+                  </button>
+                </div>
+              </div>
+
+              {/* AI Insights Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Risk Assessment Insights */}
+                {aiInsights.risk && (
+                  <div className="bg-white p-6 rounded-xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      ⚠️ AI Risk Assessment
+                      <span className="ml-2 text-sm text-gray-500">
+                        {new Date(aiInsights.risk.timestamp).toLocaleDateString()}
+                      </span>
+                    </h3>
+                    <div className="prose prose-sm max-w-none">
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <p className="text-sm text-gray-700 whitespace-pre-line">
+                          {aiInsights.risk.ai_insights}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Portfolio Optimization Insights */}
+                {aiInsights.optimization && (
+                  <div className="bg-white p-6 rounded-xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      🎯 AI Portfolio Optimization
+                      <span className="ml-2 text-sm text-gray-500">
+                        {new Date(aiInsights.optimization.timestamp).toLocaleDateString()}
+                      </span>
+                    </h3>
+                    <div className="prose prose-sm max-w-none">
+                      <div className="bg-green-50 p-4 rounded-lg">
+                        <p className="text-sm text-gray-700 whitespace-pre-line">
+                          {aiInsights.optimization.ai_insights}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Market Prediction Insights */}
+                {aiInsights.market && (
+                  <div className="bg-white p-6 rounded-xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      📈 AI Market Prediction
+                      <span className="ml-2 text-sm text-gray-500">
+                        {new Date(aiInsights.market.timestamp).toLocaleDateString()}
+                      </span>
+                    </h3>
+                    <div className="prose prose-sm max-w-none">
+                      <div className="bg-purple-50 p-4 rounded-lg">
+                        <p className="text-sm text-gray-700 whitespace-pre-line">
+                          {aiInsights.market.ai_insights}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Asset-specific AI Insights */}
+                {Object.entries(aiInsights).filter(([key]) => key.startsWith('asset_')).map(([key, insight]) => (
+                  <div key={key} className="bg-white p-6 rounded-xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      🏢 Asset AI Analysis
+                      <span className="ml-2 text-sm text-gray-500">
+                        {insight.asset_name}
+                      </span>
+                    </h3>
+                    <div className="prose prose-sm max-w-none">
+                      <div className="bg-orange-50 p-4 rounded-lg">
+                        <p className="text-sm text-gray-700 whitespace-pre-line">
+                          {insight.ai_insights}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* No insights yet */}
+              {Object.keys(aiInsights).length === 0 && !aiLoading && (
+                <div className="bg-white p-12 rounded-xl border border-gray-200 text-center">
+                  <div className="text-6xl mb-4">🤖</div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">AI-Powered Insights</h3>
+                  <p className="text-gray-600 mb-6">
+                    Get AI-powered analysis of your portfolio, market predictions, and optimization recommendations.
+                  </p>
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={() => loadAIInsights('risk', { 
+                        total_value: portfolioData?.totalValue,
+                        assets: userAssets 
+                      })}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      Start Risk Analysis
+                    </button>
+                    <button
+                      onClick={() => loadAIInsights('optimization', {
+                        total_value: portfolioData?.totalValue,
+                        assets: userAssets
+                      })}
+                      className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                    >
+                      Optimize Portfolio
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {aiLoading && (
+                <div className="bg-white p-12 rounded-xl border border-gray-200 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">AI Analysis in Progress</h3>
+                  <p className="text-gray-600">
+                    Our AI is analyzing your data to provide intelligent insights...
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

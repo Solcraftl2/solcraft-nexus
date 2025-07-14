@@ -63,6 +63,8 @@ class AIAnalysisService:
     ) -> Dict[str, Any]:
         """Analyze a specific asset using AI"""
         
+        self._check_availability()
+        
         session_id = f"asset_analysis_{uuid.uuid4().hex[:8]}"
         
         # Create system message for asset analysis

@@ -629,7 +629,7 @@ class PaymentIntegrationTester:
                 self.log_test("Payment Database Integration", False, "Database integration test failed")
         
         # Test Supabase integration specifically
-        response = await self.make_request("GET", "/analytics/platform")
+        response = await self.make_request("POST", "/analytics/platform")
         
         if response["success"]:
             data = response["data"]

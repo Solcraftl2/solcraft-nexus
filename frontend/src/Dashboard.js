@@ -626,47 +626,41 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
                     <option>Private Credit</option>
                     <option>Commodities</option>
                     <option>Equity Securities</option>
+                    <option>Infrastructure</option>
+                    <option>Art & Collectibles</option>
                   </select>
                   <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                    List Asset
+                    List Your Asset
                   </button>
                 </div>
               </div>
 
+              {/* Marketplace Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <div className="bg-white p-4 rounded-xl border border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">Total Assets</h3>
+                  <p className="text-2xl font-bold text-gray-900">{marketplaceAssets.length}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">24h Volume</h3>
+                  <p className="text-2xl font-bold text-gray-900">$2.3M</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">Active Orders</h3>
+                  <p className="text-2xl font-bold text-gray-900">{userOrders.filter(o => o.status === 'pending').length}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">Your Orders</h3>
+                  <p className="text-2xl font-bold text-gray-900">{userOrders.length}</p>
+                </div>
+              </div>
+
+              {/* Marketplace Assets Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {/* Marketplace asset cards */}
-                {[
-                  {
-                    name: 'Berlin Residential Complex',
-                    type: 'Real Estate',
-                    price: 500,
-                    totalValue: 2500000,
-                    apy: 7.8,
-                    available: 1250,
-                    image: '/api/placeholder/300/200'
-                  },
-                  {
-                    name: 'Tech Startup Equity',
-                    type: 'Equity Securities',
-                    price: 100,
-                    totalValue: 500000,
-                    apy: 25.3,
-                    available: 2000,
-                    image: '/api/placeholder/300/200'
-                  },
-                  {
-                    name: 'Silver Mining Rights',
-                    type: 'Commodities',
-                    price: 150,
-                    totalValue: 750000,
-                    apy: 9.2,
-                    available: 800,
-                    image: '/api/placeholder/300/200'
-                  }
-                ].map((asset, index) => (
-                  <div key={index} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+                {marketplaceAssets.map((asset, index) => (
+                  <div key={asset.id || index} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
                     <img 
-                      src={asset.image} 
+                      src={asset.image_url || '/api/placeholder/400/200'}
                       alt={asset.name}
                       className="w-full h-48 object-cover"
                     />
@@ -674,38 +668,121 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
                       <div className="flex justify-between items-start mb-4">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900">{asset.name}</h3>
-                          <p className="text-sm text-gray-600">{asset.type}</p>
+                          <p className="text-sm text-gray-600">{asset.category?.replace('_', ' ').toUpperCase()}</p>
                         </div>
-                        <span className="text-sm font-semibold text-green-600">{asset.apy}% APY</span>
+                        <div className="text-right">
+                          <span className="text-lg font-bold text-blue-600">${asset.token_price}</span>
+                          <p className={`text-sm ${marketplaceService.getChangeColor(asset.price_change_24h || 0)}`}>
+                            {marketplaceService.formatPercentageChange(asset.price_change_24h || 0)}
+                          </p>
+                        </div>
                       </div>
                       
                       <div className="space-y-2 mb-4">
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Token Price:</span>
-                          <span className="font-semibold">${asset.price}</span>
+                          <span className="text-gray-600">Market Cap:</span>
+                          <span className="font-semibold">${asset.market_cap?.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Total Value:</span>
-                          <span className="font-semibold">${asset.totalValue.toLocaleString()}</span>
+                          <span className="text-gray-600">APY:</span>
+                          <span className="font-semibold text-green-600">{asset.apy}%</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Available:</span>
-                          <span className="font-semibold">{asset.available} tokens</span>
+                          <span className="font-semibold">{asset.available_tokens} tokens</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">24h Volume:</span>
+                          <span className="font-semibold">${asset.volume_24h?.toLocaleString()}</span>
                         </div>
                       </div>
 
                       <div className="flex space-x-3">
-                        <button className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                        <button 
+                          onClick={() => openOrderModal(asset, 'buy')}
+                          className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                        >
                           Buy Tokens
                         </button>
-                        <button className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium">
-                          View Details
+                        <button 
+                          onClick={() => openOrderModal(asset, 'sell')}
+                          className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                        >
+                          Sell Tokens
                         </button>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* User Orders Section */}
+              {userOrders.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 mt-8">
+                  <div className="p-6 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Your Active Orders</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Side</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {userOrders.map((order) => (
+                          <tr key={order.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {order.asset_name || `Asset ${order.asset_id}`}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                              {order.order_type}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                order.side === 'buy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
+                                {order.side.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {order.remaining_quantity}/{order.quantity}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${order.price}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                order.status === 'filled' ? 'bg-green-100 text-green-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {order.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              {order.status === 'pending' && (
+                                <button
+                                  onClick={() => cancelOrder(order.id)}
+                                  className="text-red-600 hover:text-red-900 font-medium"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

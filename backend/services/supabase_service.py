@@ -317,3 +317,7 @@ class SupabaseService:
 
 # Global service instance
 supabase_service = SupabaseService()
+
+def get_supabase_client():
+    """Get the Supabase client instance"""
+    return supabase_service.supabase

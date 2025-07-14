@@ -33,6 +33,8 @@ const Dashboard = ({ connectedWallet, onDisconnect }) => {
   const [userAssets, setUserAssets] = useState([]);
   const [tradingData, setTradingData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [aiInsights, setAiInsights] = useState({});
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Mock user portfolio data (in production, fetch from backend)
   useEffect(() => {

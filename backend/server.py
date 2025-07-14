@@ -79,6 +79,26 @@ class CryptoPurchaseRequest(BaseModel):
     user_id: Optional[str] = None
     wallet_address: Optional[str] = None
 
+# AI Analysis Models
+class AssetAnalysisRequest(BaseModel):
+    asset_data: Dict[str, Any]
+    analysis_type: Optional[str] = "comprehensive"
+    language: Optional[str] = "en"
+
+class MarketPredictionRequest(BaseModel):
+    asset_class: str
+    time_horizon: Optional[str] = "3_months"
+    language: Optional[str] = "en"
+
+class RiskAssessmentRequest(BaseModel):
+    portfolio_data: Dict[str, Any]
+    language: Optional[str] = "en"
+
+class PortfolioOptimizationRequest(BaseModel):
+    portfolio_data: Dict[str, Any]
+    optimization_goals: List[str]
+    language: Optional[str] = "en"
+
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:

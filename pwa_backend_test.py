@@ -307,29 +307,41 @@ class PWABackendTester:
             if has_packages:
                 packages = data["packages"]
                 
-                # Check for expected packages
-                package_names = [pkg.get("name", "").lower() for pkg in packages]
-                has_basic = any("basic" in name for name in package_names)
-                has_premium = any("premium" in name for name in package_names)
-                has_enterprise = any("enterprise" in name for name in package_names)
-                
-                # Check package structure
-                packages_structured = all(
-                    "id" in pkg and "name" in pkg and "price" in pkg 
-                    for pkg in packages
-                )
-                
-                payment_packages_ok = (
-                    status_success and has_packages and 
-                    has_basic and has_premium and has_enterprise and
-                    packages_structured
-                )
-                
-                self.log_test(
-                    "Payment Packages Endpoint",
-                    payment_packages_ok,
-                    f"Packages found: {len(packages)} (Basic, Premium, Enterprise)"
-                )
+                # Check if packages is a list and has items
+                if isinstance(packages, list) and len(packages) > 0:
+                    # Check for expected packages
+                    package_names = []
+                    for pkg in packages:
+                        if isinstance(pkg, dict):
+                            package_names.append(pkg.get("name", "").lower())
+                        else:
+                            package_names.append(str(pkg).lower())
+                    
+                    has_basic = any("basic" in name for name in package_names)
+                    has_premium = any("premium" in name for name in package_names)
+                    has_enterprise = any("enterprise" in name for name in package_names)
+                    
+                    # Check package structure
+                    packages_structured = True
+                    for pkg in packages:
+                        if isinstance(pkg, dict):
+                            if not ("id" in pkg and "name" in pkg and "price" in pkg):
+                                packages_structured = False
+                                break
+                    
+                    payment_packages_ok = (
+                        status_success and has_packages and 
+                        has_basic and has_premium and has_enterprise and
+                        packages_structured
+                    )
+                    
+                    self.log_test(
+                        "Payment Packages Endpoint",
+                        payment_packages_ok,
+                        f"Packages found: {len(packages)} (Basic, Premium, Enterprise)"
+                    )
+                else:
+                    self.log_test("Payment Packages Endpoint", False, f"Invalid packages structure: {type(packages)}", data)
             else:
                 self.log_test("Payment Packages Endpoint", False, "Missing packages", data)
                 

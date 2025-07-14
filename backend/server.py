@@ -16,6 +16,7 @@ from services.xrpl_service import xrpl_service
 from services.xumm_service import xumm_service
 from services.tokenization_service import tokenization_service
 from services.supabase_service import supabase_service
+from services.payment_service import payment_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')

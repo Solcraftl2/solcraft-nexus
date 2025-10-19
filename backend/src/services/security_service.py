@@ -424,8 +424,8 @@ class SecurityAuditService:
         if mfa_status['enabled']:
             score += 30
         
-        # Email verified
-        if user.email_verified:
+        # KYC approved
+        if user.is_kyc_approved():
             score += 15
         
         # Recent activity (good sign)
@@ -457,11 +457,11 @@ class SecurityAuditService:
                 'description': 'Add an extra layer of security to your account'
             })
         
-        if not user.email_verified:
+        if not user.is_kyc_approved():
             recommendations.append({
                 'priority': 'medium',
-                'title': 'Verify Your Email',
-                'description': 'Verify your email address for account recovery'
+                'title': 'Complete KYC Verification',
+                'description': 'Complete identity verification to secure your account'
             })
         
         if security_score < 70:

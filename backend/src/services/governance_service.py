@@ -23,8 +23,8 @@ class Proposal(db.Model):
     __tablename__ = 'proposals'
     
     id = db.Column(db.Integer, primary_key=True)
-    asset_id = db.Column(db.Integer, db.ForeignKey('assets.id'), nullable=False)
-    creator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    asset_id = db.Column(db.String(36), db.ForeignKey('assets.id'), nullable=False)
+    creator_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=False)
@@ -80,7 +80,7 @@ class Vote(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     proposal_id = db.Column(db.Integer, db.ForeignKey('proposals.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     
     choice = db.Column(db.Enum(VoteChoice), nullable=False)
     voting_power = db.Column(db.Decimal(20, 8), nullable=False)  # Based on token holdings

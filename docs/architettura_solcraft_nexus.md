@@ -791,6 +791,33 @@ L'infrastruttura di SolCraft Nexus è progettata per alta disponibilità, scalab
 
 **Automated Deployment:** Il sistema implementa pipeline CI/CD complete che automatizzano testing, building e deployment. Utilizza GitOps per gestione configurazioni e implementa blue-green deployment per zero-downtime updates.
 
+### Deployment Multi-Regione
+
+**Netlify Functions su più regioni:** SolCraft Nexus sfrutta l'infrastruttura globale di Netlify replicando le funzioni serverless in aree geografiche differenti per ridurre la latenza.
+
+```toml
+[functions."*"]
+  regions = ["us-east-1", "eu-west-1"]
+```
+
+**Kubernetes Multi-Cluster:** Per garantire resilienza a livello mondiale la piattaforma può essere distribuita su più cluster Kubernetes. Di seguito un esempio Terraform che crea due cluster GKE in regioni distinte:
+
+```hcl
+resource "google_container_cluster" "eu" {
+  name     = "scn-eu"
+  location = "europe-west1"
+  remove_default_node_pool = true
+  initial_node_count       = 1
+}
+
+resource "google_container_cluster" "us" {
+  name     = "scn-us"
+  location = "us-east1"
+  remove_default_node_pool = true
+  initial_node_count       = 1
+}
+```
+
 ### Monitoring e Observability
 
 **Comprehensive Monitoring:** L'infrastruttura include monitoring completo con Prometheus per metriche, Grafana per visualizzazione, ELK stack per log aggregation e distributed tracing per performance analysis. Include anche alerting automatico per problemi critici.

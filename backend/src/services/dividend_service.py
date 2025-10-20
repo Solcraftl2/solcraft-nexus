@@ -3,9 +3,10 @@ import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 from src.models.user import db, User
-from src.models.asset import Asset, Portfolio
+from src.models.asset import Asset, TokenHolding
 from src.models.transaction import Transaction, DividendDistribution
 from src.services.wallet_service import xrpl_service
+from src.services.secure_wallet_service import secure_wallet_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,22 +59,24 @@ class DividendService:
             if not asset:
                 raise ValueError(f"Asset {asset_id} not found")
             
-            # Get all portfolios holding this asset
-            portfolios = Portfolio.query.filter_by(asset_id=asset_id).all()
+            # Get all token holdings for this asset
+            holdings = TokenHolding.query.filter_by(asset_id=asset_id).filter(
+                TokenHolding.amount > 0
+            ).all()
             
             total_distributed = Decimal('0')
             distributions = []
             
-            for portfolio in portfolios:
-                if portfolio.token_balance > 0:
+            for holding in holdings:
+                if holding.amount > 0:
                     # Calculate dividend amount for this holder
-                    dividend_amount = Decimal(portfolio.token_balance) * dividend_per_token
+                    dividend_amount = Decimal(holding.amount) * dividend_per_token
                     
                     if dividend_amount > 0:
                         # Create dividend distribution record
                         distribution = DividendDistribution(
                             asset_id=asset_id,
-                            user_id=portfolio.user_id,
+                            user_id=holding.user_id,
                             amount=dividend_amount,
                             distribution_type=distribution_type,
                             status='pending',
@@ -110,10 +113,26 @@ class DividendService:
                 db.session.commit()
                 return False
             
+            # Get sender (issuer or platform) wallet
+            asset = Asset.query.get(distribution.asset_id)
+            sender_wallet = None
+            if asset:
+                try:
+                    sender_wallet = secure_wallet_service.get_wallet_for_transaction(asset.issuer_id)
+                except Exception as e:
+                    logger.error(f"Failed to get issuer wallet: {str(e)}")
+
+            if not sender_wallet:
+                distribution.status = 'failed'
+                distribution.failure_reason = 'Sender wallet not available'
+                db.session.commit()
+                return False
+
             # Send XRP dividend to user's wallet
             result = xrpl_service.send_xrp(
-                to_address=user.wallet_address,
-                amount=float(distribution.amount),
+                sender_wallet,
+                user.wallet_address,
+                Decimal(distribution.amount),
                 memo=f"Dividend from asset {distribution.asset_id}"
             )
             

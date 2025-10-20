@@ -17,7 +17,7 @@ class User(db.Model):
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20))
-    email_verified = db.Column(db.Boolean, default=False)  # Added email verification column
+    email_verified = db.Column(db.Boolean, default=False)
     
     # Account type and status
     account_type = db.Column(db.String(20), nullable=False, default='individual')  # individual, organization
@@ -88,6 +88,7 @@ class User(db.Model):
             'first_name': self.first_name,
             'last_name': self.last_name,
             'phone': self.phone,
+            'email_verified': self.email_verified,
             'account_type': self.account_type,
             'status': self.status,
             'kyc_status': self.kyc_status,

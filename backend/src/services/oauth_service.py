@@ -267,6 +267,7 @@ class OAuthService:
                 status='active',  # OAuth users are automatically active
                 kyc_status='not_started',
                 language=oauth_data.get('locale', 'en')[:2],  # Extract language code
+                email_verified=oauth_data.get('email_verified', False),
                 # Note: OAuth users don't have passwords - they authenticate via OAuth
             )
             

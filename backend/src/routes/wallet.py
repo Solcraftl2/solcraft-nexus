@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from src.models.user import db, User
 from src.models.transaction import Transaction
-from src.services.wallet_service import xrpl_service
+from src.services.wallet_service import wallet_service, xrpl_service
 from src.services.secure_wallet_service import secure_wallet_service
 from src.services.transaction_optimization_service import transaction_optimization_service
 from src.services.blockchain_notification_service import blockchain_notification_service
